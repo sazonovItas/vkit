@@ -1,0 +1,40 @@
+#pragma once
+#include "GLFW/glfw3.h"
+#include "scoped.hpp"
+#include "vulkan/vulkan.hpp"
+
+namespace lvk {
+struct DearImGuiCreateInfo {
+  GLFWwindow* window;
+  std::uint32_t api_vesrion;
+  vk::Instance instance;
+  vk::PhysicalDevice physical_device;
+  std::uint32_t queue_family;
+  vk::Device device;
+  vk::Queue queue;
+  vk::Format color_format;
+  vk::SampleCountFlagBits samples;
+};
+
+class DearImGui {
+ public:
+  using CreateInfo = DearImGuiCreateInfo;
+
+  explicit DearImGui(CreateInfo const& create_info);
+
+  void new_frame();
+  void end_frame();
+  void render(vk::CommandBuffer command_buffer) const;
+
+ private:
+  enum class State : std::int8_t { kEnded, kBegun };
+
+  struct Deleter {
+    void operator()(vk::Device device) const;
+  };
+
+  State m_state_;
+
+  Scoped<vk::Device, Deleter> m_device_;
+};
+};  // namespace lvk
