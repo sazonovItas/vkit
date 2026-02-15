@@ -48,7 +48,7 @@ class ShaderProgram {
   float line_width{1.0F};
 
   vk::ColorBlendEquationEXT color_blend_equation{kColorBlendEquationV};
-  vk::CompareOp depth_compare_op{vk::CompareOp::eLessOrEqual};
+  vk::CompareOp depth_compare_op{vk::CompareOp::eLess};
 
   std::uint8_t flags{kFlagsV};
 

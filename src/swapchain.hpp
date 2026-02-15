@@ -4,14 +4,15 @@
 
 #include "gpu.hpp"
 #include "render_target.hpp"
+#include "vma.hpp"
 #include "vulkan/vulkan.hpp"
 
 namespace lvk {
 
 class Swapchain {
  public:
-  explicit Swapchain(vk::Device device, Gpu const& gpu, vk::SurfaceKHR surface,
-                     glm::ivec2 size);
+  explicit Swapchain(vk::Device device, Gpu const& gpu, VmaAllocator allocator,
+                     vk::SurfaceKHR surface, glm::ivec2 size);
 
   auto recreate(glm::ivec2 size) -> bool;
 
@@ -27,17 +28,20 @@ class Swapchain {
       -> std::optional<RenderTarget>;
 
   [[nodiscard]] auto base_barrier() const -> vk::ImageMemoryBarrier2;
+  [[nodiscard]] auto base_depth_barrier() const -> vk::ImageMemoryBarrier2;
 
   [[nodiscard]] auto get_present_semaphore() const -> vk::Semaphore;
   [[nodiscard]] auto present(vk::Queue queue) -> bool;
 
  private:
   void populate_images();
+  void populate_depth_image();
   void create_image_views();
   void create_present_semaphores();
 
   vk::Device m_device_;
   Gpu m_gpu_;
+  VmaAllocator m_allocator_;
 
   vk::SwapchainCreateInfoKHR m_ci_;
   vk::UniqueSwapchainKHR m_swapchain_;
@@ -45,6 +49,9 @@ class Swapchain {
   std::vector<vk::UniqueImageView> m_image_views_;
   std::vector<vk::UniqueSemaphore> m_present_semaphorses_;
   std::optional<std::size_t> m_image_index_;
+
+  vma::Image m_depth_image_;
+  vk::UniqueImageView m_depth_image_view_;
 };
 
 }  // namespace lvk

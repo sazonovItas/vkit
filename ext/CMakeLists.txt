@@ -70,6 +70,9 @@ target_sources(vma PRIVATE
 )
 target_compile_options(vma PRIVATE -w)
 
+message(STATUS "[fastgltf]")
+add_subdirectory(fastgltf)
+
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(learn-vk::ext ALIAS ${PROJECT_NAME})
 
@@ -77,6 +80,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
   glm::glm
   imgui::imgui
   vma::vma
+  fastgltf::fastgltf
 )
 
 target_compile_definitions(${PROJECT_NAME} INTERFACE

@@ -6,6 +6,8 @@
 #include <stdexcept>
 
 #include "resource_buffering.hpp"
+#include "vma.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 
@@ -84,9 +86,18 @@ auto needs_recreation(vk::Result const result) -> bool {
   throw std::runtime_error{"swapchain error"};
 }
 
-constexpr auto kSubresourceRangeV = [] {
+constexpr auto kColorSubresourceRangeV = [] {
   auto ret = vk::ImageSubresourceRange{};
   ret.setAspectMask(vk::ImageAspectFlagBits::eColor)
+      .setLayerCount(1)
+      .setLevelCount(1);
+  return ret;
+}();
+
+constexpr auto kDepthSubresourceRangeV = [] {
+  auto ret = vk::ImageSubresourceRange{};
+  ret.setAspectMask(vk::ImageAspectFlagBits::eDepth |
+                    vk::ImageAspectFlagBits::eStencil)
       .setLayerCount(1)
       .setLevelCount(1);
   return ret;
@@ -94,8 +105,9 @@ constexpr auto kSubresourceRangeV = [] {
 };  // namespace
 
 Swapchain::Swapchain(vk::Device const device, Gpu const& gpu,
-                     vk::SurfaceKHR const surface, glm::ivec2 const size)
-    : m_device_(device), m_gpu_(gpu) {
+                     VmaAllocator allocator, vk::SurfaceKHR const surface,
+                     glm::ivec2 const size)
+    : m_device_(device), m_gpu_(gpu), m_allocator_(allocator) {
   auto const surface_format =
       get_surface_format(m_gpu_.device.getSurfaceFormatsKHR(surface));
   m_ci_.setSurface(surface)
@@ -125,6 +137,7 @@ auto Swapchain::recreate(glm::ivec2 size) -> bool {
   m_swapchain_ = m_device_.createSwapchainKHRUnique(m_ci_);
 
   populate_images();
+  populate_depth_image();
   create_image_views();
   create_present_semaphores();
 
@@ -148,6 +161,8 @@ auto Swapchain::acquire_next_image(vk::Semaphore const to_signal)
   return RenderTarget{
       .image = m_images_.at(*m_image_index_),
       .image_view = *m_image_views_.at(*m_image_index_),
+      .depth_image = m_depth_image_.get().image,
+      .depth_image_view = *m_depth_image_view_,
       .extent = m_ci_.imageExtent,
   };
 }
@@ -155,11 +170,20 @@ auto Swapchain::acquire_next_image(vk::Semaphore const to_signal)
 auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_images_.at(m_image_index_.value()))
-      .setSubresourceRange(kSubresourceRangeV)
+      .setSubresourceRange(kColorSubresourceRangeV)
       .setSrcQueueFamilyIndex(m_gpu_.queue_family)
       .setDstQueueFamilyIndex(m_gpu_.queue_family);
   return ret;
 };
+
+auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
+  auto ret = vk::ImageMemoryBarrier2{};
+  ret.setImage(m_depth_image_.get().image)
+      .setSubresourceRange(kDepthSubresourceRangeV)
+      .setSrcQueueFamilyIndex(m_gpu_.queue_family)
+      .setDstQueueFamilyIndex(m_gpu_.queue_family);
+  return ret;
+}
 
 auto Swapchain::get_present_semaphore() const -> vk::Semaphore {
   return *m_present_semaphorses_.at(m_image_index_.value());
@@ -190,6 +214,23 @@ void Swapchain::populate_images() {
   result = m_device_.getSwapchainImagesKHR(*m_swapchain_, &image_count,
                                            m_images_.data());
   require_success(result, "failed to get swapchain images");
+}
+
+void Swapchain::populate_depth_image() {
+  auto depth_image_ci = vma::ImageCreateInfo{
+      .allocator = m_allocator_,
+      .queue_family = m_gpu_.queue_family,
+  };
+  m_depth_image_ = vma::create_image(
+      depth_image_ci, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1,
+      vk::Format::eD32SfloatS8Uint, m_ci_.imageExtent);
+
+  auto depth_image_view_ci = vk::ImageViewCreateInfo{};
+  depth_image_view_ci.setImage(m_depth_image_.get().image)
+      .setViewType(vk::ImageViewType::e2D)
+      .setFormat(vk::Format::eD32SfloatS8Uint)
+      .setSubresourceRange(kDepthSubresourceRangeV);
+  m_depth_image_view_ = m_device_.createImageViewUnique(depth_image_view_ci);
 }
 
 void Swapchain::create_image_views() {

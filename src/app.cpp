@@ -6,22 +6,33 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <print>
 #include <ranges>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
+#include "GLFW/glfw3.h"
 #include "command_block.hpp"
 #include "dear_imgui.hpp"
+#include "fastgltf/core.hpp"
+#include "fastgltf/glm_element_traits.hpp"
+#include "fastgltf/tools.hpp"
+#include "fastgltf/types.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_common.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
+#include "glm/glm.hpp"
 #include "gpu.hpp"
+#include "model.hpp"
 #include "pipeline.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
-#include "vertex.hpp"
 #include "vma.hpp"
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_core.h"
@@ -98,6 +109,10 @@ template <typename T>
   return std::bit_cast<std::array<std::byte, sizeof(T)>>(t);
 }
 
+template <typename T>
+[[nodiscard]] constexpr auto to_byte_span(std::vector<T> const& v) {
+  return std::as_bytes(std::span{v});
+}
 constexpr auto layout_binding(std::uint32_t binding,
                               vk::DescriptorType const type) {
   return vk::DescriptorSetLayoutBinding{
@@ -107,6 +122,7 @@ constexpr auto layout_binding(std::uint32_t binding,
       vk::ShaderStageFlagBits::eAllGraphics,
   };
 }
+
 };  // namespace
 
 namespace lvk {
@@ -120,6 +136,7 @@ void App::run() {
   create_device();
   create_allocator();
   create_swapchain();
+  create_depth_image();
   create_render_sync();
   create_imgui();
   create_descriptor_pool();
@@ -130,6 +147,8 @@ void App::run() {
 
   create_shader_resources();
   create_descriptor_sets();
+
+  load_gltf();
 
   main_loop();
 }
@@ -167,17 +186,23 @@ void App::inspect() {
       m_shader_->line_width = m_line_width_;
     }
 
-    static auto const kInspectTransform = [](Transform& out) {
-      ImGui::DragFloat2("position", &out.position.x);
-      ImGui::DragFloat("rotation", &out.rotation);
-      ImGui::DragFloat2("scale", &out.scale.x, 0.1F);
+    static auto const kCameraView = [](Camera& out) {
+      ImGui::DragFloat3("position", &out.position.x);
+      ImGui::DragFloat3("target", &out.target.x);
+      ImGui::DragFloat3("up", &out.up.x);
     };
 
     ImGui::Separator();
     if (ImGui::TreeNode("View")) {
-      kInspectTransform(m_view_transform_);
+      kCameraView(m_camera_);
       ImGui::TreePop();
     }
+
+    static auto const kInspectTransform = [](Transform& out) {
+      ImGui::DragFloat3("position", &out.position.x);
+      ImGui::DragFloat3("rotation", &out.rotation.x);
+      ImGui::DragFloat3("scale", &out.scale.x, 0.1F);
+    };
 
     ImGui::Separator();
     if (ImGui::TreeNode("Instances")) {
@@ -195,33 +220,27 @@ void App::inspect() {
 }
 
 void App::draw(vk::CommandBuffer const command_buffer) const {
-  // command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-  // *m_pipeline_); command_buffer.setPolygonModeEXT(m_wireframe_ ?
-  // vk::PolygonMode::eLine
-  //                                               : vk::PolygonMode::eFill);
-  // if (m_wireframe_) {
-  //   command_buffer.setLineWidth(m_line_width_);
-  // }
-  //
-  // auto viewport = vk::Viewport{};
-  // viewport.setX(0.0F)
-  //     .setY(static_cast<float>(m_render_target_->extent.height))
-  //     .setWidth(static_cast<float>(m_render_target_->extent.width))
-  //     .setHeight(-viewport.y);
-  // command_buffer.setViewport(0, viewport);
-  // command_buffer.setScissor(0, vk::Rect2D({}, m_render_target_->extent));
-
   m_shader_->bind(command_buffer, m_framebuffer_size_);
 
   bind_descriptor_sets(command_buffer);
-
-  command_buffer.bindVertexBuffers(0, m_vbo_.get().buffer, vk::DeviceSize{});
-  command_buffer.bindIndexBuffer(m_vbo_.get().buffer, 4 * sizeof(Vertex),
-                                 vk::IndexType::eUint32);
-
-  auto const instances = static_cast<std::uint32_t>(m_instances_.size());
-  command_buffer.drawIndexed(6, instances, 0, 0, 0);
+  for (const auto& mesh : meshes_) {
+    draw_mesh(command_buffer, mesh);
+  }
 };
+
+void App::draw_mesh(vk::CommandBuffer const command_buffer,
+                    Mesh const& mesh) const {
+  for (const auto& primitive : mesh.primitives) {
+    command_buffer.bindVertexBuffers(0, primitive.vertex_buffer.get().buffer,
+                                     vk::DeviceSize{});
+    command_buffer.bindIndexBuffer(primitive.index_buffer.get().buffer, 0,
+                                   vk::IndexType::eUint32);
+    command_buffer.drawIndexed(
+        primitive.draw.count, primitive.draw.instance_count,
+        primitive.draw.first_index, primitive.draw.vertex_offset,
+        primitive.draw.first_instance);
+  }
+}
 
 auto App::acquire_render_target() -> bool {
   m_framebuffer_size_ = glfw::framebuffer_size(m_window_.get());
@@ -263,16 +282,28 @@ auto App::begin_frame() -> vk::CommandBuffer {
 
 void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
   auto dependency_info = vk::DependencyInfo{};
-  auto barrier = m_swapchain_->base_barrier();
 
-  barrier.setOldLayout(vk::ImageLayout::eUndefined)
+  auto depth_barrier = m_swapchain_->base_depth_barrier();
+  depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
+      .setNewLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
+      .setDstAccessMask(vk::AccessFlagBits2::eDepthStencilAttachmentRead |
+                        vk::AccessFlagBits2::eDepthStencilAttachmentWrite)
+      .setDstStageMask(vk::PipelineStageFlagBits2::eEarlyFragmentTests |
+                       vk::PipelineStageFlagBits2::eLateFragmentTests);
+
+  auto color_barrier = m_swapchain_->base_barrier();
+  color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
-      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
+      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
+      .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
                         vk::AccessFlagBits2::eColorAttachmentWrite)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(barrier.srcAccessMask)
-      .setDstStageMask(barrier.srcStageMask);
-  dependency_info.setImageMemoryBarriers(barrier);
+      .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+
+  auto barriers = std::array{depth_barrier, color_barrier};
+  dependency_info.setImageMemoryBarriers(barriers);
   command_buffer.pipelineBarrier2(dependency_info);
 }
 
@@ -284,13 +315,20 @@ void App::render(vk::CommandBuffer const command_buffer) {
       .setStoreOp(vk::AttachmentStoreOp::eStore)
       .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
 
+  auto depth_attachment = vk::RenderingAttachmentInfo{};
+  depth_attachment.setImageView(m_render_target_->depth_image_view)
+      .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
+      .setLoadOp(vk::AttachmentLoadOp::eClear)
+      .setStoreOp(vk::AttachmentStoreOp::eStore)
+      .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
+
   auto rendering_info = vk::RenderingInfo{};
   auto const render_area = vk::Rect2D{vk::Offset2D{}, m_render_target_->extent};
   rendering_info.setRenderArea(render_area)
-      .setColorAttachments(color_attachment)
       .setLayerCount(1)
-      .setColorAttachments(color_attachment)
-      .setPDepthAttachment(nullptr);
+      .setColorAttachmentCount(1)
+      .setPColorAttachments(&color_attachment)
+      .setPDepthAttachment(&depth_attachment);
 
   update_view();
   update_instances();
@@ -303,7 +341,8 @@ void App::render(vk::CommandBuffer const command_buffer) {
   m_imgui_->end_frame();
 
   color_attachment.setLoadOp(vk::AttachmentLoadOp::eLoad);
-  rendering_info.setColorAttachments(color_attachment)
+  rendering_info.setColorAttachmentCount(1)
+      .setPColorAttachments(&color_attachment)
       .setPDepthAttachment(nullptr);
   command_buffer.beginRendering(rendering_info);
   m_imgui_->render(command_buffer);
@@ -374,11 +413,17 @@ void App::update_instances() {
 
 void App::update_view() {
   auto const half_size = 0.5F * glm::vec2{m_framebuffer_size_};
-  auto const mat_projection =
-      glm::ortho(-half_size.x, half_size.x, -half_size.y, half_size.y);
+  auto mat_projection =
+      glm::perspective(glm::radians(90.0F),
+                       static_cast<float>(m_framebuffer_size_.x) /
+                           static_cast<float>(m_framebuffer_size_.y),
+                       0.1F, 200.0F);
 
-  auto const mat_view = m_view_transform_.view_matrix();
+  auto const mat_view =
+      glm::lookAt(m_camera_.position, m_camera_.target, m_camera_.up);
+
   auto const mat_vp = mat_projection * mat_view;
+
   auto const bytes =
       std::bit_cast<std::array<std::byte, sizeof(mat_vp)>>(mat_vp);
 
@@ -427,32 +472,6 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
 }
 
 void App::create_shader_resources() {
-  static constexpr auto kVerticesV = std::array{
-      Vertex{.position = {-200.0F, -200.0F}, .uv = {0.0F, 1.0F}},
-      Vertex{.position = {200.0F, -200.0F}, .uv = {1.0F, 1.0F}},
-      Vertex{.position = {200.0F, 200.0F}, .uv = {1.0F, 0.0F}},
-      Vertex{.position = {-200.0F, 200.0F}, .uv = {0.0F, 0.0F}},
-  };
-  static constexpr auto kIndicesV = std::array{
-      0U, 1U, 2U, 2U, 3U, 0U,
-  };
-  static constexpr auto kVerticesBytesV = to_byte_array(kVerticesV);
-  static constexpr auto kIndicesBytesV = to_byte_array(kIndicesV);
-  static constexpr auto kTotalBytesV =
-      std::array<std::span<std::byte const>, 2>{
-          kVerticesBytesV,
-          kIndicesBytesV,
-      };
-
-  auto const buffer_ci = vma::BufferCreateInfo{
-      .allocator = m_allocator_.get(),
-      .usage = vk::BufferUsageFlagBits::eVertexBuffer |
-               vk::BufferUsageFlagBits::eIndexBuffer,
-      .queue_family = m_gpu_.queue_family,
-  };
-  m_vbo_ = vma::create_device_buffer(buffer_ci, create_command_block(),
-                                     kTotalBytesV);
-
   m_view_ubo_.emplace(m_allocator_.get(), m_gpu_.queue_family,
                       vk::BufferUsageFlagBits::eUniformBuffer);
 
@@ -462,16 +481,16 @@ void App::create_shader_resources() {
   using Pixel = std::array<std::byte, 4>;
   using vma::Bitmap;
 
-  static constexpr auto kRgbyPixelsV = std::array{
+  static constexpr auto kRgbaPixelsV = std::array{
       Pixel{std::byte{0xFF}, {}, {}, std::byte{0xFF}},
       Pixel{std::byte{}, std::byte{0xFF}, {}, std::byte{0xFF}},
       Pixel{std::byte{}, {}, std::byte{0xFF}, std::byte{0xFF}},
       Pixel{std::byte{0xFF}, std::byte{0xFF}, {}, std::byte{0xFF}},
   };
-  static constexpr auto kRgbyBytesV =
-      std::bit_cast<std::array<std::byte, sizeof(kRgbyPixelsV)>>(kRgbyPixelsV);
+  static constexpr auto kRgbaBytesV =
+      std::bit_cast<std::array<std::byte, sizeof(kRgbaPixelsV)>>(kRgbaPixelsV);
   static constexpr auto kRgbyBitmapV = Bitmap{
-      .bytes = kRgbyBytesV,
+      .bytes = kRgbaBytesV,
       .size = {2, 2},
   };
   auto texture_ci = Texture::CreateInfo{
@@ -557,8 +576,8 @@ void App::create_allocator() {
 }
 
 void App::create_alt_pipeline() {
-  auto const vertex_spirv = to_spir_v(asset_path("shader.vert"));
-  auto const fragment_spirv = to_spir_v(asset_path("shader.frag"));
+  auto const vertex_spirv = to_spir_v(asset_path("shaders/shader.vert"));
+  auto const fragment_spirv = to_spir_v(asset_path("shaders/shader.frag"));
   if (vertex_spirv.empty() || fragment_spirv.empty()) {
     throw std::runtime_error{"failed to load shaders"};
   }
@@ -592,8 +611,8 @@ void App::create_alt_pipeline() {
 }
 
 void App::create_shader() {
-  auto const vertex_spirv = to_spir_v(asset_path("shader.vert"));
-  auto const fragment_spirv = to_spir_v(asset_path("shader.frag"));
+  auto const vertex_spirv = to_spir_v(asset_path("shaders/shader.vert"));
+  auto const fragment_spirv = to_spir_v(asset_path("shaders/shader.frag"));
   static constexpr auto kVertexInputV = ShaderVertexInput{
       .attributes = kVertexAttributesV,
       .bindings = kVertexBindingsV,
@@ -649,8 +668,11 @@ void App::create_imgui() {
 
 void App::create_swapchain() {
   auto const size = glfw::framebuffer_size(m_window_.get());
-  m_swapchain_.emplace(*m_device_, m_gpu_, *m_surface_, size);
+  m_swapchain_.emplace(*m_device_, m_gpu_, m_allocator_.get(), *m_surface_,
+                       size);
 }
+
+void App::create_depth_image() {}
 
 void App::create_device() {
   auto queue_ci = vk::DeviceQueueCreateInfo{};
@@ -741,5 +763,177 @@ void App::create_window() {
 auto App::asset_path(std::string_view uri) const -> fs::path {
   return m_assets_dir_ / uri;
 }
+
+void App::load_gltf() {
+  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
+    std::println(stderr, "failed to load gltf model");
+    return;
+  }
+
+  for (const auto& mesh : asset_->meshes) {
+    load_mesh(mesh);
+  }
+}
+
+auto App::load_asset(fs::path const& path) -> bool {
+  if (!fs::exists(path)) {
+    std::println(stderr, "failed to find file: `{}`", path.generic_string());
+    return false;
+  }
+
+  std::println("Loading gltf from file: `{}`", path.generic_string());
+
+  {
+    static constexpr auto kSupportedExtensions =
+        fastgltf::Extensions::KHR_mesh_quantization |
+        fastgltf::Extensions::KHR_texture_transform |
+        fastgltf::Extensions::KHR_materials_variants;
+
+    fastgltf::Parser parser{kSupportedExtensions};
+
+    static constexpr auto kGltfOptions =
+        fastgltf::Options::DontRequireValidAssetMember |
+        fastgltf::Options::AllowDouble |
+        fastgltf::Options::LoadExternalBuffers |
+        fastgltf::Options::LoadExternalImages |
+        fastgltf::Options::GenerateMeshIndices;
+
+    auto gltf_file = fastgltf::MappedGltfFile::FromPath(path);
+    if (!static_cast<bool>(gltf_file)) {
+      std::println(stderr, "failed to open glTF file: {}",
+                   fastgltf::getErrorMessage(gltf_file.error()));
+      return false;
+    }
+
+    auto expected_asset =
+        parser.loadGltf(gltf_file.get(), path.parent_path(), kGltfOptions);
+    if (expected_asset.error() != fastgltf::Error::None) {
+      std::println(stderr, "failed to load glTF: {}",
+                   fastgltf::getErrorMessage(expected_asset.error()));
+      return false;
+    }
+
+    asset_.emplace(std::move(expected_asset.get()));
+  }
+
+  return true;
+}
+
+auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
+  assert(asset_.has_value());
+
+  auto const& asset = *asset_;
+
+  auto out_mesh = Mesh{};
+  out_mesh.primitives.resize(mesh.primitives.size());
+
+  for (int i = 0; i < mesh.primitives.size(); i++) {
+    const auto& primitive = mesh.primitives[i];
+
+    assert(primitive.indicesAccessor.has_value());
+
+    auto& out_primitive = out_mesh.primitives[i];
+
+    auto vertices = std::vector<Vertex>{};
+    auto indices = std::vector<std::uint32_t>{};
+
+    // POSITIONS
+    {
+      const auto* pos_it = primitive.findAttribute("POSITION");
+      assert(pos_it != primitive.attributes.end());
+
+      const auto& pos_accessor = asset.accessors[pos_it->accessorIndex];
+      if (!pos_accessor.bufferViewIndex.has_value()) continue;
+
+      vertices.resize(pos_accessor.count);
+
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(
+          asset, pos_accessor, [&](glm::vec3 pos, std::size_t idx) {
+            vertices[idx].position = pos;
+            vertices[idx].color = glm::vec3(1.0F);
+            vertices[idx].uv = glm::vec2(0.0F);
+            vertices[idx].normal = glm::vec3(0.0F);
+          });
+    }
+
+    // NORMALS
+    {
+      const auto* normal_it = primitive.findAttribute("NORMAL");
+      assert(normal_it != primitive.attributes.end());
+
+      const auto& normal_accessor = asset.accessors[normal_it->accessorIndex];
+      assert(normal_accessor.bufferViewIndex.has_value());
+
+      fastgltf::iterateAccessorWithIndex<glm::vec3>(
+          asset, normal_accessor, [&](glm::vec3 normal, std::size_t idx) {
+            vertices[idx].normal = normal;
+          });
+    }
+
+    // TEXTURE COORDINATES
+    {
+      auto texcoord_attr = std::string("TEXCOORD_0");
+      const auto* texcoord_it = primitive.findAttribute(texcoord_attr);
+      assert(texcoord_it != primitive.attributes.end());
+
+      const auto& texcoord_accessor =
+          asset.accessors[texcoord_it->accessorIndex];
+      assert(texcoord_accessor.bufferViewIndex.has_value());
+
+      fastgltf::iterateAccessorWithIndex<glm::vec2>(
+          asset, texcoord_accessor,
+          [&](glm::vec2 uv, std::size_t idx) { vertices[idx].uv = uv; });
+    }
+
+    // INDICES
+    {
+      assert(primitive.indicesAccessor.has_value());
+      const auto& index_accessor =
+          asset.accessors[primitive.indicesAccessor.value()];
+
+      assert(index_accessor.bufferViewIndex.has_value());
+      assert(index_accessor.componentType ==
+             fastgltf::ComponentType::UnsignedInt);
+
+      indices.resize(index_accessor.count);
+      fastgltf::copyFromAccessor<std::uint32_t>(asset, index_accessor,
+                                                indices.data());
+    }
+
+    // vertex buffer
+    auto const buffer_vertex_ci = vma::BufferCreateInfo{
+        .allocator = m_allocator_.get(),
+        .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+        .queue_family = m_gpu_.queue_family,
+    };
+    auto vertex_buffer = vma::create_device_buffer(
+        buffer_vertex_ci, create_command_block(),
+        std::array<std::span<std::byte const>, 1>{to_byte_span(vertices)});
+    out_primitive.vertex_buffer = std::move(vertex_buffer);
+
+    // index buffer
+    auto const buffer_index_ci = vma::BufferCreateInfo{
+        .allocator = m_allocator_.get(),
+        .usage = vk::BufferUsageFlagBits::eIndexBuffer,
+        .queue_family = m_gpu_.queue_family,
+    };
+    auto index_buffer = vma::create_device_buffer(
+        buffer_vertex_ci, create_command_block(),
+        std::array<std::span<std::byte const>, 1>{to_byte_span(indices)});
+    out_primitive.index_buffer = std::move(index_buffer);
+
+    // draw command
+    auto& draw = out_primitive.draw;
+    draw.count = indices.size();
+    draw.instance_count = 1;
+    draw.first_index = 0;
+    draw.vertex_offset = 0;
+    draw.first_instance = 0;
+  }
+
+  meshes_.emplace_back(std::move(out_mesh));
+
+  return true;
+};
 
 }  // namespace lvk

@@ -3,6 +3,7 @@
 #include <print>
 #include <stdexcept>
 
+#include "GLFW/glfw3.h"
 #include "vulkan/vulkan.hpp"
 
 namespace lvk::glfw {

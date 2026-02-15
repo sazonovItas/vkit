@@ -58,7 +58,12 @@ void ShaderProgram::set_viewport_scissor(vk::CommandBuffer command_buffer,
                                          glm::ivec2 framebuffer_size) {
   auto const fsize = glm::vec2{framebuffer_size};
   auto viewport = vk::Viewport{};
-  viewport.setX(0.0F).setY(fsize.y).setWidth(fsize.x).setHeight(-fsize.y);
+  viewport.setX(0.0F)
+      .setY(fsize.y)
+      .setWidth(fsize.x)
+      .setHeight(-fsize.y)
+      .setMinDepth(0.0F)
+      .setMaxDepth(1.0F);
   command_buffer.setViewportWithCount(viewport);
 
   auto const usize = glm::uvec2{framebuffer_size};
@@ -71,9 +76,11 @@ void ShaderProgram::set_static_states(vk::CommandBuffer command_buffer) {
   command_buffer.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
   command_buffer.setSampleMaskEXT(vk::SampleCountFlagBits::e1, 0xff);
   command_buffer.setAlphaToCoverageEnableEXT(vk::False);
-  command_buffer.setCullMode(vk::CullModeFlagBits::eNone);
   command_buffer.setFrontFace(vk::FrontFace::eCounterClockwise);
+  command_buffer.setCullMode(vk::CullModeFlagBits::eBack);
+  command_buffer.setDepthBoundsTestEnable(vk::False);
   command_buffer.setDepthBiasEnable(vk::False);
+  command_buffer.setDepthBounds(0.0F, 1.0F);
   command_buffer.setStencilTestEnable(vk::False);
   command_buffer.setPrimitiveRestartEnable(vk::False);
   command_buffer.setColorWriteMaskEXT(0, ~vk::ColorComponentFlagBits{});

@@ -1,6 +1,7 @@
 #include "transform.hpp"
 
 #include "glm/ext/matrix_transform.hpp"
+#include "glm/fwd.hpp"
 #include "glm/trigonometric.hpp"
 
 namespace lvk {
@@ -11,14 +12,19 @@ struct Matricies {
   glm::mat4 scale;
 };
 
-[[nodiscard]] auto to_matricies(glm::vec2 const position, float rotation,
-                                glm::vec2 const scale) -> Matricies {
+[[nodiscard]] auto to_matricies(glm::vec3 const position, glm::vec3 rotation,
+                                glm::vec3 const scale) -> Matricies {
   static constexpr auto kMatV = glm::identity<glm::mat4>();
-  static constexpr auto kAxisV = glm::vec3{0.0F, 0.0F, 1.0F};
+
+  static constexpr auto kXAxe = glm::vec3{1.0F, 0.0F, 0.0F};
+  static constexpr auto kYAxe = glm::vec3{0.0F, 1.0F, 0.0F};
+  static constexpr auto kZAxe = glm::vec3{0.0F, 0.0F, 1.0F};
   return Matricies{
-      .translation = glm::translate(kMatV, glm::vec3{position, 0.0F}),
-      .orientation = glm::rotate(kMatV, glm::radians(rotation), kAxisV),
-      .scale = glm::scale(kMatV, glm::vec3{scale, 1.0F}),
+      .translation = glm::translate(kMatV, position),
+      .orientation = glm::rotate(kMatV, glm::radians(rotation.x), kXAxe) *
+                     glm::rotate(kMatV, glm::radians(rotation.y), kYAxe) *
+                     glm::rotate(kMatV, glm::radians(rotation.z), kZAxe),
+      .scale = glm::scale(kMatV, scale),
   };
 }
 };  // namespace
