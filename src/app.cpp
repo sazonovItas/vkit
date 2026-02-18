@@ -4,6 +4,7 @@
 #include <imgui.h>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <chrono>
 #include <cstdio>
@@ -30,7 +31,6 @@
 #include "glm/glm.hpp"
 #include "gpu.hpp"
 #include "model.hpp"
-#include "pipeline.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "vma.hpp"
@@ -44,6 +44,17 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 namespace {
 constexpr auto kVkVersionV = VK_MAKE_VERSION(1, 3, 0);
 
+VKAPI_ATTR VkBool32 VKAPI_CALL
+debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+               VkDebugUtilsMessageTypeFlagsEXT messageType,
+               const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+               void* pUserData) {
+  if (pCallbackData && pCallbackData->pMessage) {
+    std::println("[Validation]: {}", pCallbackData->pMessage);
+  }
+
+  return VK_FALSE;
+}
 [[nodiscard]] auto locate_assets_dir() -> fs::path {
   static constexpr std::string_view kDirNameV{"assets"};
 
@@ -122,7 +133,6 @@ constexpr auto layout_binding(std::uint32_t binding,
       vk::ShaderStageFlagBits::eAllGraphics,
   };
 }
-
 };  // namespace
 
 namespace lvk {
@@ -141,7 +151,6 @@ void App::run() {
   create_imgui();
   create_descriptor_pool();
   create_pipeline_layout();
-  create_alt_pipeline();
   create_shader();
   create_cmd_block_pool();
 
@@ -220,7 +229,7 @@ void App::inspect() {
 }
 
 void App::draw(vk::CommandBuffer const command_buffer) const {
-  m_shader_->bind(command_buffer, m_framebuffer_size_);
+  m_shader_->bind(command_buffer, glm::ivec2{}, m_framebuffer_size_);
 
   bind_descriptor_sets(command_buffer);
   for (const auto& mesh : meshes_) {
@@ -231,8 +240,12 @@ void App::draw(vk::CommandBuffer const command_buffer) const {
 void App::draw_mesh(vk::CommandBuffer const command_buffer,
                     Mesh const& mesh) const {
   for (const auto& primitive : mesh.primitives) {
-    command_buffer.bindVertexBuffers(0, primitive.vertex_buffer.get().buffer,
-                                     vk::DeviceSize{});
+    auto constants = PushConstants{
+        .vertex_buffer = primitive.vertex_buffer.get().address,
+    };
+    command_buffer.pushConstants(*m_pipeline_layout_,
+                                 vk::ShaderStageFlagBits::eVertex, 0,
+                                 sizeof(PushConstants), &constants);
     command_buffer.bindIndexBuffer(primitive.index_buffer.get().buffer, 0,
                                    vk::IndexType::eUint32);
     command_buffer.drawIndexed(
@@ -296,11 +309,11 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
   auto color_barrier = m_swapchain_->base_barrier();
   color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
-      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
-      .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
+      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
                         vk::AccessFlagBits2::eColorAttachmentWrite)
-      .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
+      .setDstAccessMask(color_barrier.srcAccessMask)
+      .setDstStageMask(color_barrier.srcStageMask);
 
   auto barriers = std::array{depth_barrier, color_barrier};
   dependency_info.setImageMemoryBarriers(barriers);
@@ -417,7 +430,7 @@ void App::update_view() {
       glm::perspective(glm::radians(90.0F),
                        static_cast<float>(m_framebuffer_size_.x) /
                            static_cast<float>(m_framebuffer_size_.y),
-                       0.1F, 200.0F);
+                       0.1F, 1000.0F);
 
   auto const mat_view =
       glm::lookAt(m_camera_.position, m_camera_.target, m_camera_.up);
@@ -540,8 +553,19 @@ void App::create_pipeline_layout() {
     m_set_layout_views_.push_back(*m_set_layouts_.back());
   }
 
+  auto push_constants_ranges = std::array<vk::PushConstantRange, 1>{};
+  push_constants_ranges[0]
+      .setOffset(0)
+      .setSize(sizeof(PushConstants))
+      .setStageFlags(vk::ShaderStageFlagBits::eVertex);
+
+  for (auto const& push_constant_range : push_constants_ranges) {
+    m_push_constant_ranges_.push_back(push_constant_range);
+  }
+
   auto pipeline_layout_ci = vk::PipelineLayoutCreateInfo{};
-  pipeline_layout_ci.setSetLayouts(m_set_layout_views_);
+  pipeline_layout_ci.setSetLayouts(m_set_layout_views_)
+      .setPushConstantRanges(push_constants_ranges);
   m_pipeline_layout_ =
       m_device_->createPipelineLayoutUnique(pipeline_layout_ci);
 }
@@ -575,54 +599,15 @@ void App::create_allocator() {
   m_allocator_ = vma::create_allocator(*m_instance_, m_gpu_.device, *m_device_);
 }
 
-void App::create_alt_pipeline() {
-  auto const vertex_spirv = to_spir_v(asset_path("shaders/shader.vert"));
-  auto const fragment_spirv = to_spir_v(asset_path("shaders/shader.frag"));
-  if (vertex_spirv.empty() || fragment_spirv.empty()) {
-    throw std::runtime_error{"failed to load shaders"};
-  }
-
-  auto pipeline_layout_ci = vk::PipelineLayoutCreateInfo{};
-  pipeline_layout_ci.setSetLayouts({});
-  m_alt_pipeline_layout_ =
-      m_device_->createPipelineLayoutUnique(pipeline_layout_ci);
-
-  auto const pipeline_builder_ci = PipelineBuilder::CreateInfo{
-      .device = *m_device_,
-      .samples = vk::SampleCountFlagBits::e1,
-      .color_format = m_swapchain_->get_format(),
-  };
-  m_alt_pipeline_builder_.emplace(pipeline_builder_ci);
-
-  auto vertex_ci = vk::ShaderModuleCreateInfo{};
-  vertex_ci.setCode(vertex_spirv);
-  auto fragment_ci = vk::ShaderModuleCreateInfo{};
-  fragment_ci.setCode(fragment_spirv);
-
-  auto const vertex_shader = m_device_->createShaderModuleUnique(vertex_ci);
-  auto const fragment_shader = m_device_->createShaderModuleUnique(fragment_ci);
-  auto const pipeline_state = PipelineState{
-      .vertex_shader = *vertex_shader,
-      .fragment_shader = *fragment_shader,
-  };
-
-  m_alt_pipeline_ =
-      m_alt_pipeline_builder_->build(*m_alt_pipeline_layout_, pipeline_state);
-}
-
 void App::create_shader() {
-  auto const vertex_spirv = to_spir_v(asset_path("shaders/shader.vert"));
-  auto const fragment_spirv = to_spir_v(asset_path("shaders/shader.frag"));
-  static constexpr auto kVertexInputV = ShaderVertexInput{
-      .attributes = kVertexAttributesV,
-      .bindings = kVertexBindingsV,
-  };
+  auto const vertex_spirv = to_spir_v(asset_path("shaders/mesh.vert"));
+  auto const fragment_spirv = to_spir_v(asset_path("shaders/mesh.frag"));
   auto const shader_ci = ShaderProgram::CreateInfo{
       .device = *m_device_,
       .vertex_spirv = vertex_spirv,
       .fragment_spirv = fragment_spirv,
-      .vertex_input = kVertexInputV,
       .set_layouts = m_set_layout_views_,
+      .push_constant_ranges = m_push_constant_ranges_,
   };
   m_shader_.emplace(shader_ci);
 }
@@ -682,19 +667,25 @@ void App::create_device() {
       .setQueuePriorities(kQueuePrioritiesV);
 
   auto enabled_features = vk::PhysicalDeviceFeatures{};
-  enabled_features.fillModeNonSolid = m_gpu_.features.fillModeNonSolid;
-  enabled_features.wideLines = m_gpu_.features.wideLines;
-  enabled_features.samplerAnisotropy = m_gpu_.features.samplerAnisotropy;
-  enabled_features.sampleRateShading = m_gpu_.features.sampleRateShading;
+  enabled_features.setFillModeNonSolid(m_gpu_.features.fillModeNonSolid);
+  enabled_features.setWideLines(m_gpu_.features.wideLines);
+  enabled_features.setSamplerAnisotropy(m_gpu_.features.samplerAnisotropy);
+  enabled_features.setSampleRateShading(m_gpu_.features.sampleRateShading);
 
   auto sync_feature = vk::PhysicalDeviceSynchronization2Features{vk::True};
   auto dynamic_redering_feature =
       vk::PhysicalDeviceDynamicRenderingFeatures{vk::True};
-  sync_feature.setPNext(&dynamic_redering_feature);
 
   auto shader_object_feature =
       vk::PhysicalDeviceShaderObjectFeaturesEXT{vk::True};
+
+  auto buffer_device_address_feature = vk::PhysicalDeviceVulkan12Features{};
+  buffer_device_address_feature.setScalarBlockLayout(vk::True);
+  buffer_device_address_feature.setBufferDeviceAddress(vk::True);
+
+  sync_feature.setPNext(&dynamic_redering_feature);
   dynamic_redering_feature.setPNext(&shader_object_feature);
+  shader_object_feature.setPNext(&buffer_device_address_feature);
 
   auto device_ci = vk::DeviceCreateInfo{};
   static constexpr auto kExtensionsV = std::array{
@@ -721,8 +712,8 @@ void App::select_gpu() {
       "Selected GPU: {}, type: {}",
       std::string_view{m_gpu_.properties.deviceName},
       m_gpu_.properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu
-          ? "Discrete"
-          : "Integrated");
+          ? "DiscreteGpu"
+          : "IntegratedGpu");
 }
 
 void App::create_surface() {
@@ -731,6 +722,7 @@ void App::create_surface() {
 
 void App::create_instance() {
   VULKAN_HPP_DEFAULT_DISPATCHER.init();
+
   auto const loader_version = vk::enumerateInstanceVersion();
   if (loader_version < kVkVersionV) {
     throw std::runtime_error{"loader does not support vulkan 1.3"};
@@ -739,21 +731,37 @@ void App::create_instance() {
   auto app_info = vk::ApplicationInfo{};
   app_info.setPApplicationName("learn vulkan").setApiVersion(kVkVersionV);
 
-  auto instance_ci = vk::InstanceCreateInfo{};
-
-  auto const extensions = glfw::instance_extensions();
-
   static constexpr auto kLayersV = std::array{
-      "VK_LAYER_KHRONOS_shader_object",
+      "VK_LAYER_KHRONOS_validation",
   };
   auto const layers = get_layers(kLayersV);
 
+  auto glfw_extensions = glfw::instance_extensions();
+  auto extensions =
+      std::vector<const char*>(glfw_extensions.begin(), glfw_extensions.end());
+  extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+  auto debug_create_info = vk::DebugUtilsMessengerCreateInfoEXT{};
+  debug_create_info.setMessageSeverity(
+      vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
+      vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+      vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose);
+  debug_create_info.setMessageType(
+      vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+      vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+      vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance);
+  debug_create_info.setPfnUserCallback(debug_callback);
+
+  auto instance_ci = vk::InstanceCreateInfo{};
   instance_ci.setPApplicationInfo(&app_info)
       .setPEnabledExtensionNames(extensions)
-      .setPEnabledLayerNames(kLayersV);
+      .setPNext(debug_create_info);
 
   m_instance_ = vk::createInstanceUnique(instance_ci);
   VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_instance_);
+
+  m_debug_messenger_ = m_instance_->createDebugUtilsMessengerEXTUnique(
+      debug_create_info, nullptr, VULKAN_HPP_DEFAULT_DISPATCHER);
 }
 
 void App::create_window() {
@@ -765,7 +773,7 @@ auto App::asset_path(std::string_view uri) const -> fs::path {
 }
 
 void App::load_gltf() {
-  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
+  if (!load_asset(asset_path("models/sword/scene.gltf"))) {
     std::println(stderr, "failed to load gltf model");
     return;
   }
@@ -850,9 +858,10 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
       fastgltf::iterateAccessorWithIndex<glm::vec3>(
           asset, pos_accessor, [&](glm::vec3 pos, std::size_t idx) {
             vertices[idx].position = pos;
-            vertices[idx].color = glm::vec3(1.0F);
-            vertices[idx].uv = glm::vec2(0.0F);
+            vertices[idx].uv_x = 0.0F;
             vertices[idx].normal = glm::vec3(0.0F);
+            vertices[idx].uv_y = 0.0F;
+            vertices[idx].tangent = glm::vec4(0.0F);
           });
     }
 
@@ -870,6 +879,21 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
           });
     }
 
+    // // TANGENTS
+    // {
+    //   const auto* tangent_it = primitive.findAttribute("TANGENT");
+    //   assert(tangent_it != primitive.attributes.end());
+    //
+    //   const auto& tangent_accessor =
+    //   asset.accessors[tangent_it->accessorIndex];
+    //   assert(tangent_accessor.bufferViewIndex.has_value());
+    //
+    //   fastgltf::iterateAccessorWithIndex<glm::vec4>(
+    //       asset, tangent_accessor, [&](glm::vec4 tangent, std::size_t idx) {
+    //         vertices[idx].tangent = tangent;
+    //       });
+    // }
+
     // TEXTURE COORDINATES
     {
       auto texcoord_attr = std::string("TEXCOORD_0");
@@ -881,8 +905,10 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
       assert(texcoord_accessor.bufferViewIndex.has_value());
 
       fastgltf::iterateAccessorWithIndex<glm::vec2>(
-          asset, texcoord_accessor,
-          [&](glm::vec2 uv, std::size_t idx) { vertices[idx].uv = uv; });
+          asset, texcoord_accessor, [&](glm::vec2 uv, std::size_t idx) {
+            vertices[idx].uv_x = uv.x;
+            vertices[idx].uv_y = uv.y;
+          });
     }
 
     // INDICES
@@ -901,24 +927,26 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
     }
 
     // vertex buffer
-    auto const buffer_vertex_ci = vma::BufferCreateInfo{
+    auto const vertex_ci = vma::BufferCreateInfo{
+        .device = *m_device_,
         .allocator = m_allocator_.get(),
-        .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+        .usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
         .queue_family = m_gpu_.queue_family,
     };
     auto vertex_buffer = vma::create_device_buffer(
-        buffer_vertex_ci, create_command_block(),
+        vertex_ci, create_command_block(),
         std::array<std::span<std::byte const>, 1>{to_byte_span(vertices)});
     out_primitive.vertex_buffer = std::move(vertex_buffer);
 
     // index buffer
-    auto const buffer_index_ci = vma::BufferCreateInfo{
+    auto const index_ci = vma::BufferCreateInfo{
+        .device = *m_device_,
         .allocator = m_allocator_.get(),
         .usage = vk::BufferUsageFlagBits::eIndexBuffer,
         .queue_family = m_gpu_.queue_family,
     };
     auto index_buffer = vma::create_device_buffer(
-        buffer_vertex_ci, create_command_block(),
+        index_ci, create_command_block(),
         std::array<std::span<std::byte const>, 1>{to_byte_span(indices)});
     out_primitive.index_buffer = std::move(index_buffer);
 

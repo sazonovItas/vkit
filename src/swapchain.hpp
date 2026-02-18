@@ -39,8 +39,8 @@ class Swapchain {
   void create_image_views();
   void create_present_semaphores();
 
-  vk::Device m_device_;
   Gpu m_gpu_;
+  vk::Device m_device_;
   VmaAllocator m_allocator_;
 
   vk::SwapchainCreateInfoKHR m_ci_;

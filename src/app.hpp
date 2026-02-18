@@ -8,7 +8,6 @@
 #include "fastgltf/types.hpp"
 #include "gpu.hpp"
 #include "model.hpp"
-#include "pipeline.hpp"
 #include "resource_buffering.hpp"
 #include "scoped_waiter.hpp"
 #include "shader_program.hpp"
@@ -46,7 +45,6 @@ class App {
   void create_descriptor_pool();
   void create_pipeline_layout();
   void create_shader();
-  void create_alt_pipeline();
   void create_shader_resources();
   void create_cmd_block_pool();
   void create_descriptor_sets();
@@ -79,7 +77,9 @@ class App {
 
   glfw::Window m_window_;
   vk::UniqueInstance m_instance_;
+  vk::UniqueDebugUtilsMessengerEXT m_debug_messenger_;
   vk::UniqueSurfaceKHR m_surface_;
+
   Gpu m_gpu_{};
   vk::UniqueDevice m_device_;
   vk::Queue m_queue_;
@@ -97,13 +97,10 @@ class App {
 
   std::optional<DearImGui> m_imgui_;
 
-  std::optional<PipelineBuilder> m_alt_pipeline_builder_;
-  vk::UniquePipelineLayout m_alt_pipeline_layout_;
-  vk::UniquePipeline m_alt_pipeline_;
-
   vk::UniqueDescriptorPool m_descriptor_pool_;
   std::vector<vk::UniqueDescriptorSetLayout> m_set_layouts_;
   std::vector<vk::DescriptorSetLayout> m_set_layout_views_;
+  std::vector<vk::PushConstantRange> m_push_constant_ranges_;
   vk::UniquePipelineLayout m_pipeline_layout_;
 
   std::optional<ShaderProgram> m_shader_;
@@ -131,7 +128,7 @@ class App {
   };
 
   Camera m_camera_{
-      .position = glm::vec3(0.0F, 0.75F, 1.0F),
+      .position = glm::vec3(0.0F, 2.0F, 1.0F),
       .target = glm::vec3(0.0F, 0.0F, 0.0F),
       .up = glm::vec3(0.0F, 1.0F, 0.0F),
   };

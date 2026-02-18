@@ -1,5 +1,7 @@
 project(learn-vk-ext)
 
+set(CMAKE_CXX_COMPILER=clang++)
+
 set(GLFW_INSTALL OFF)
 set(GLFW_BUILD_DOCS OFF)
 message(STATUS "[glfw]")

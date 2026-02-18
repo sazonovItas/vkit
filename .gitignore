@@ -3,5 +3,6 @@ build
 compile_commands.json
 
 imgui.ini
+.renderdoc
 
 assets/models

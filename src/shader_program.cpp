@@ -12,14 +12,14 @@ constexpr auto to_vkbool(bool const value) {
 };  // namespace
 
 namespace lvk {
-ShaderProgram::ShaderProgram(CreateInfo const& create_info)
-    : m_vertex_input_(create_info.vertex_input) {
+ShaderProgram::ShaderProgram(CreateInfo const& create_info) {
   auto const create_shader_ci =
       [&create_info](std::span<std::uint32_t const> spirv) {
         auto ret = vk::ShaderCreateInfoEXT{};
         ret.setCodeSize(spirv.size_bytes())
             .setPCode(spirv.data())
             .setSetLayouts(create_info.set_layouts)
+            .setPushConstantRanges(create_info.push_constant_ranges)
             .setCodeType(vk::ShaderCodeTypeEXT::eSpirv)
             .setPName("main");
         return ret;
@@ -45,8 +45,9 @@ ShaderProgram::ShaderProgram(CreateInfo const& create_info)
 }
 
 void ShaderProgram::bind(vk::CommandBuffer const command_buffer,
+                         glm::ivec2 const offset,
                          glm::ivec2 const framebuffer_size) const {
-  set_viewport_scissor(command_buffer, framebuffer_size);
+  set_viewport_scissor(command_buffer, offset, framebuffer_size);
   set_static_states(command_buffer);
   set_common_states(command_buffer);
   set_vertex_states(command_buffer);
@@ -55,11 +56,12 @@ void ShaderProgram::bind(vk::CommandBuffer const command_buffer,
 }
 
 void ShaderProgram::set_viewport_scissor(vk::CommandBuffer command_buffer,
+                                         glm::ivec2 offset,
                                          glm::ivec2 framebuffer_size) {
   auto const fsize = glm::vec2{framebuffer_size};
   auto viewport = vk::Viewport{};
-  viewport.setX(0.0F)
-      .setY(fsize.y)
+  viewport.setX(offset.x)
+      .setY(fsize.y + offset.y)
       .setWidth(fsize.x)
       .setHeight(-fsize.y)
       .setMinDepth(0.0F)
@@ -96,9 +98,8 @@ void ShaderProgram::set_common_states(vk::CommandBuffer command_buffer) const {
 }
 
 void ShaderProgram::set_vertex_states(vk::CommandBuffer command_buffer) const {
-  command_buffer.setVertexInputEXT(m_vertex_input_.bindings,
-                                   m_vertex_input_.attributes);
   command_buffer.setPrimitiveTopology(topology);
+  command_buffer.setVertexInputEXT({}, {});
 }
 
 void ShaderProgram::set_fragment_states(

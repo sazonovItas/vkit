@@ -1,7 +1,7 @@
 .PHONY: glslc
 glslc:
-	glslc ./src/glsl/shader.vert -o ./assets/shaders/shader.vert
-	glslc ./src/glsl/shader.frag -o ./assets/shaders/shader.frag
+	glslc ./src/glsl/mesh.vert -o ./assets/shaders/mesh.vert
+	glslc ./src/glsl/mesh.frag -o ./assets/shaders/mesh.frag
 
 .PHONY: cmake
 cmake:

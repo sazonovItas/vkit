@@ -28,6 +28,7 @@ struct RawBuffer {
   VmaAllocation allocation{};
   vk::Buffer buffer;
   vk::DeviceSize size{};
+  vk::DeviceAddress address{};
   void* mapped{};
 };
 
@@ -38,6 +39,7 @@ struct BufferDeleter {
 using Buffer = Scoped<RawBuffer, BufferDeleter>;
 
 struct BufferCreateInfo {
+  vk::Device device;
   VmaAllocator allocator;
   vk::BufferUsageFlags usage;
   std::uint32_t queue_family;

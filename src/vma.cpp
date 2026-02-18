@@ -3,6 +3,7 @@
 #include <cstring>
 #include <numeric>
 #include <print>
+#include <stdexcept>
 
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_core.h"
@@ -26,6 +27,7 @@ auto create_allocator(vk::Instance const instance,
   allocator_ci.device = device;
   allocator_ci.pVulkanFunctions = &vma_vk_funcs;
   allocator_ci.instance = instance;
+  allocator_ci.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
   VmaAllocator ret{};
   auto const result = vmaCreateAllocator(&allocator_ci, &ret);
@@ -61,9 +63,8 @@ auto create_buffer(const BufferCreateInfo& create_info,
   }
 
   auto buffer_ci = vk::BufferCreateInfo{};
-  buffer_ci.setQueueFamilyIndices(create_info.queue_family)
-      .setSize(size)
-      .setUsage(usage);
+  buffer_ci.setSize(size).setUsage(usage);
+
   auto vma_buffer_ci = static_cast<VkBufferCreateInfo>(buffer_ci);
 
   VmaAllocation allocation{};
@@ -77,11 +78,19 @@ auto create_buffer(const BufferCreateInfo& create_info,
     return {};
   }
 
+  auto address = vk::DeviceAddress{0};
+  if ((usage & vk::BufferUsageFlagBits::eShaderDeviceAddress) ==
+      vk::BufferUsageFlagBits::eShaderDeviceAddress) {
+    auto device_address_info = vk::BufferDeviceAddressInfo{buffer};
+    address = create_info.device.getBufferAddress(device_address_info);
+  }
+
   return RawBuffer{
       .allocator = create_info.allocator,
       .allocation = allocation,
       .buffer = buffer,
       .size = size,
+      .address = address,
       .mapped = allocation_info.pMappedData,
   };
 }
