@@ -123,6 +123,7 @@ template <typename T>
 [[nodiscard]] constexpr auto to_byte_span(std::vector<T> const& v) {
   return std::as_bytes(std::span{v});
 }
+
 constexpr auto layout_binding(std::uint32_t binding,
                               vk::DescriptorType const type) {
   return vk::DescriptorSetLayoutBinding{
@@ -131,6 +132,132 @@ constexpr auto layout_binding(std::uint32_t binding,
       1,
       vk::ShaderStageFlagBits::eAllGraphics,
   };
+}
+
+struct BitmapData {
+  std::vector<std::byte> storage;
+  vkit::vulkan::vma::Bitmap bitmap;
+};
+
+float hash(int x, int y) {
+  std::hash<int> h;
+  return static_cast<float>((h((x * 73856093) ^ (y * 19349663))) & 0xffff) /
+         65535.0F;
+}
+
+BitmapData generate_bricks(int width, int height, float brickWidth,
+                           float brickHeight, float mortarThickness) {
+  BitmapData result;
+  result.storage.resize(width * height * 4);
+
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      float fx = static_cast<float>(x) / width;
+      float fy = static_cast<float>(y) / height;
+
+      float bx = fx * (width / brickWidth);
+      float by = fy * (height / brickHeight);
+
+      int row = static_cast<int>(std::floor(by));
+
+      if (row % 2 == 1) bx += 0.5F;
+
+      float brick_local_x = bx - std::floor(bx);
+      float brick_local_y = by - std::floor(by);
+
+      float local_x = std::fmod(static_cast<float>(x), brickWidth);
+      float local_y = std::fmod(static_cast<float>(y), brickHeight);
+
+      if (row % 2 == 1)
+        local_x =
+            std::fmod(static_cast<float>(x) + (brickWidth * 0.5F), brickWidth);
+
+      bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
+
+      int index = (y * width + x) * 4;
+
+      if (is_mortar) {
+        uint8_t mortar = 200;
+        result.storage[index + 0] = std::byte(mortar);
+        result.storage[index + 1] = std::byte(mortar);
+        result.storage[index + 2] = std::byte(mortar);
+        result.storage[index + 3] = std::byte(255);
+      } else {
+        float noise = hash(static_cast<int>(std::floor(bx)),
+                           static_cast<int>(std::floor(by)));
+        float variation = 0.8F + (noise * 0.4F);
+
+        auto r = static_cast<uint8_t>(150 * variation);
+        auto g = static_cast<uint8_t>(50 * variation);
+        auto b = static_cast<uint8_t>(40 * variation);
+
+        result.storage[index + 0] = std::byte(r);
+        result.storage[index + 1] = std::byte(g);
+        result.storage[index + 2] = std::byte(b);
+        result.storage[index + 3] = std::byte(255);
+      }
+    }
+  }
+
+  result.bitmap = {
+      .bytes = std::span<const std::byte>(result.storage.data(),
+                                          result.storage.size()),
+      .size = {width, height},
+  };
+
+  return result;
+}
+
+BitmapData generateStoneTiles(int width, int height, int tileSize,
+                              float mortarThickness) {
+  BitmapData result;
+  result.storage.resize(width * height * 4);
+
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      int tile_x = x / tileSize;
+      int tile_y = y / tileSize;
+
+      auto local_x = static_cast<float>(x % tileSize);
+      auto local_y = static_cast<float>(y % tileSize);
+
+      bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
+
+      int index = (y * width + x) * 4;
+
+      if (is_mortar) {
+        uint8_t mortar = 180;
+        result.storage[index + 0] = std::byte(mortar);
+        result.storage[index + 1] = std::byte(mortar);
+        result.storage[index + 2] = std::byte(mortar);
+        result.storage[index + 3] = std::byte(255);
+      } else {
+        float base_noise = hash(tile_x, tile_y);
+        float variation = 0.7F + (base_noise * 0.6F);
+
+        // дополнительная мелкая зернистость
+        float fine_noise = hash(x, y);
+        float grain = 0.9F + (fine_noise * 0.2F);
+
+        auto r = static_cast<uint8_t>(120 * variation * grain);
+        auto g = static_cast<uint8_t>(110 * variation * grain);
+        auto b = static_cast<uint8_t>(100 * variation * grain);
+
+        result.storage[index + 0] = std::byte(r);
+        result.storage[index + 1] = std::byte(g);
+        result.storage[index + 2] = std::byte(b);
+        result.storage[index + 3] = std::byte(255);
+      }
+    }
+  }
+
+  result.bitmap = {
+      .bytes = std::span<const std::byte>(result.storage.data(),
+                                          result.storage.size()),
+      .size = {width, height},
+  };
+
+  return result;
 }
 };  // namespace
 
@@ -178,7 +305,7 @@ void App::main_loop() {
 }
 
 void App::inspect() {
-  ImGui::SetNextWindowSize({200.0F, 100.0F}, ImGuiCond_Once);
+  ImGui::SetNextWindowSize({300.0F, 320.0F}, ImGuiCond_Once);
   if (ImGui::Begin("Inspect")) {
     if (ImGui::Checkbox("wireframe", &m_wireframe_)) {
       m_shader_->polygon_mode =
@@ -214,6 +341,29 @@ void App::inspect() {
     ImGui::Separator();
     if (ImGui::TreeNode("Instance")) {
       kInspectTransform(m_transform_);
+      ImGui::TreePop();
+    }
+
+    ImGui::Separator();
+    if (ImGui::TreeNode("Texture")) {
+      if (m_textures_ && !m_textures_->empty()) {
+        const char* preview = (*m_textures_)[m_curr_tex_idx_].name.c_str();
+
+        if (ImGui::BeginCombo("Current", preview)) {
+          for (uint32_t i = 0; i < m_textures_->size(); ++i) {
+            bool selected = (m_curr_tex_idx_ == i);
+
+            if (ImGui::Selectable((*m_textures_)[i].name.c_str(), selected)) {
+              m_curr_tex_idx_ = i;
+            }
+
+            if (selected) ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+      }
+
       ImGui::TreePop();
     }
   }
@@ -445,7 +595,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
       .setDstBinding(0);
   writes[0] = write;
 
-  auto const image_info = m_texture_->descriptor_info();
+  auto const image_info = (*m_textures_)[m_curr_tex_idx_].descriptor_info();
   write.setImageInfo(image_info)
       .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
       .setDescriptorCount(1)
@@ -465,6 +615,7 @@ void App::create_shader_resources() {
                       vk::BufferUsageFlagBits::eUniformBuffer);
 
   using Pixel = std::array<std::byte, 4>;
+  using std::vector;
   using vkit::vulkan::vma::Bitmap;
 
   static constexpr auto kRgbaPixelsV = std::array{
@@ -475,20 +626,53 @@ void App::create_shader_resources() {
   };
   static constexpr auto kRgbaBytesV =
       std::bit_cast<std::array<std::byte, sizeof(kRgbaPixelsV)>>(kRgbaPixelsV);
+
+  m_textures_.emplace(std::vector<Texture>{});
+
+  // 4xSquare board texture
   static constexpr auto kRgbyBitmapV = Bitmap{
       .bytes = kRgbaBytesV,
       .size = {2, 2},
   };
-  auto texture_ci = Texture::CreateInfo{
+  auto grb_board_ci = Texture::CreateInfo{
+      .name = "4xSquare board",
       .device = *m_gpu_->device,
       .allocator = m_gpu_->allocator.get(),
       .queue_family = m_gpu_->queue_families.transfer,
       .command_block = create_command_block(),
       .bitmap = kRgbyBitmapV,
   };
+  grb_board_ci.sampler.setMagFilter(vk::Filter::eNearest);
 
-  texture_ci.sampler.setMagFilter(vk::Filter::eNearest);
-  m_texture_.emplace(std::move(texture_ci));
+  m_textures_->emplace_back(std::move(grb_board_ci));
+
+  // Bricks texture
+  auto bricks = generate_bricks(1024, 1024, 8.0F, 8.0F, 0.125F);
+  auto bricks_ci = Texture::CreateInfo{
+      .name = "Bricks",
+      .device = *m_gpu_->device,
+      .allocator = m_gpu_->allocator.get(),
+      .queue_family = m_gpu_->queue_families.transfer,
+      .command_block = create_command_block(),
+      .bitmap = bricks.bitmap,
+  };
+  bricks_ci.sampler.setMagFilter(vk::Filter::eNearest);
+
+  m_textures_->emplace_back(std::move(bricks_ci));
+
+  // Stone texture
+  auto stone = generateStoneTiles(128, 128, 8, 0.5F);
+  auto stone_ci = Texture::CreateInfo{
+      .name = "Stone",
+      .device = *m_gpu_->device,
+      .allocator = m_gpu_->allocator.get(),
+      .queue_family = m_gpu_->queue_families.transfer,
+      .command_block = create_command_block(),
+      .bitmap = stone.bitmap,
+  };
+  stone_ci.sampler.setMagFilter(vk::Filter::eNearest);
+
+  m_textures_->emplace_back(std::move(stone_ci));
 }
 
 void App::create_descriptor_sets() {
@@ -789,20 +973,20 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
           });
     }
 
-    // // TANGENTS
-    // {
-    //   const auto* tangent_it = primitive.findAttribute("TANGENT");
-    //   assert(tangent_it != primitive.attributes.end());
-    //
-    //   const auto& tangent_accessor =
-    //   asset.accessors[tangent_it->accessorIndex];
-    //   assert(tangent_accessor.bufferViewIndex.has_value());
-    //
-    //   fastgltf::iterateAccessorWithIndex<glm::vec4>(
-    //       asset, tangent_accessor, [&](glm::vec4 tangent, std::size_t idx) {
-    //         vertices[idx].tangent = tangent;
-    //       });
-    // }
+    // TANGENTS
+    {
+      const auto* tangent_it = primitive.findAttribute("TANGENT");
+      if (tangent_it != primitive.attributes.end()) {
+        const auto& tangent_accessor =
+            asset.accessors[tangent_it->accessorIndex];
+        assert(tangent_accessor.bufferViewIndex.has_value());
+
+        fastgltf::iterateAccessorWithIndex<glm::vec4>(
+            asset, tangent_accessor, [&](glm::vec4 tangent, std::size_t idx) {
+              vertices[idx].tangent = tangent;
+            });
+      }
+    }
 
     // TEXTURE COORDINATES
     {

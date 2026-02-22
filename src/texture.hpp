@@ -25,6 +25,8 @@ constexpr auto kSamplerCiV = create_sampler_ci(
     vk::SamplerAddressMode::eClampToEdge, vk::Filter::eLinear);
 
 struct TextureCreateInfo {
+  std::string name;
+
   vk::Device device;
   VmaAllocator allocator;
   std::uint32_t queue_family;
@@ -41,6 +43,8 @@ class Texture {
   explicit Texture(CreateInfo create_info);
 
   [[nodiscard]] auto descriptor_info() const -> vk::DescriptorImageInfo;
+
+  std::string name;
 
  private:
   vkit::vulkan::vma::Image m_image_;

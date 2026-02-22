@@ -36,6 +36,8 @@ Texture::Texture(CreateInfo create_info) {
   m_view_ = create_info.device.createImageViewUnique(image_view_ci);
 
   m_sampler_ = create_info.device.createSamplerUnique(create_info.sampler);
+
+  name = create_info.name;
 }
 
 auto Texture::descriptor_info() const -> vk::DescriptorImageInfo {

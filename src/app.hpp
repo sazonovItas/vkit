@@ -75,11 +75,7 @@ class App {
   vk::UniqueDebugUtilsMessengerEXT m_debug_messenger_;
   vk::UniqueSurfaceKHR m_surface_;
 
-  // Gpu m_gpu_{};
   std::optional<vkit::vulkan::Gpu> m_gpu_;
-  // vk::UniqueDevice m_device_;
-  // vk::Queue m_queue_;
-  // vkit::vulkan::vma::Allocator m_allocator_;
 
   std::optional<Swapchain> m_swapchain_;
 
@@ -106,7 +102,8 @@ class App {
   Transform m_transform_;
 
   std::optional<DescriptorBuffer> m_view_ubo_;
-  std::optional<Texture> m_texture_;
+  std::uint32_t m_curr_tex_idx_{0};
+  std::optional<std::vector<Texture>> m_textures_;
   Buffered<std::vector<vk::DescriptorSet>> m_descriptor_sets_{};
 
   glm::ivec2 m_framebuffer_size_{};
@@ -122,7 +119,7 @@ class App {
   };
 
   Camera m_camera_{
-      .position = glm::vec3(0.0F, 1.0F, 1.0F),
+      .position = glm::vec3(0.0F, 2.0F, 2.0F),
       .target = glm::vec3(0.0F, 0.0F, 0.0F),
       .up = glm::vec3(0.0F, 1.0F, 0.0F),
   };
