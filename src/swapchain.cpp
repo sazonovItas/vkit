@@ -6,8 +6,7 @@
 #include <stdexcept>
 
 #include "resource_buffering.hpp"
-#include "vma.hpp"
-#include "vulkan/vulkan.hpp"
+#include "vulkan/gpu.hpp"
 
 namespace lvk {
 
@@ -104,12 +103,16 @@ constexpr auto kDepthSubresourceRangeV = [] {
 }();
 };  // namespace
 
-Swapchain::Swapchain(vk::Device const device, Gpu const& gpu,
-                     VmaAllocator allocator, vk::SurfaceKHR const surface,
+Swapchain::Swapchain(vk::Device device, vk::PhysicalDevice physical_device,
+                     vkit::vulkan::QueueFamilies& queue_families,
+                     VmaAllocator allocator, vk::SurfaceKHR surface,
                      glm::ivec2 const size)
-    : m_device_(device), m_gpu_(gpu), m_allocator_(allocator) {
+    : m_device_(device),
+      m_physical_device_(physical_device),
+      m_queue_families_(queue_families),
+      m_allocator_(allocator) {
   auto const surface_format =
-      get_surface_format(m_gpu_.device.getSurfaceFormatsKHR(surface));
+      get_surface_format(m_physical_device_.getSurfaceFormatsKHR(surface));
   m_ci_.setSurface(surface)
       .setImageFormat(surface_format.format)
       .setImageColorSpace(surface_format.colorSpace)
@@ -125,11 +128,11 @@ auto Swapchain::recreate(glm::ivec2 size) -> bool {
   if (size.x <= 0 || size.y <= 0) return false;
 
   auto const capabilities =
-      m_gpu_.device.getSurfaceCapabilitiesKHR(m_ci_.surface);
+      m_physical_device_.getSurfaceCapabilitiesKHR(m_ci_.surface);
   m_ci_.setImageExtent(get_image_extent(capabilities, size))
       .setMinImageCount(get_image_count(capabilities))
       .setOldSwapchain(m_swapchain_ ? *m_swapchain_ : vk::SwapchainKHR{})
-      .setQueueFamilyIndices(m_gpu_.queue_family);
+      .setQueueFamilyIndices(m_queue_families_.graphics_present);
   assert(m_ci_.imageExtent.width > 0 && m_ci_.imageExtent.height > 0 &&
          m_ci_.minImageCount >= kMinImagesV);
 
@@ -171,8 +174,8 @@ auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_images_.at(m_image_index_.value()))
       .setSubresourceRange(kColorSubresourceRangeV)
-      .setSrcQueueFamilyIndex(m_gpu_.queue_family)
-      .setDstQueueFamilyIndex(m_gpu_.queue_family);
+      .setSrcQueueFamilyIndex(m_queue_families_.graphics_present)
+      .setDstQueueFamilyIndex(m_queue_families_.graphics_present);
   return ret;
 };
 
@@ -180,8 +183,8 @@ auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_depth_image_.get().image)
       .setSubresourceRange(kDepthSubresourceRangeV)
-      .setSrcQueueFamilyIndex(m_gpu_.queue_family)
-      .setDstQueueFamilyIndex(m_gpu_.queue_family);
+      .setSrcQueueFamilyIndex(m_queue_families_.graphics_present)
+      .setDstQueueFamilyIndex(m_queue_families_.graphics_present);
   return ret;
 }
 
@@ -217,11 +220,11 @@ void Swapchain::populate_images() {
 }
 
 void Swapchain::populate_depth_image() {
-  auto depth_image_ci = vma::ImageCreateInfo{
+  auto depth_image_ci = vkit::vulkan::vma::ImageCreateInfo{
       .allocator = m_allocator_,
-      .queue_family = m_gpu_.queue_family,
+      .queue_family = m_queue_families_.transfer,
   };
-  m_depth_image_ = vma::create_image(
+  m_depth_image_ = vkit::vulkan::vma::create_image(
       depth_image_ci, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1,
       vk::Format::eD32SfloatS8Uint, m_ci_.imageExtent);
 

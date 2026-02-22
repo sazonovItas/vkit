@@ -1,14 +1,14 @@
 #include "texture.hpp"
 
-#include "vma.hpp"
-#include "vulkan/vulkan.hpp"
+#include "vulkan/vma/image.hpp"
 
 namespace lvk {
 
 constexpr auto kWhitePixelV = std::array{std::byte{0xFF}, std::byte{0xFF},
                                          std::byte{0xFF}, std::byte{0xFF}};
 
-constexpr auto kWhiteBitmapV = Bitmap{.bytes = kWhitePixelV, .size = {1, 1}};
+constexpr auto kWhiteBitmapV =
+    vkit::vulkan::vma::Bitmap{.bytes = kWhitePixelV, .size = {1, 1}};
 
 Texture::Texture(CreateInfo create_info) {
   if (create_info.bitmap.bytes.empty() || create_info.bitmap.size.x <= 0 ||
@@ -16,11 +16,11 @@ Texture::Texture(CreateInfo create_info) {
     create_info.bitmap = kWhiteBitmapV;
   }
 
-  auto const image_ci = vma::ImageCreateInfo{
+  auto const image_ci = vkit::vulkan::vma::ImageCreateInfo{
       .allocator = create_info.allocator,
       .queue_family = create_info.queue_family,
   };
-  m_image_ = vma::create_sampled_image(
+  m_image_ = vkit::vulkan::vma::create_sampled_image(
       image_ci, std::move(create_info.command_block), create_info.bitmap);
 
   auto image_view_ci = vk::ImageViewCreateInfo{};

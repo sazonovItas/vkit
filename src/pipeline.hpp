@@ -2,8 +2,6 @@
 
 #include <cstdint>
 
-#include "vulkan/vulkan.hpp"
-
 namespace lvk {
 struct PipelineFlag {
   enum : std::uint8_t {

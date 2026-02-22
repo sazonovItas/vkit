@@ -30,6 +30,7 @@ struct ShaderProgramCreateInfo {
 };
 
 struct PushConstants {
+  glm::mat4 transform;
   vk::DeviceAddress vertex_buffer;
 };
 

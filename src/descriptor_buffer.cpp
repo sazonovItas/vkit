@@ -4,9 +4,6 @@
 #include <cstdint>
 #include <cstring>
 
-#include "vma.hpp"
-#include "vulkan/vulkan.hpp"
-
 namespace lvk {
 DescriptorBuffer::DescriptorBuffer(VmaAllocator allocator,
                                    std::uint32_t const queue_family,
@@ -39,13 +36,13 @@ void DescriptorBuffer::write_to(Buffer& out,
 
   out.size = bytes.size();
   if (out.buffer.get().size < bytes.size()) {
-    auto const buffer_ci = vma::BufferCreateInfo{
+    auto const buffer_ci = vkit::vulkan::vma::BufferCreateInfo{
         .allocator = m_allocator_,
         .usage = m_usage_,
         .queue_family = m_queue_family_,
     };
-    out.buffer =
-        vma::create_buffer(buffer_ci, vma::BufferMemoryType::kHost, out.size);
+    out.buffer = vkit::vulkan::vma::create_buffer(
+        buffer_ci, vkit::vulkan::vma::BufferMemoryType::kHost, out.size);
   }
 
   std::memcpy(out.buffer.get().mapped, bytes.data(), bytes.size());

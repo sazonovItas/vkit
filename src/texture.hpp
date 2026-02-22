@@ -2,14 +2,11 @@
 
 #include <vk_mem_alloc.h>
 
-#include "command_block.hpp"
-#include "vma.hpp"
+#include "vulkan/command_block.hpp"
+#include "vulkan/vma/image.hpp"
 #include "vulkan/vulkan.hpp"
 
 namespace lvk {
-
-using vma::Bitmap;
-
 [[nodiscard]] constexpr auto create_sampler_ci(
     vk::SamplerAddressMode const wrap, vk::Filter const filter) {
   auto ret = vk::SamplerCreateInfo{};
@@ -31,8 +28,8 @@ struct TextureCreateInfo {
   vk::Device device;
   VmaAllocator allocator;
   std::uint32_t queue_family;
-  CommandBlock command_block;
-  Bitmap bitmap;
+  vkit::vulkan::CommandBlock command_block;
+  vkit::vulkan::vma::Bitmap bitmap;
 
   vk::SamplerCreateInfo sampler{kSamplerCiV};
 };
@@ -46,7 +43,7 @@ class Texture {
   [[nodiscard]] auto descriptor_info() const -> vk::DescriptorImageInfo;
 
  private:
-  vma::Image m_image_;
+  vkit::vulkan::vma::Image m_image_;
   vk::UniqueImageView m_view_;
   vk::UniqueSampler m_sampler_;
 };

@@ -10,6 +10,6 @@ struct Gpu {
   std::uint32_t queue_family;
 };
 
-[[nodiscard]] auto get_suitable_gpu(vk::Instance instance,
-                                    vk::SurfaceKHR surface) -> Gpu;
+[[nodiscard]] auto get_suitable_gpu(vk::Instance const& instance,
+                                    vk::SurfaceKHR const& surface) -> Gpu;
 };  // namespace lvk

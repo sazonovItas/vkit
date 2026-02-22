@@ -59,7 +59,7 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
   }
   ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.99F;
 
-  m_device_ = Scoped<vk::Device, Deleter>{create_info.device};
+  m_device_ = vkit::util::Scoped<vk::Device, Deleter>{create_info.device};
 }
 
 void DearImGui::new_frame() {

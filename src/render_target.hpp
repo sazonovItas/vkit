@@ -1,7 +1,5 @@
 #pragma once
 
-#include "vulkan/vulkan.hpp"
-
 namespace lvk {
 struct RenderTarget {
   vk::Image image;

@@ -4,8 +4,8 @@
 #include <ranges>
 #include <stdexcept>
 
-auto lvk::get_suitable_gpu(vk::Instance instance, vk::SurfaceKHR surface)
-    -> Gpu {
+auto lvk::get_suitable_gpu(const vk::Instance& instance,
+                           const vk::SurfaceKHR& surface) -> Gpu {
   auto const supports_swapchain = [](Gpu const& gpu) {
     static constexpr std::string_view kNameV = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
     static constexpr auto kIsSwapchain =

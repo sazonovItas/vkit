@@ -1,5 +1,6 @@
 #pragma once
 
+#include "fastgltf/math.hpp"
 namespace lvk {
 struct Transform {
   glm::vec3 position{};

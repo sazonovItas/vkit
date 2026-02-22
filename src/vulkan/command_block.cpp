@@ -3,9 +3,7 @@
 #include <chrono>
 #include <print>
 
-#include "vulkan/vulkan.hpp"
-
-namespace lvk {
+namespace vkit::vulkan {
 CommandBlock::CommandBlock(vk::Device const device, vk::Queue const queue,
                            vk::CommandPool const command_pool)
     : m_device_(device), m_queue_(queue) {
@@ -15,23 +13,22 @@ CommandBlock::CommandBlock(vk::Device const device, vk::Queue const queue,
       .setLevel(vk::CommandBufferLevel::ePrimary);
 
   auto command_buffers = m_device_.allocateCommandBuffersUnique(allocate_info);
-  m_command_buffer_ = std::move(command_buffers.front());
+  m_cb_ = std::move(command_buffers.front());
 
   auto begin_info = vk::CommandBufferBeginInfo{};
   begin_info.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-  m_command_buffer_->begin(begin_info);
+  m_cb_->begin(begin_info);
 }
 
 void CommandBlock::submit_and_wait() {
-  if (!m_command_buffer_) {
+  if (!m_cb_) {
     return;
   }
 
-  m_command_buffer_->end();
+  m_cb_->end();
 
   auto submit_info = vk::SubmitInfo2KHR{};
-  auto const command_buffer_info =
-      vk::CommandBufferSubmitInfo(*m_command_buffer_);
+  auto const command_buffer_info = vk::CommandBufferSubmitInfo(*m_cb_);
   submit_info.setCommandBufferInfos(command_buffer_info);
   auto fence = m_device_.createFenceUnique({});
   m_queue_.submit2(submit_info, *fence);
@@ -43,6 +40,6 @@ void CommandBlock::submit_and_wait() {
     std::println(stderr, "failed to submit Command Buffer");
   }
 
-  m_command_buffer_.reset();
+  m_cb_.reset();
 }
-};  // namespace lvk
+};  // namespace vkit::vulkan

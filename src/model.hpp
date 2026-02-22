@@ -1,14 +1,14 @@
 #pragma once
 
-#include "vma.hpp"
+#include "vulkan/vma/buffer.hpp"
 
 namespace lvk {
 struct DrawCommand {
-  std::uint32_t count;
-  std::uint32_t instance_count;
-  std::uint32_t first_index;
-  std::uint32_t vertex_offset;
-  std::uint32_t first_instance;
+  std::uint32_t count{};
+  std::uint32_t instance_count{};
+  std::uint32_t first_index{};
+  std::uint32_t vertex_offset{};
+  std::uint32_t first_instance{};
 };
 
 struct Vertex {
@@ -20,13 +20,21 @@ struct Vertex {
 };
 
 struct Primitive {
-  DrawCommand draw;
-
-  vma::Buffer vertex_buffer;
-  vma::Buffer index_buffer;
+  DrawCommand draw{};
+  vkit::vulkan::vma::Buffer vertex_buffer;
+  vkit::vulkan::vma::Buffer index_buffer;
 };
 
 struct Mesh {
   std::vector<Primitive> primitives;
+};
+
+struct Material {
+  glm::vec4 base_color{};
+  glm::vec4 metallic_roughness_emissive{};
+  std::uint32_t diffuse_tex{};
+  std::uint32_t normal_tex{};
+  std::uint32_t metallic_roughness_tex{};
+  std::uint32_t emissive_tex{};
 };
 };  // namespace lvk

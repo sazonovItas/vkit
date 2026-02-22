@@ -3,8 +3,7 @@
 #include <vk_mem_alloc.h>
 
 #include "resource_buffering.hpp"
-#include "vma.hpp"
-#include "vulkan/vulkan.hpp"
+#include "vulkan/vma/buffer.hpp"
 
 namespace lvk {
 class DescriptorBuffer {
@@ -19,7 +18,7 @@ class DescriptorBuffer {
 
  private:
   struct Buffer {
-    vma::Buffer buffer;
+    vkit::vulkan::vma::Buffer buffer;
     vk::DeviceSize size{};
   };
 

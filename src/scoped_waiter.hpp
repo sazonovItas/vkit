@@ -1,11 +1,11 @@
 #pragma once
-#include "scoped.hpp"
-#include "vulkan/vulkan.hpp"
+
+#include "util/scoped.hpp"
 
 namespace lvk {
 struct ScopedWaiterDeleter {
   void operator()(vk::Device const device) const noexcept { device.waitIdle(); }
 };
 
-using ScopedWaiter = Scoped<vk::Device, ScopedWaiterDeleter>;
-}  // namespace lvk
+using ScopedWaiter = vkit::util::Scoped<vk::Device, ScopedWaiterDeleter>;
+};  // namespace lvk
