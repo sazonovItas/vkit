@@ -132,7 +132,7 @@ auto Swapchain::recreate(glm::ivec2 size) -> bool {
   m_ci_.setImageExtent(get_image_extent(capabilities, size))
       .setMinImageCount(get_image_count(capabilities))
       .setOldSwapchain(m_swapchain_ ? *m_swapchain_ : vk::SwapchainKHR{})
-      .setQueueFamilyIndices(m_queue_families_.graphics_present);
+      .setQueueFamilyIndices(m_queue_families_.graphicsPresent);
   assert(m_ci_.imageExtent.width > 0 && m_ci_.imageExtent.height > 0 &&
          m_ci_.minImageCount >= kMinImagesV);
 
@@ -174,8 +174,8 @@ auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_images_.at(m_image_index_.value()))
       .setSubresourceRange(kColorSubresourceRangeV)
-      .setSrcQueueFamilyIndex(m_queue_families_.graphics_present)
-      .setDstQueueFamilyIndex(m_queue_families_.graphics_present);
+      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
+      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
   return ret;
 };
 
@@ -183,8 +183,8 @@ auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_depth_image_.get().image)
       .setSubresourceRange(kDepthSubresourceRangeV)
-      .setSrcQueueFamilyIndex(m_queue_families_.graphics_present)
-      .setDstQueueFamilyIndex(m_queue_families_.graphics_present);
+      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
+      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
   return ret;
 }
 

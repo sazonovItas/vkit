@@ -1,6 +1,6 @@
 #pragma once
 
-namespace vkit::util {
+namespace vkit {
 template <typename Type>
 concept Scopeable = std::equality_comparable<Type>;
 
@@ -37,4 +37,4 @@ class Scoped {
  private:
   Type m_t_{};
 };
-}  // namespace vkit::util
+}  // namespace vkit

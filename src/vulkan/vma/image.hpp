@@ -2,8 +2,8 @@
 
 #include <vk_mem_alloc.h>
 
-#include "util/scoped.hpp"
-#include "vulkan/command_block.hpp"
+#include "scoped/scoped.hpp"
+#include "vulkan/util.hpp"
 
 namespace vkit::vulkan::vma {
 struct RawImage {
@@ -21,9 +21,10 @@ struct ImageDeleter {
   void operator()(RawImage const& raw_image) const noexcept;
 };
 
-using Image = util::Scoped<RawImage, ImageDeleter>;
+using Image = Scoped<RawImage, ImageDeleter>;
 
 struct ImageCreateInfo {
+  std::uint32_t levels;
   VmaAllocator allocator;
   std::uint32_t queue_family;
 };
@@ -39,6 +40,6 @@ struct Bitmap {
 };
 
 [[nodiscard]] auto create_sampled_image(ImageCreateInfo const& create_info,
-                                        CommandBlock command_block,
+                                        util::CommandBlock command_block,
                                         Bitmap const& bitmap) -> Image;
 };  // namespace vkit::vulkan::vma

@@ -36,7 +36,7 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
   init_info.Device = create_info.device;
   init_info.QueueFamily = create_info.queue_family;
   init_info.Queue = create_info.queue;
-  init_info.MinImageCount = 3;
+  init_info.MinImageCount = kResourceBufferingV;
   init_info.ImageCount = static_cast<std::uint32_t>(kResourceBufferingV);
   init_info.DescriptorPoolSize = 8;
   init_info.PipelineInfoMain.MSAASamples =
@@ -59,7 +59,7 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
   }
   ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.99F;
 
-  m_device_ = vkit::util::Scoped<vk::Device, Deleter>{create_info.device};
+  m_device_ = vkit::Scoped<vk::Device, Deleter>{create_info.device};
 }
 
 void DearImGui::new_frame() {
@@ -80,12 +80,13 @@ void DearImGui::end_frame() {
   m_state_ = State::kEnded;
 }
 
-void DearImGui::render(vk::CommandBuffer const command_buffer) const {
+void DearImGui::render(vk::CommandBuffer cb) const {
   auto* data = ImGui::GetDrawData();
   if (data == nullptr) {
     return;
   }
-  ImGui_ImplVulkan_RenderDrawData(data, command_buffer);
+
+  ImGui_ImplVulkan_RenderDrawData(data, cb);
 }
 
 void DearImGui::Deleter::operator()(vk::Device const device) const {

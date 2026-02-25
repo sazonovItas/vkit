@@ -47,7 +47,7 @@ QueueFamilies::QueueFamilies(vk::PhysicalDevice physical_device,
     std::unreachable();
   }();
 
-  graphics_present = [&] -> std::uint32_t {
+  graphicsPresent = [&] -> std::uint32_t {
     for (const auto &[idx, props] :
          queue_family_properties | std::ranges::views::enumerate) {
       if (util::contains(props.queueFlags, vk::QueueFlagBits::eGraphics) &&
@@ -72,27 +72,26 @@ QueueFamilies::QueueFamilies(vk::PhysicalDevice physical_device,
     return compute;
   }();
 
-  unique_indices = {compute, graphics_present, transfer};
-  std::ranges::sort(unique_indices);
-  const auto ret = std::ranges::unique(unique_indices);
-  unique_indices.erase(ret.begin(), ret.end());
+  uniqueIndices = {compute, graphicsPresent, transfer};
+  std::ranges::sort(uniqueIndices);
+  const auto ret = std::ranges::unique(uniqueIndices);
+  uniqueIndices.erase(ret.begin(), ret.end());
 }
 
 Queues::Queues(vk::Device device, const QueueFamilies &queue_families) noexcept
     : compute{device.getQueue(queue_families.compute, 0)},
-      graphics_present{device.getQueue(queue_families.graphics_present, 0)},
+      graphicsPresent{device.getQueue(queue_families.graphicsPresent, 0)},
       transfer{device.getQueue(queue_families.transfer, 0)} {}
 
 Gpu::Gpu(const vk::Instance &instance, vk::SurfaceKHR surface)
-    : physical_device{select_gpu(instance, surface)},
-      physical_device_properties{physical_device.getProperties()},
-      queue_families(physical_device, surface),
+    : physicalDevice{select_gpu(instance, surface)},
+      physicalDeviceProperties{physicalDevice.getProperties()},
+      queueFamilies(physicalDevice, surface),
       device{create_device()},
-      queues{*device, queue_families},
+      queues{*device, queueFamilies},
       allocator{create_allocator(instance)} {}
 
-[[nodiscard]] auto Gpu::select_gpu(const vk::Instance &instance,
-                                   vk::SurfaceKHR surface) const
+auto Gpu::select_gpu(const vk::Instance &instance, vk::SurfaceKHR surface) const
     -> vk::PhysicalDevice {
   const auto gpu_rater = [&](vk::PhysicalDevice gpu) -> std::uint32_t {
     try {
@@ -154,6 +153,8 @@ Gpu::Gpu(const vk::Instance &instance, vk::SurfaceKHR surface)
 
   auto properties = best_gpu.getProperties();
 
+  // TODO(itas): move this log somewhere else
+  // TODO(itas): add options for eVirtual, eCpu and eOther
   std::println("Selected GPU: {}, type: {}",
                std::string_view{properties.deviceName},
                properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu
@@ -165,7 +166,7 @@ Gpu::Gpu(const vk::Instance &instance, vk::SurfaceKHR surface)
 
 auto Gpu::create_device() -> vk::UniqueDevice {
   const std::vector available_extensions =
-      physical_device.enumerateDeviceExtensionProperties();
+      physicalDevice.enumerateDeviceExtensionProperties();
   const std::unordered_set available_extensions_names =
       available_extensions |
       std::views::transform([](const vk::ExtensionProperties &properties) {
@@ -176,10 +177,10 @@ auto Gpu::create_device() -> vk::UniqueDevice {
   auto extensions = std::vector{std::from_range, kRequiredExtensions};
 
   auto queue_cis = std::vector<vk::DeviceQueueCreateInfo>();
-  queue_cis.reserve(queue_families.unique_indices.size());
+  queue_cis.reserve(queueFamilies.uniqueIndices.size());
 
-  constexpr float kPriority = 1.F;
-  for (std::uint32_t idx : queue_families.unique_indices) {
+  constexpr static auto kPriority = 1.F;
+  for (std::uint32_t idx : queueFamilies.uniqueIndices) {
     auto ci =
         vk::DeviceQueueCreateInfo{}.setQueueFamilyIndex(idx).setQueuePriorities(
             vk::ArrayProxyNoTemporaries<const float>{kPriority});
@@ -208,13 +209,13 @@ auto Gpu::create_device() -> vk::UniqueDevice {
           .setDescriptorBindingStorageImageUpdateAfterBind(vk::True),
   };
 
-  auto device = physical_device.createDeviceUnique(ci.get());
+  auto device = physicalDevice.createDeviceUnique(ci.get());
   VULKAN_HPP_DEFAULT_DISPATCHER.init(*device);
   return device;
 }
 
 auto Gpu::create_allocator(const vk::Instance &instance) const
     -> vma::Allocator {
-  return vma::create_allocator(instance, physical_device, *device);
+  return vma::create_allocator(instance, physicalDevice, *device);
 }
 };  // namespace vkit::vulkan

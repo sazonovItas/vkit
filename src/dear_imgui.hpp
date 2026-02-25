@@ -1,7 +1,7 @@
 #pragma once
 
 #include "GLFW/glfw3.h"
-#include "util/scoped.hpp"
+#include "scoped/scoped.hpp"
 
 namespace lvk {
 struct DearImGuiCreateInfo {
@@ -24,7 +24,7 @@ class DearImGui {
 
   void new_frame();
   void end_frame();
-  void render(vk::CommandBuffer command_buffer) const;
+  void render(vk::CommandBuffer cb) const;
 
  private:
   enum class State : std::int8_t { kEnded, kBegun };
@@ -35,6 +35,6 @@ class DearImGui {
 
   State m_state_;
 
-  vkit::util::Scoped<vk::Device, Deleter> m_device_;
+  vkit::Scoped<vk::Device, Deleter> m_device_;
 };
 };  // namespace lvk

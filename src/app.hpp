@@ -45,7 +45,8 @@ class App {
   void create_descriptor_sets();
 
   [[nodiscard]] auto asset_path(std::string_view uri) const -> fs::path;
-  [[nodiscard]] auto create_command_block() const -> vkit::vulkan::CommandBlock;
+  [[nodiscard]] auto create_command_block() const
+      -> vkit::vulkan::util::CommandBlock;
   [[nodiscard]] auto allocate_sets() const -> std::vector<vk::DescriptorSet>;
 
   void main_loop();

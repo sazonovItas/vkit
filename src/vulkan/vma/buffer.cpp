@@ -13,7 +13,7 @@ auto create_buffer(const BufferCreateInfo& create_info,
                    BufferMemoryType memory_type, vk::DeviceSize size)
     -> Buffer {
   if (0 == size) {
-    // FIX: migrate to exceptions instead of just logging
+    // FIX: migrate to exceptions or optional value instead of just logging
     std::println(stderr, "Buffer cannot be 0-sized");
     return {};
   }
@@ -43,7 +43,7 @@ auto create_buffer(const BufferCreateInfo& create_info,
       vmaCreateBuffer(create_info.allocator, &vma_buffer_ci, &allocation_ci,
                       &buffer, &allocation, &allocation_info);
   if (result != VK_SUCCESS) {
-    // FIX: migrate to exceptions instead of just logging
+    // FIX: migrate to exceptions or optional value instead of just logging
     std::println(stderr, "failed to create VMA Buffer");
     return {};
   }
@@ -67,7 +67,7 @@ auto create_buffer(const BufferCreateInfo& create_info,
 }
 
 auto create_device_buffer(BufferCreateInfo const& create_info,
-                          CommandBlock command_block,
+                          util::CommandBlock command_block,
                           ByteSpans const& byte_spans) -> Buffer {
   auto const total_size = std::accumulate(
       byte_spans.begin(), byte_spans.end(), 0UZ,
@@ -91,12 +91,11 @@ auto create_device_buffer(BufferCreateInfo const& create_info,
     dst = dst.subspan(bytes.size());
   }
 
-  auto buffer_copy = vk::BufferCopy2{};
-  buffer_copy.setSize(total_size);
-  auto copy_buffer_info = vk::CopyBufferInfo2{};
-  copy_buffer_info.setSrcBuffer(staging_buffer.get().buffer)
-      .setDstBuffer(ret.get().buffer)
-      .setRegions(buffer_copy);
+  auto buffer_copy = vk::BufferCopy2{}.setSize(total_size);
+  auto copy_buffer_info = vk::CopyBufferInfo2{}
+                              .setSrcBuffer(staging_buffer.get().buffer)
+                              .setDstBuffer(ret.get().buffer)
+                              .setRegions(buffer_copy);
 
   command_block.cb().copyBuffer2(copy_buffer_info);
 

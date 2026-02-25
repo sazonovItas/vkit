@@ -4,23 +4,23 @@
 
 namespace vkit::vulkan {
 struct QueueFamilies {
-  std::uint32_t compute, graphics_present, transfer;
-  std::vector<std::uint32_t> unique_indices;
+  std::uint32_t compute, graphicsPresent, transfer;
+  std::vector<std::uint32_t> uniqueIndices;
 
   QueueFamilies(vk::PhysicalDevice physical_device, vk::SurfaceKHR surface);
 };
 
 struct Queues {
-  vk::Queue compute, graphics_present, transfer;
+  vk::Queue compute, graphicsPresent, transfer;
 
   Queues(vk::Device device, const QueueFamilies& queue_families) noexcept;
 };
 
 class Gpu {
  public:
-  vk::PhysicalDevice physical_device;
-  vk::PhysicalDeviceProperties physical_device_properties;
-  QueueFamilies queue_families;
+  vk::PhysicalDevice physicalDevice;
+  vk::PhysicalDeviceProperties physicalDeviceProperties;
+  QueueFamilies queueFamilies;
   vk::UniqueDevice device;
   Queues queues;
   vma::Allocator allocator;

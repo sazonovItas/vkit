@@ -5,9 +5,8 @@ void AllocatorDeleter::operator()(VmaAllocator allocator) const noexcept {
   vmaDestroyAllocator(allocator);
 }
 
-auto create_allocator(vk::Instance const instance,
-                      vk::PhysicalDevice const physical_device,
-                      vk::Device const device) -> Allocator {
+auto create_allocator(vk::Instance instance, vk::PhysicalDevice physical_device,
+                      vk::Device device) -> Allocator {
   auto const& dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
 
   auto vma_vk_funcs = VmaVulkanFunctions{};

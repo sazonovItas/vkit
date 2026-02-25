@@ -2,7 +2,7 @@
 
 #include <vk_mem_alloc.h>
 
-#include "vulkan/command_block.hpp"
+#include "vulkan/util.hpp"
 #include "vulkan/vma/image.hpp"
 #include "vulkan/vulkan.hpp"
 
@@ -30,7 +30,7 @@ struct TextureCreateInfo {
   vk::Device device;
   VmaAllocator allocator;
   std::uint32_t queue_family;
-  vkit::vulkan::CommandBlock command_block;
+  vkit::vulkan::util::CommandBlock command_block;
   vkit::vulkan::vma::Bitmap bitmap;
 
   vk::SamplerCreateInfo sampler{kSamplerCiV};

@@ -2,8 +2,8 @@
 
 #include <vk_mem_alloc.h>
 
-#include "util/scoped.hpp"
-#include "vulkan/command_block.hpp"
+#include "scoped/scoped.hpp"
+#include "vulkan/util.hpp"
 
 namespace vkit::vulkan::vma {
 struct RawBuffer {
@@ -29,7 +29,7 @@ struct BufferDeleter {
   void operator()(RawBuffer const& raw_buffer) const noexcept;
 };
 
-using Buffer = util::Scoped<RawBuffer, BufferDeleter>;
+using Buffer = Scoped<RawBuffer, BufferDeleter>;
 
 struct BufferCreateInfo {
   vk::Device device;
@@ -47,6 +47,6 @@ enum class BufferMemoryType : std::int8_t { kHost, kDevice };
 using ByteSpans = std::span<std::span<std::byte const> const>;
 
 [[nodiscard]] auto create_device_buffer(BufferCreateInfo const& create_info,
-                                        CommandBlock command_block,
+                                        util::CommandBlock command_block,
                                         ByteSpans const& byte_spans) -> Buffer;
 };  // namespace vkit::vulkan::vma

@@ -33,8 +33,8 @@
 #include "model.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
-#include "vulkan/command_block.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/util.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
@@ -313,7 +313,7 @@ void App::inspect() {
     }
     if (m_wireframe_) {
       auto const& line_width_range =
-          m_gpu_->physical_device_properties.limits.lineWidthRange;
+          m_gpu_->physicalDeviceProperties.limits.lineWidthRange;
       ImGui::SetNextItemWidth(100.0F);
       ImGui::DragFloat("line width", &m_line_width_, 0.25F, line_width_range[0],
                        line_width_range[1]);
@@ -546,14 +546,14 @@ void App::submit_and_present() {
       .setWaitSemaphoreInfos(wait_semaphore_info)
       .setSignalSemaphoreInfos(signal_semaphore_info);
 
-  m_gpu_->queues.graphics_present.submit2(submit_info, *render_sync.drawn);
+  m_gpu_->queues.graphicsPresent.submit2(submit_info, *render_sync.drawn);
 
   m_frame_index_ = (m_frame_index_ + 1) % m_render_sync_.size();
   m_render_target_.reset();
 
   auto const fb_size_changed = m_framebuffer_size_ != m_swapchain_->get_size();
   auto const out_of_date =
-      !m_swapchain_->present(m_gpu_->queues.graphics_present);
+      !m_swapchain_->present(m_gpu_->queues.graphicsPresent);
   if (fb_size_changed || out_of_date) {
     m_swapchain_->recreate(m_framebuffer_size_);
   }
@@ -611,7 +611,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
 }
 
 void App::create_shader_resources() {
-  m_view_ubo_.emplace(m_gpu_->allocator.get(), m_gpu_->queue_families.transfer,
+  m_view_ubo_.emplace(m_gpu_->allocator.get(), m_gpu_->queueFamilies.transfer,
                       vk::BufferUsageFlagBits::eUniformBuffer);
 
   using Pixel = std::array<std::byte, 4>;
@@ -638,7 +638,7 @@ void App::create_shader_resources() {
       .name = "4xSquare board",
       .device = *m_gpu_->device,
       .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queue_families.transfer,
+      .queue_family = m_gpu_->queueFamilies.transfer,
       .command_block = create_command_block(),
       .bitmap = kRgbyBitmapV,
   };
@@ -652,7 +652,7 @@ void App::create_shader_resources() {
       .name = "Bricks",
       .device = *m_gpu_->device,
       .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queue_families.transfer,
+      .queue_family = m_gpu_->queueFamilies.transfer,
       .command_block = create_command_block(),
       .bitmap = bricks.bitmap,
   };
@@ -666,7 +666,7 @@ void App::create_shader_resources() {
       .name = "Stone",
       .device = *m_gpu_->device,
       .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queue_families.transfer,
+      .queue_family = m_gpu_->queueFamilies.transfer,
       .command_block = create_command_block(),
       .bitmap = stone.bitmap,
   };
@@ -732,14 +732,14 @@ void App::create_descriptor_pool() {
   m_descriptor_pool_ = m_gpu_->device->createDescriptorPoolUnique(pool_ci);
 }
 
-auto App::create_command_block() const -> vkit::vulkan::CommandBlock {
-  return vkit::vulkan::CommandBlock{
-      *m_gpu_->device, m_gpu_->queues.graphics_present, *m_cmd_block_pool_};
+auto App::create_command_block() const -> vkit::vulkan::util::CommandBlock {
+  return vkit::vulkan::util::CommandBlock{
+      *m_gpu_->device, m_gpu_->queues.graphicsPresent, *m_cmd_block_pool_};
 }
 
 void App::create_cmd_block_pool() {
   auto command_pool_ci = vk::CommandPoolCreateInfo{};
-  command_pool_ci.setQueueFamilyIndex(m_gpu_->queue_families.graphics_present)
+  command_pool_ci.setQueueFamilyIndex(m_gpu_->queueFamilies.graphicsPresent)
       .setFlags(vk::CommandPoolCreateFlagBits::eTransient);
   m_cmd_block_pool_ = m_gpu_->device->createCommandPoolUnique(command_pool_ci);
 }
@@ -760,7 +760,7 @@ void App::create_shader() {
 void App::create_render_sync() {
   auto command_pool_ci = vk::CommandPoolCreateInfo{};
   command_pool_ci.setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
-      .setQueueFamilyIndex(m_gpu_->queue_families.graphics_present);
+      .setQueueFamilyIndex(m_gpu_->queueFamilies.graphicsPresent);
   m_render_cmd_pool_ = m_gpu_->device->createCommandPoolUnique(command_pool_ci);
 
   auto command_buffer_ai = vk::CommandBufferAllocateInfo{};
@@ -786,10 +786,10 @@ void App::create_imgui() {
       .window = m_window_.get(),
       .api_vesrion = kVkVersionV,
       .instance = *m_instance_,
-      .physical_device = m_gpu_->physical_device,
-      .queue_family = m_gpu_->queue_families.graphics_present,
+      .physical_device = m_gpu_->physicalDevice,
+      .queue_family = m_gpu_->queueFamilies.graphicsPresent,
       .device = *m_gpu_->device,
-      .queue = m_gpu_->queues.graphics_present,
+      .queue = m_gpu_->queues.graphicsPresent,
       .color_format = m_swapchain_->get_format(),
       .samples = vk::SampleCountFlagBits::e1,
   };
@@ -798,8 +798,8 @@ void App::create_imgui() {
 
 void App::create_swapchain() {
   auto const size = glfw::framebuffer_size(m_window_.get());
-  m_swapchain_.emplace(*m_gpu_->device, m_gpu_->physical_device,
-                       m_gpu_->queue_families, m_gpu_->allocator.get(),
+  m_swapchain_.emplace(*m_gpu_->device, m_gpu_->physicalDevice,
+                       m_gpu_->queueFamilies, m_gpu_->allocator.get(),
                        *m_surface_, size);
 }
 
@@ -1025,7 +1025,7 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
         .device = *m_gpu_->device,
         .allocator = m_gpu_->allocator.get(),
         .usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-        .queue_family = m_gpu_->queue_families.transfer,
+        .queue_family = m_gpu_->queueFamilies.transfer,
     };
     auto vertex_buffer = vkit::vulkan::vma::create_device_buffer(
         vertex_ci, create_command_block(),
@@ -1037,7 +1037,7 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
         .device = *m_gpu_->device,
         .allocator = m_gpu_->allocator.get(),
         .usage = vk::BufferUsageFlagBits::eIndexBuffer,
-        .queue_family = m_gpu_->queue_families.transfer,
+        .queue_family = m_gpu_->queueFamilies.transfer,
     };
     auto index_buffer = vkit::vulkan::vma::create_device_buffer(
         index_ci, create_command_block(),
