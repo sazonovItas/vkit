@@ -31,6 +31,7 @@ class Swapchain {
       -> std::optional<RenderTarget>;
 
   [[nodiscard]] auto base_barrier() const -> vk::ImageMemoryBarrier2;
+  [[nodiscard]] auto base_color_barrier() const -> vk::ImageMemoryBarrier2;
   [[nodiscard]] auto base_depth_barrier() const -> vk::ImageMemoryBarrier2;
 
   [[nodiscard]] auto get_present_semaphore() const -> vk::Semaphore;
@@ -38,9 +39,11 @@ class Swapchain {
 
  private:
   void populate_images();
-  void populate_depth_image();
   void create_image_views();
   void create_present_semaphores();
+
+  void populate_color_image();
+  void populate_depth_image();
 
   vk::PhysicalDevice m_physical_device_;
   vkit::vulkan::QueueFamilies m_queue_families_;
@@ -53,6 +56,9 @@ class Swapchain {
   std::vector<vk::UniqueImageView> m_image_views_;
   std::vector<vk::UniqueSemaphore> m_present_semaphorses_;
   std::optional<std::size_t> m_image_index_;
+
+  vkit::vulkan::vma::Image m_color_image_;
+  vk::UniqueImageView m_color_image_view_;
 
   vkit::vulkan::vma::Image m_depth_image_;
   vk::UniqueImageView m_depth_image_view_;

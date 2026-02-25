@@ -34,7 +34,6 @@ class App {
   void create_surface();
   void create_device();
   void create_swapchain();
-  void create_depth_image();
   void create_render_sync();
   void create_imgui();
   void create_descriptor_pool();

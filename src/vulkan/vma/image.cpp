@@ -106,8 +106,7 @@ void ImageDeleter::operator()(RawImage const& raw_image) const noexcept {
 }
 
 auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
-                  std::uint32_t levels, vk::Format format, vk::Extent2D extent)
-    -> Image {
+                  vk::Format format, vk::Extent2D extent) -> Image {
   if (extent.width == 0 || extent.height == 0) {
     std::println(stderr, "images cannot have 0 width or height");
     return {};
@@ -119,8 +118,8 @@ auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
       .setFormat(format)
       .setUsage(usage)
       .setArrayLayers(1)
-      .setMipLevels(levels)
-      .setSamples(vk::SampleCountFlagBits::e1)
+      .setMipLevels(create_info.levels)
+      .setSamples(create_info.sample_count)
       .setTiling(vk::ImageTiling::eOptimal)
       .setInitialLayout(vk::ImageLayout::eUndefined)
       .setQueueFamilyIndices(create_info.queue_family);
@@ -143,7 +142,7 @@ auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
       .image = image,
       .extent = extent,
       .format = format,
-      .levels = levels,
+      .levels = create_info.levels,
   };
 }
 
@@ -155,8 +154,8 @@ auto create_sampled_image(ImageCreateInfo const& create_info,
   auto const extent = vk::Extent2D{usize.x, usize.y};
   auto const usage =
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-  auto ret = create_image(create_info, usage, mip_levels,
-                          vk::Format::eR8G8B8A8Srgb, extent);
+  auto ret =
+      create_image(create_info, usage, vk::Format::eR8G8B8A8Srgb, extent);
 
   auto const buffer_ci = BufferCreateInfo{
       .allocator = create_info.allocator,

@@ -5,6 +5,7 @@
 #include <limits>
 #include <stdexcept>
 
+#include "render_target.hpp"
 #include "resource_buffering.hpp"
 #include "vulkan/gpu.hpp"
 
@@ -140,9 +141,11 @@ auto Swapchain::recreate(glm::ivec2 size) -> bool {
   m_swapchain_ = m_device_.createSwapchainKHRUnique(m_ci_);
 
   populate_images();
-  populate_depth_image();
   create_image_views();
   create_present_semaphores();
+
+  populate_color_image();
+  populate_depth_image();
 
   return true;
 }
@@ -161,9 +164,12 @@ auto Swapchain::acquire_next_image(vk::Semaphore const to_signal)
   }
 
   m_image_index_ = static_cast<std::size_t>(image_index);
+
   return RenderTarget{
       .image = m_images_.at(*m_image_index_),
       .image_view = *m_image_views_.at(*m_image_index_),
+      .color_image = m_color_image_.get().image,
+      .color_image_view = *m_color_image_view_,
       .depth_image = m_depth_image_.get().image,
       .depth_image_view = *m_depth_image_view_,
       .extent = m_ci_.imageExtent,
@@ -178,6 +184,15 @@ auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
       .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
   return ret;
 };
+
+auto Swapchain::base_color_barrier() const -> vk::ImageMemoryBarrier2 {
+  auto ret = vk::ImageMemoryBarrier2{};
+  ret.setImage(m_color_image_.get().image)
+      .setSubresourceRange(kColorSubresourceRangeV)
+      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
+      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
+  return ret;
+}
 
 auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
@@ -220,20 +235,39 @@ void Swapchain::populate_images() {
 }
 
 void Swapchain::populate_depth_image() {
-  auto depth_image_ci = vkit::vulkan::vma::ImageCreateInfo{
+  auto image_ci = vkit::vulkan::vma::ImageCreateInfo{
+      .sample_count = kSampleCount,
       .allocator = m_allocator_,
       .queue_family = m_queue_families_.transfer,
   };
   m_depth_image_ = vkit::vulkan::vma::create_image(
-      depth_image_ci, vk::ImageUsageFlagBits::eDepthStencilAttachment, 1,
+      image_ci, vk::ImageUsageFlagBits::eDepthStencilAttachment,
       vk::Format::eD32SfloatS8Uint, m_ci_.imageExtent);
 
-  auto depth_image_view_ci = vk::ImageViewCreateInfo{};
-  depth_image_view_ci.setImage(m_depth_image_.get().image)
+  auto image_view_ci = vk::ImageViewCreateInfo{};
+  image_view_ci.setImage(m_depth_image_.get().image)
       .setViewType(vk::ImageViewType::e2D)
       .setFormat(vk::Format::eD32SfloatS8Uint)
       .setSubresourceRange(kDepthSubresourceRangeV);
-  m_depth_image_view_ = m_device_.createImageViewUnique(depth_image_view_ci);
+  m_depth_image_view_ = m_device_.createImageViewUnique(image_view_ci);
+}
+
+void Swapchain::populate_color_image() {
+  auto image_ci = vkit::vulkan::vma::ImageCreateInfo{
+      .sample_count = kSampleCount,
+      .allocator = m_allocator_,
+      .queue_family = m_queue_families_.transfer,
+  };
+  m_color_image_ = vkit::vulkan::vma::create_image(
+      image_ci, vk::ImageUsageFlagBits::eColorAttachment, m_ci_.imageFormat,
+      m_ci_.imageExtent);
+
+  auto image_view_ci = vk::ImageViewCreateInfo{};
+  image_view_ci.setImage(m_color_image_.get().image)
+      .setViewType(vk::ImageViewType::e2D)
+      .setFormat(m_ci_.imageFormat)
+      .setSubresourceRange(kColorSubresourceRangeV);
+  m_color_image_view_ = m_device_.createImageViewUnique(image_view_ci);
 }
 
 void Swapchain::create_image_views() {

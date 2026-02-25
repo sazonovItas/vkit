@@ -3,6 +3,7 @@
 #include <array>
 #include <stdexcept>
 
+#include "render_target.hpp"
 #include "vulkan/vulkan.hpp"
 
 namespace {
@@ -75,8 +76,8 @@ void ShaderProgram::set_viewport_scissor(vk::CommandBuffer command_buffer,
 }
 void ShaderProgram::set_static_states(vk::CommandBuffer command_buffer) {
   command_buffer.setRasterizerDiscardEnable(vk::False);
-  command_buffer.setRasterizationSamplesEXT(vk::SampleCountFlagBits::e1);
-  command_buffer.setSampleMaskEXT(vk::SampleCountFlagBits::e1, 0xff);
+  command_buffer.setRasterizationSamplesEXT(kSampleCount);
+  command_buffer.setSampleMaskEXT(kSampleCount, 0xffffffff);
   command_buffer.setAlphaToCoverageEnableEXT(vk::False);
   command_buffer.setFrontFace(vk::FrontFace::eCounterClockwise);
   command_buffer.setCullMode(vk::CullModeFlagBits::eBack);

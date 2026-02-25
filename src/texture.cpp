@@ -17,7 +17,6 @@ Texture::Texture(CreateInfo create_info) {
   }
 
   auto const image_ci = vkit::vulkan::vma::ImageCreateInfo{
-      .levels = 16,
       .allocator = create_info.allocator,
       .queue_family = create_info.queue_family,
   };

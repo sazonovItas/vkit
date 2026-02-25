@@ -4,6 +4,7 @@
 
 #include "scoped/scoped.hpp"
 #include "vulkan/util.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit::vulkan::vma {
 struct RawImage {
@@ -24,15 +25,15 @@ struct ImageDeleter {
 using Image = Scoped<RawImage, ImageDeleter>;
 
 struct ImageCreateInfo {
-  std::uint32_t levels;
+  std::uint32_t levels{1};
+  vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
   VmaAllocator allocator;
   std::uint32_t queue_family;
 };
 
 [[nodiscard]] auto create_image(ImageCreateInfo const& create_info,
-                                vk::ImageUsageFlags usage, std::uint32_t levels,
-                                vk::Format format, vk::Extent2D extent)
-    -> Image;
+                                vk::ImageUsageFlags usage, vk::Format format,
+                                vk::Extent2D extent) -> Image;
 
 struct Bitmap {
   std::span<std::byte const> bytes;

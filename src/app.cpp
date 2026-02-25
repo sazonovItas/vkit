@@ -270,7 +270,6 @@ void App::run() {
   create_surface();
   create_device();
   create_swapchain();
-  create_depth_image();
   create_render_sync();
   create_imgui();
   create_descriptor_pool();
@@ -445,6 +444,15 @@ auto App::begin_frame() -> vk::CommandBuffer {
 void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
   auto dependency_info = vk::DependencyInfo{};
 
+  auto color_barrier = m_swapchain_->base_color_barrier();
+  color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
+      .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
+                        vk::AccessFlagBits2::eColorAttachmentWrite)
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
+      .setDstAccessMask(color_barrier.srcAccessMask)
+      .setDstStageMask(color_barrier.srcStageMask);
+
   auto depth_barrier = m_swapchain_->base_depth_barrier();
   depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
@@ -455,33 +463,37 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
       .setDstStageMask(vk::PipelineStageFlagBits2::eEarlyFragmentTests |
                        vk::PipelineStageFlagBits2::eLateFragmentTests);
 
-  auto color_barrier = m_swapchain_->base_barrier();
-  color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
+  auto swapchain_color_barrier = m_swapchain_->base_barrier();
+  swapchain_color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
                         vk::AccessFlagBits2::eColorAttachmentWrite)
       .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(color_barrier.srcAccessMask)
-      .setDstStageMask(color_barrier.srcStageMask);
+      .setDstAccessMask(swapchain_color_barrier.srcAccessMask)
+      .setDstStageMask(swapchain_color_barrier.srcStageMask);
 
-  auto barriers = std::array{depth_barrier, color_barrier};
+  auto barriers =
+      std::array{color_barrier, depth_barrier, swapchain_color_barrier};
   dependency_info.setImageMemoryBarriers(barriers);
   command_buffer.pipelineBarrier2(dependency_info);
 }
 
 void App::render(vk::CommandBuffer const command_buffer) {
   auto color_attachment = vk::RenderingAttachmentInfo{};
-  color_attachment.setImageView(m_render_target_->image_view)
+  color_attachment.setImageView(m_render_target_->color_image_view)
       .setImageLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setResolveMode(vk::ResolveModeFlagBits::eAverage)
+      .setResolveImageView(m_render_target_->image_view)
+      .setResolveImageLayout(vk::ImageLayout::eAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
-      .setStoreOp(vk::AttachmentStoreOp::eStore)
+      .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
 
   auto depth_attachment = vk::RenderingAttachmentInfo{};
   depth_attachment.setImageView(m_render_target_->depth_image_view)
       .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
-      .setStoreOp(vk::AttachmentStoreOp::eStore)
+      .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
 
   auto rendering_info = vk::RenderingInfo{};
@@ -498,11 +510,19 @@ void App::render(vk::CommandBuffer const command_buffer) {
   draw(command_buffer);
   command_buffer.endRendering();
 
-  color_attachment.setLoadOp(vk::AttachmentLoadOp::eLoad);
-  rendering_info.setColorAttachmentCount(1)
-      .setPColorAttachments(&color_attachment)
-      .setPDepthAttachment(nullptr);
-  command_buffer.beginRendering(rendering_info);
+  auto imgui_attachment = vk::RenderingAttachmentInfo{};
+  imgui_attachment.setImageView(m_render_target_->image_view)
+      .setResolveImageLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setLoadOp(vk::AttachmentLoadOp::eLoad)
+      .setStoreOp(vk::AttachmentStoreOp::eStore);
+
+  auto imgui_rendering = vk::RenderingInfo{};
+  imgui_rendering.setRenderArea(render_area)
+      .setLayerCount(1)
+      .setColorAttachmentCount(1)
+      .setPColorAttachments(&imgui_attachment);
+
+  command_buffer.beginRendering(imgui_rendering);
   inspect();
   m_imgui_->end_frame();
   m_imgui_->render(command_buffer);
@@ -802,8 +822,6 @@ void App::create_swapchain() {
                        m_gpu_->queueFamilies, m_gpu_->allocator.get(),
                        *m_surface_, size);
 }
-
-void App::create_depth_image() {}
 
 void App::create_device() {
   m_gpu_.emplace(m_instance_.get(), m_surface_.get());
