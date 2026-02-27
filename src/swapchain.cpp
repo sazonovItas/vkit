@@ -8,6 +8,7 @@
 #include "render_target.hpp"
 #include "resource_buffering.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 
@@ -236,13 +237,14 @@ void Swapchain::populate_images() {
 
 void Swapchain::populate_depth_image() {
   auto image_ci = vkit::vulkan::vma::ImageCreateInfo{
+      .format = vk::Format::eD32SfloatS8Uint,
       .sample_count = kSampleCount,
-      .allocator = m_allocator_,
       .queue_family = m_queue_families_.transfer,
+      .allocator = m_allocator_,
   };
   m_depth_image_ = vkit::vulkan::vma::create_image(
       image_ci, vk::ImageUsageFlagBits::eDepthStencilAttachment,
-      vk::Format::eD32SfloatS8Uint, m_ci_.imageExtent);
+      m_ci_.imageExtent);
 
   auto image_view_ci = vk::ImageViewCreateInfo{};
   image_view_ci.setImage(m_depth_image_.get().image)
@@ -254,13 +256,13 @@ void Swapchain::populate_depth_image() {
 
 void Swapchain::populate_color_image() {
   auto image_ci = vkit::vulkan::vma::ImageCreateInfo{
+      .format = m_ci_.imageFormat,
       .sample_count = kSampleCount,
-      .allocator = m_allocator_,
       .queue_family = m_queue_families_.transfer,
+      .allocator = m_allocator_,
   };
   m_color_image_ = vkit::vulkan::vma::create_image(
-      image_ci, vk::ImageUsageFlagBits::eColorAttachment, m_ci_.imageFormat,
-      m_ci_.imageExtent);
+      image_ci, vk::ImageUsageFlagBits::eColorAttachment, m_ci_.imageExtent);
 
   auto image_view_ci = vk::ImageViewCreateInfo{};
   image_view_ci.setImage(m_color_image_.get().image)

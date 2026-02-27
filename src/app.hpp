@@ -66,6 +66,7 @@ class App {
 
   void load_gltf();
   auto load_asset(fs::path const& path) -> bool;
+  auto load_image(fastgltf::Image const& image, std::string name) -> bool;
   auto load_mesh(fastgltf::Mesh const& mesh) -> bool;
 
   fs::path m_assets_dir_;
@@ -99,12 +100,16 @@ class App {
 
   std::optional<fastgltf::Asset> m_asset_;
   std::vector<Mesh> meshes_;
+  std::vector<Material> materials_;
+  std::vector<Texture> textures_;
+
   Transform m_transform_;
 
   std::optional<DescriptorBuffer> m_view_ubo_;
   std::uint32_t m_curr_tex_idx_{0};
-  std::optional<std::vector<Texture>> m_textures_;
   Buffered<std::vector<vk::DescriptorSet>> m_descriptor_sets_{};
+
+  std::optional<std::vector<Texture>> m_textures_;
 
   glm::ivec2 m_framebuffer_size_{};
   std::optional<RenderTarget> m_render_target_;

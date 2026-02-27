@@ -2,6 +2,12 @@
 
 #include "vulkan/vma/image.hpp"
 
+namespace {
+constexpr auto get_level_count(glm::ivec2 size) {
+  return static_cast<std::uint32_t>(1 + floor(log2(std::max(size.x, size.y))));
+};
+}  // namespace
+
 namespace lvk {
 
 constexpr auto kWhitePixelV = std::array{std::byte{0xFF}, std::byte{0xFF},
@@ -16,9 +22,12 @@ Texture::Texture(CreateInfo create_info) {
     create_info.bitmap = kWhiteBitmapV;
   }
 
+  auto levels = get_level_count(create_info.bitmap.size);
+
   auto const image_ci = vkit::vulkan::vma::ImageCreateInfo{
-      .allocator = create_info.allocator,
+      .levels = levels,
       .queue_family = create_info.queue_family,
+      .allocator = create_info.allocator,
   };
   m_image_ = vkit::vulkan::vma::create_sampled_image(
       image_ci, std::move(create_info.command_block), create_info.bitmap);

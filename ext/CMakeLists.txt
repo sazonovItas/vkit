@@ -75,6 +75,12 @@ target_compile_options(vma PRIVATE -w)
 message(STATUS "[fastgltf]")
 add_subdirectory(fastgltf)
 
+message(STATUS "[meshoptimizer]")
+add_subdirectory(meshoptimizer)
+
+message(STATUS "[image magick++]")
+find_package(ImageMagick COMPONENTS Magick++)
+
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(learn-vk::ext ALIAS ${PROJECT_NAME})
 
@@ -83,10 +89,16 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
   imgui::imgui
   vma::vma
   fastgltf::fastgltf
+  meshoptimizer
+  ${ImageMagick_LIBRARIES}
 )
-
+target_include_directories(${PROJECT_NAME} INTERFACE
+  ${ImageMagick_INCLUDE_DIRS}
+)
 target_compile_definitions(${PROJECT_NAME} INTERFACE
   GLFW_INCLUDE_VULKAN
+  MAGICKCORE_QUANTUM_DEPTH=32
+  MAGICKCORE_HDRI_ENABLE=0
 )
 
 target_link_libraries(${PROJECT_NAME} INTERFACE dl)

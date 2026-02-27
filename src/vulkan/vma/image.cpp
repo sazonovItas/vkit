@@ -106,7 +106,7 @@ void ImageDeleter::operator()(RawImage const& raw_image) const noexcept {
 }
 
 auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
-                  vk::Format format, vk::Extent2D extent) -> Image {
+                  vk::Extent2D extent) -> Image {
   if (extent.width == 0 || extent.height == 0) {
     std::println(stderr, "images cannot have 0 width or height");
     return {};
@@ -115,7 +115,7 @@ auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
   auto image_ci = vk::ImageCreateInfo{};
   image_ci.setImageType(vk::ImageType::e2D)
       .setExtent({extent.width, extent.height, 1})
-      .setFormat(format)
+      .setFormat(create_info.format)
       .setUsage(usage)
       .setArrayLayers(1)
       .setMipLevels(create_info.levels)
@@ -141,7 +141,7 @@ auto create_image(const ImageCreateInfo& create_info, vk::ImageUsageFlags usage,
       .allocation = allocation,
       .image = image,
       .extent = extent,
-      .format = format,
+      .format = create_info.format,
       .levels = create_info.levels,
   };
 }
@@ -154,8 +154,7 @@ auto create_sampled_image(ImageCreateInfo const& create_info,
   auto const extent = vk::Extent2D{usize.x, usize.y};
   auto const usage =
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled;
-  auto ret =
-      create_image(create_info, usage, vk::Format::eR8G8B8A8Srgb, extent);
+  auto ret = create_image(create_info, usage, extent);
 
   auto const buffer_ci = BufferCreateInfo{
       .allocator = create_info.allocator,

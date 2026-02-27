@@ -1,5 +1,6 @@
 #include "app.hpp"
 
+#include <ImageMagick-7/Magick++.h>
 #include <backends/imgui_impl_glfw.h>
 #include <imgui.h>
 
@@ -8,6 +9,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -15,9 +17,13 @@
 #include <ranges>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "GLFW/glfw3.h"
+#include "Magick++/Blob.h"
+#include "Magick++/Image.h"
+#include "Magick++/Include.h"
 #include "dear_imgui.hpp"
 #include "fastgltf/core.hpp"
 #include "fastgltf/glm_element_traits.hpp"
@@ -35,6 +41,7 @@
 #include "shader_program.hpp"
 #include "vulkan/gpu.hpp"
 #include "vulkan/util.hpp"
+#include "vulkan/vma/image.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
@@ -559,7 +566,6 @@ void App::submit_and_present() {
 
   auto signal_semaphore_info = vk::SemaphoreSubmitInfo{};
   signal_semaphore_info.setSemaphore(m_swapchain_->get_present_semaphore())
-      .setSemaphore(m_swapchain_->get_present_semaphore())
       .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
   submit_info.setCommandBufferInfos(command_buffer_info)
@@ -885,9 +891,14 @@ auto App::asset_path(std::string_view uri) const -> fs::path {
 }
 
 void App::load_gltf() {
-  if (!load_asset(asset_path("models/sword/scene.gltf"))) {
+  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
     std::println(stderr, "failed to load gltf model");
     return;
+  }
+
+  for (const auto [idx, image] :
+       std::ranges::views::enumerate(m_asset_->images)) {
+    load_image(image, std::format("test-{}", idx));
   }
 
   for (const auto& mesh : m_asset_->meshes) {
@@ -939,9 +950,122 @@ auto App::load_asset(fs::path const& path) -> bool {
   return true;
 }
 
+auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
+  assert(m_asset_.has_value());
+  auto const& asset = *m_asset_;
+
+  std::vector<std::byte> bytes;
+  vkit::vulkan::vma::Bitmap bitmap{};
+
+  std::visit(
+      fastgltf::visitor{
+          [&](fastgltf::sources::URI const& path) {
+            assert(path.fileByteOffset == 0);
+            assert(path.uri.isLocalPath());
+
+            auto file_path = m_assets_dir_ / "models" / path.uri.fspath();
+
+            auto image = Magick::Image{};
+            image.read(file_path);
+            image.depth(8);
+            image.colorSpace(Magick::sRGBColorspace);
+            image.alphaChannel(Magick::ActivateAlphaChannel);
+
+            auto width = static_cast<int>(image.columns());
+            auto height = static_cast<int>(image.rows());
+            bytes.resize(width * height * 4);
+
+            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
+                        bytes.data());
+
+            bitmap = {
+                .bytes = std::move(bytes),
+                .size = {width, height},
+            };
+          },
+          [&](fastgltf::sources::Array const& array) {
+            Magick::Blob blob(array.bytes.data(), array.bytes.size());
+
+            auto image = Magick::Image{};
+            image.read(blob);
+
+            // image.depth(8);
+            // image.colorSpace(Magick::sRGBColorspace);
+            // image.alphaChannel(Magick::ActivateAlphaChannel);
+
+            auto width = static_cast<int>(image.columns());
+            auto height = static_cast<int>(image.rows());
+            // bytes.resize(width * height * 4);
+            //
+            // image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
+            //             bytes.data());
+
+            bytes.resize(array.bytes.size());
+            std::memcpy(bytes.data(), array.bytes.data(), array.bytes.size());
+
+            bitmap = {
+                .bytes = std::move(bytes),
+                .size = {width, height},
+            };
+          },
+          [&](fastgltf::sources::BufferView const& view) {
+            const auto& buffer_view = asset.bufferViews[view.bufferViewIndex];
+            const auto& buffer = asset.buffers[buffer_view.bufferIndex];
+
+            const std::byte* data = nullptr;
+
+            std::visit(fastgltf::visitor{
+                           [&](fastgltf::sources::Array const& array) {
+                             data = array.bytes.data() + buffer_view.byteOffset;
+                           },
+                           [&](fastgltf::sources::Vector const& vec) {
+                             data = vec.bytes.data() + buffer_view.byteOffset;
+                           },
+                           [&](auto&) {},
+                       },
+                       buffer.data);
+
+            Magick::Blob blob(data, buffer_view.byteLength);
+
+            Magick::Image image;
+            image.read(blob);
+            image.depth(8);
+            image.colorSpace(Magick::sRGBColorspace);
+            image.alphaChannel(Magick::ActivateAlphaChannel);
+
+            int width = image.columns();
+            int height = image.rows();
+
+            bytes.resize(width * height * 4);
+
+            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
+                        bytes.data());
+
+            bitmap = {
+                .bytes = std::move(bytes),
+                .size = {width, height},
+            };
+          },
+          [](auto& a) {},
+      },
+      image.data);
+
+  auto ci = Texture::CreateInfo{
+      .name = std::move(name),
+      .device = *m_gpu_->device,
+      .allocator = m_gpu_->allocator.get(),
+      .queue_family = m_gpu_->queueFamilies.graphicsPresent,
+      .command_block = create_command_block(),
+      .bitmap = bitmap,
+  };
+
+  m_textures_->emplace_back(std::move(ci));
+
+  return true;
+}
+
 auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
   assert(m_asset_.has_value());
-
   auto const& asset = *m_asset_;
 
   auto out_mesh = Mesh{};

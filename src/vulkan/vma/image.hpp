@@ -26,14 +26,15 @@ using Image = Scoped<RawImage, ImageDeleter>;
 
 struct ImageCreateInfo {
   std::uint32_t levels{1};
+  vk::Format format{vk::Format::eR8G8B8A8Srgb};
   vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
-  VmaAllocator allocator;
   std::uint32_t queue_family;
+  VmaAllocator allocator;
 };
 
 [[nodiscard]] auto create_image(ImageCreateInfo const& create_info,
-                                vk::ImageUsageFlags usage, vk::Format format,
-                                vk::Extent2D extent) -> Image;
+                                vk::ImageUsageFlags usage, vk::Extent2D extent)
+    -> Image;
 
 struct Bitmap {
   std::span<std::byte const> bytes;
