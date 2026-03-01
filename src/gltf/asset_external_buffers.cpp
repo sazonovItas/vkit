@@ -1,12 +1,8 @@
-#include "asset.hpp"
+#include "asset_external_buffers.hpp"
 
 #include <fstream>
-#include <memory>
-#include <span>
-#include <stdexcept>
-#include <utility>
-#include <variant>
 
+#include "asset_error.hpp"
 #include "fastgltf/types.hpp"
 #include "meshoptimizer.h"
 
@@ -133,17 +129,9 @@ AssetExternalBuffers::AssetExternalBuffers(
   }
 }
 
-auto AssetExternalBuffers::operator()(std::size_t buffer_view_idx) const
+auto AssetExternalBuffers::operator()(const fastgltf::Asset& /*asset*/,
+                                      std::size_t buffer_view_idx) const
     -> std::span<const std::byte> {
   return buffer_view_bytes_[buffer_view_idx];
 }
-
-auto format_as(AssetProcessError error) noexcept -> std::string {
-  switch (error) {
-    case AssetProcessError::kUnsupportedSourceDataType:
-      return "the source data type is not supported";
-  };
-
-  std::unreachable();
-};
 };  // namespace vkit::gltf

@@ -52,7 +52,7 @@ auto create_buffer(const BufferCreateInfo& create_info,
   if (memory_type == BufferMemoryType::kDevice &&
       (usage & vk::BufferUsageFlagBits::eShaderDeviceAddress) ==
           vk::BufferUsageFlagBits::eShaderDeviceAddress) {
-    auto device_address_info = vk::BufferDeviceAddressInfo{buffer};
+    auto device_address_info = vk::BufferDeviceAddressInfo{}.setBuffer(buffer);
     address = create_info.device.getBufferAddress(device_address_info);
   }
 
