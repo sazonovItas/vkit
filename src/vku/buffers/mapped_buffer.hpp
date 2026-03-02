@@ -5,10 +5,9 @@
 #include <type_traits>
 #include <variant>
 
-#include "allocated_buffer.hpp"
 #include "vk_mem_alloc.hpp"
-
-#define FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
+#include "vku/buffers/allocated_buffer.hpp"
+#include "vku/queue.hpp"
 
 namespace vku {
 class MappedBuffer : public AllocatedBuffer {
@@ -53,17 +52,15 @@ class MappedBuffer : public AllocatedBuffer {
                vk::ArrayProxy<const std::uint32_t> queue_family_indices,
                const vma::AllocationCreateInfo& allocation_create_info =
                    {kAllocationFlags, kMemoryUsage})
-      : MappedBuffer{
-            allocator,
-            vk::BufferCreateInfo{
-                {},
-                sizeof(T),
-                usage,
-                queue_family_indices.size() == 1 ? vk::SharingMode::eExclusive
-                                                 : vk::SharingMode::eConcurrent,
-                queue_family_indices,
-            },
-            allocation_create_info} {
+      : MappedBuffer{allocator,
+                     vk::BufferCreateInfo{
+                         {},
+                         sizeof(T),
+                         usage,
+                         get_sharing_mode(queue_family_indices),
+                         queue_family_indices,
+                     },
+                     allocation_create_info} {
     *static_cast<T*>(data) = value;
   }
 
@@ -72,7 +69,7 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
                vk::BufferUsageFlags usage,
-               const vma::AllocationCreateInfo& allocationCreateInfo =
+               const vma::AllocationCreateInfo& allocation_create_info =
                    {kAllocationFlags, kMemoryUsage})
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
@@ -80,8 +77,8 @@ class MappedBuffer : public AllocatedBuffer {
                          r.size() * sizeof(std::ranges::range_value_t<R>),
                          usage,
                      },
-                     allocationCreateInfo} {
-    std::ranges::copy(FWD(r),
+                     allocation_create_info} {
+    std::ranges::copy(std::forward<R>(r),
                       static_cast<std::ranges::range_value_t<R>*>(data));
   }
 
@@ -90,21 +87,19 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
                vk::BufferUsageFlags usage,
-               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
-               const vma::AllocationCreateInfo& allocationCreateInfo =
+               vk::ArrayProxy<const std::uint32_t> queue_family_indices,
+               const vma::AllocationCreateInfo& allocation_create_info =
                    {kAllocationFlags, kMemoryUsage})
       : MappedBuffer{allocator,
-                     VULKAN_HPP_NAMESPACE::BufferCreateInfo{
+                     vk::BufferCreateInfo{
                          {},
                          r.size() * sizeof(std::ranges::range_value_t<R>),
                          usage,
-                         queueFamilyIndices.size() == 1
-                             ? VULKAN_HPP_NAMESPACE::SharingMode::eExclusive
-                             : VULKAN_HPP_NAMESPACE::SharingMode::eConcurrent,
-                         queueFamilyIndices,
+                         get_sharing_mode(queue_family_indices),
+                         queue_family_indices,
                      },
-                     allocationCreateInfo} {
-    std::ranges::copy(FWD(r),
+                     allocation_create_info} {
+    std::ranges::copy(std::forward<R>(r),
                       static_cast<std::ranges::range_value_t<R>*>(data));
   }
 

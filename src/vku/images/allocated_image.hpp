@@ -1,7 +1,7 @@
 #pragma once
 
-#include "image.hpp"
 #include "vk_mem_alloc.hpp"
+#include "vku/images/image.hpp"
 
 namespace vku {
 struct AllocatedImage : Image {
@@ -10,7 +10,7 @@ struct AllocatedImage : Image {
 
   AllocatedImage(vma::Allocator allocator,
                  const vk::ImageCreateInfo& create_info,
-                 const vma::AllocationCreateInfo allocation_create_info =
+                 const vma::AllocationCreateInfo& allocation_create_info =
                      {{}, vma::MemoryUsage::eAutoPreferDevice})
       : Image{
             .image = nullptr,

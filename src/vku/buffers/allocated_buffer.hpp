@@ -2,8 +2,8 @@
 
 #include <utility>
 
-#include "buffer.hpp"
 #include "vk_mem_alloc.hpp"
+#include "vku/buffers/buffer.hpp"
 
 namespace vku {
 struct AllocatedBuffer : Buffer {
