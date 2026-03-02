@@ -7,8 +7,7 @@ auto parser = fastgltf::Parser{
     fastgltf::Extensions::KHR_materials_variants |
         fastgltf::Extensions::KHR_texture_transform |
         fastgltf::Extensions::KHR_mesh_quantization |
-        fastgltf::Extensions::EXT_meshopt_compression |
-        fastgltf::Extensions::EXT_mesh_gpu_instancing,
+        fastgltf::Extensions::EXT_meshopt_compression,
 };
 };  // namespace
 

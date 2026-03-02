@@ -4,6 +4,7 @@
 
 #include "vk_mem_alloc.hpp"
 #include "vku/buffers/buffer.hpp"
+#include "vku/constants.hpp"
 
 namespace vku {
 struct AllocatedBuffer : Buffer {
@@ -13,8 +14,9 @@ struct AllocatedBuffer : Buffer {
   AllocatedBuffer(vma::Allocator allocator,
                   const vk::BufferCreateInfo& create_info,
                   const vma::AllocationCreateInfo& allocation_create_info =
-                      {{}, vma::MemoryUsage::eAutoPreferDevice})
+                      allocation::kDeviceLocal)
       : allocator{allocator} {
+    size = create_info.size;
     std::tie(allocation, buffer) =
         allocator.createBuffer(create_info, allocation_create_info);
   }
@@ -35,8 +37,8 @@ struct AllocatedBuffer : Buffer {
 
     static_cast<Buffer&>(*this) = static_cast<Buffer>(src);
     allocator = src.allocator;
-    buffer = std::exchange(src.buffer, nullptr);
     allocation = std::exchange(src.allocation, nullptr);
+    buffer = std::exchange(src.buffer, nullptr);
     return *this;
   }
 

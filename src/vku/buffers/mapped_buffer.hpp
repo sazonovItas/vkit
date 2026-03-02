@@ -3,27 +3,21 @@
 #include <concepts>
 #include <cstdint>
 #include <type_traits>
-#include <variant>
 
 #include "vk_mem_alloc.hpp"
 #include "vku/buffers/allocated_buffer.hpp"
+#include "vku/constants.hpp"
 #include "vku/queue.hpp"
 
 namespace vku {
 class MappedBuffer : public AllocatedBuffer {
-  static constexpr auto kAllocationFlags =
-      vma::AllocationCreateFlagBits::eHostAccessSequentialWrite |
-      vma::AllocationCreateFlagBits::eMapped;
-
-  static constexpr auto kMemoryUsage = vma::MemoryUsage::eAuto;
-
  public:
   void* data;
 
   MappedBuffer(vma::Allocator allocator,
                const vk::BufferCreateInfo& create_info,
                const vma::AllocationCreateInfo& allocation_create_info =
-                   {kAllocationFlags, kMemoryUsage})
+                   allocation::kHostWrite)
       : AllocatedBuffer{allocator, create_info, allocation_create_info},
         data{allocator.mapMemory(allocation)} {}
 
@@ -33,7 +27,7 @@ class MappedBuffer : public AllocatedBuffer {
   MappedBuffer(vma::Allocator allocator, const T& value,
                vk::BufferUsageFlags usage,
                const vma::AllocationCreateInfo& allocation_create_info =
-                   {kAllocationFlags, kMemoryUsage})
+                   allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
@@ -51,7 +45,7 @@ class MappedBuffer : public AllocatedBuffer {
                vk::BufferUsageFlags usage,
                vk::ArrayProxy<const std::uint32_t> queue_family_indices,
                const vma::AllocationCreateInfo& allocation_create_info =
-                   {kAllocationFlags, kMemoryUsage})
+                   allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
@@ -70,7 +64,7 @@ class MappedBuffer : public AllocatedBuffer {
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
                vk::BufferUsageFlags usage,
                const vma::AllocationCreateInfo& allocation_create_info =
-                   {kAllocationFlags, kMemoryUsage})
+                   allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
@@ -89,7 +83,7 @@ class MappedBuffer : public AllocatedBuffer {
                vk::BufferUsageFlags usage,
                vk::ArrayProxy<const std::uint32_t> queue_family_indices,
                const vma::AllocationCreateInfo& allocation_create_info =
-                   {kAllocationFlags, kMemoryUsage})
+                   allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
@@ -167,9 +161,5 @@ class MappedBuffer : public AllocatedBuffer {
   explicit MappedBuffer(AllocatedBuffer&& allocated_buffer)
       : AllocatedBuffer{std::move(allocated_buffer)},
         data{allocator.mapMemory(allocation)} {}
-
-  friend std::variant<AllocatedBuffer, MappedBuffer> create_staging_dst_buffer(
-      vma::Allocator, const vk::BufferCreateInfo&,
-      const vma::AllocationCreateInfo&);
 };
 };  // namespace vku
