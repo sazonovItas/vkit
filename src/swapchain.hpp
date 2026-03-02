@@ -1,12 +1,12 @@
 #pragma once
-#include <vk_mem_alloc.h>
 
 #include <optional>
 #include <vector>
 
 #include "render_target.hpp"
+#include "vk_mem_alloc.hpp"
+#include "vku/images/allocated_image.hpp"
 #include "vulkan/gpu.hpp"
-#include "vulkan/vma/image.hpp"
 
 namespace lvk {
 
@@ -14,7 +14,7 @@ class Swapchain {
  public:
   explicit Swapchain(vk::Device device, vk::PhysicalDevice physical_device,
                      vkit::vulkan::QueueFamilies& queue_families,
-                     VmaAllocator allocator, vk::SurfaceKHR surface,
+                     vma::Allocator allocator, vk::SurfaceKHR surface,
                      glm::ivec2 size);
 
   auto recreate(glm::ivec2 size) -> bool;
@@ -48,7 +48,7 @@ class Swapchain {
   vk::PhysicalDevice m_physical_device_;
   vkit::vulkan::QueueFamilies m_queue_families_;
   vk::Device m_device_;
-  VmaAllocator m_allocator_;
+  vma::Allocator m_allocator_;
 
   vk::SwapchainCreateInfoKHR m_ci_;
   vk::UniqueSwapchainKHR m_swapchain_;
@@ -57,10 +57,10 @@ class Swapchain {
   std::vector<vk::UniqueSemaphore> m_present_semaphorses_;
   std::optional<std::size_t> m_image_index_;
 
-  vkit::vulkan::vma::Image m_color_image_;
+  std::optional<vku::AllocatedImage> m_color_image_;
   vk::UniqueImageView m_color_image_view_;
 
-  vkit::vulkan::vma::Image m_depth_image_;
+  std::optional<vku::AllocatedImage> m_depth_image_;
   vk::UniqueImageView m_depth_image_view_;
 };
 

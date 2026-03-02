@@ -4,8 +4,12 @@
 #include <cstdint>
 #include <cstring>
 
+#include "vku/buffers/allocated_buffer.hpp"
+#include "vku/constants.hpp"
+#include "vulkan/vulkan.hpp"
+
 namespace lvk {
-DescriptorBuffer::DescriptorBuffer(VmaAllocator allocator,
+DescriptorBuffer::DescriptorBuffer(vma::Allocator allocator,
                                    std::uint32_t const queue_family,
                                    vk::BufferUsageFlags const usage)
     : m_allocator_{allocator}, m_queue_family_{queue_family}, m_usage_{usage} {
@@ -22,29 +26,25 @@ void DescriptorBuffer::write_at(std::size_t const frame_index,
 auto DescriptorBuffer::descriptor_info_at(std::size_t const frame_index) const
     -> vk::DescriptorBufferInfo {
   auto const& buffer = m_buffers_.at(frame_index);
-  auto ret = vk::DescriptorBufferInfo{};
-  ret.setBuffer(buffer.buffer.get().buffer).setRange(buffer.size);
-  return ret;
+  return vk::DescriptorBufferInfo{}
+      .setBuffer(buffer->buffer)
+      .setRange(buffer->size);
 }
 
-void DescriptorBuffer::write_to(Buffer& out,
+void DescriptorBuffer::write_to(std::optional<vku::AllocatedBuffer>& out,
                                 std::span<std::byte const> bytes) const {
   static constexpr auto kBlankByteV = std::array{std::byte{}};
   if (bytes.empty()) {
     bytes = kBlankByteV;
   }
 
-  out.size = bytes.size();
-  if (out.buffer.get().size < bytes.size()) {
-    auto const buffer_ci = vkit::vulkan::vma::BufferCreateInfo{
-        .allocator = m_allocator_,
-        .usage = m_usage_,
-        .queue_family = m_queue_family_,
-    };
-    out.buffer = vkit::vulkan::vma::create_buffer(
-        buffer_ci, vkit::vulkan::vma::BufferMemoryType::kHost, out.size);
+  if (!out.has_value() || out->size < bytes.size()) {
+    auto buffer_ci =
+        vk::BufferCreateInfo{}.setSize(bytes.size_bytes()).setUsage(m_usage_);
+    out.emplace(m_allocator_, buffer_ci, vku::allocation::kHostWrite);
   }
 
-  std::memcpy(out.buffer.get().mapped, bytes.data(), bytes.size());
+  m_allocator_.copyMemoryToAllocation(bytes.data(), out->allocation, {},
+                                      bytes.size_bytes());
 }
 };  // namespace lvk

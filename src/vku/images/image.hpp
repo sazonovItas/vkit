@@ -7,6 +7,7 @@ struct Image {
   vk::Image image;
   vk::Extent3D extent;
   vk::Format format;
+  vk::SampleCountFlagBits samples;
   std::uint32_t mip_levels;
   std::uint32_t array_layers;
 
@@ -19,9 +20,9 @@ struct Image {
         {
             infer_aspect_flags(format),
             0,
-            vk::RemainingMipLevels,
+            mip_levels,
             0,
-            vk::RemainingArrayLayers,
+            array_layers,
         },
         type);
   }
@@ -56,6 +57,12 @@ struct Image {
   [[nodiscard]] auto mip_extent_2d(std::uint32_t mip_level) const
       -> vk::Extent2D {
     return mip_extent(vk::Extent2D{extent.width, extent.height}, mip_level);
+  }
+
+  [[nodiscard]] auto subresource_range(
+      vk::ImageAspectFlags aspect_flags = vk::ImageAspectFlagBits::eColor)
+      const noexcept -> vk::ImageSubresourceRange {
+    return {aspect_flags, 0, mip_levels, 0, array_layers};
   }
 
   [[nodiscard]] static constexpr auto infer_aspect_flags(vk::Format format)
@@ -100,24 +107,22 @@ struct Image {
       -> vk::Extent2D {
     assert(mip_level < max_mip_levels(extent) &&
            "mipLevel must be less than maxMipLevels(extent)");
-    return {std::max(extent.width >> mip_level, 1U),
-            std::max(extent.height >> mip_level, 1U)};
+    return {
+        std::max(extent.width >> mip_level, 1U),
+        std::max(extent.height >> mip_level, 1U),
+    };
   }
 
   [[nodiscard]] static constexpr auto mip_extent(
       const vk::Extent3D &extent, std::uint32_t mip_level) noexcept
       -> vk::Extent3D {
     assert(mip_level < max_mip_levels(extent) &&
-           "mipLevel must be less than maxMipLevels(extent)");
-    return {std::max(extent.width >> mip_level, 1U),
-            std::max(extent.height >> mip_level, 1U),
-            std::max(extent.depth >> mip_level, 1U)};
+           "MipLevel must be less than maxMipLevels(extent).");
+    return {
+        std::max(extent.width >> mip_level, 1U),
+        std::max(extent.height >> mip_level, 1U),
+        std::max(extent.depth >> mip_level, 1U),
+    };
   }
 };
-
-[[nodiscard]] constexpr auto full_subresource_range(
-    vk::ImageAspectFlags aspect_flags =
-        vk::ImageAspectFlagBits::eColor) noexcept -> vk::ImageSubresourceRange {
-  return {aspect_flags, 0, vk::RemainingMipLevels, 0, vk::RemainingArrayLayers};
-}
 }  // namespace vku

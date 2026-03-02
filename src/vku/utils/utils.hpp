@@ -22,6 +22,11 @@ template <typename T>
   return {extent.width, extent.height};
 }
 
+[[nodiscard]] constexpr auto to_extent_3d(const vk::Extent2D& extent) noexcept
+    -> vk::Extent3D {
+  return {extent.width, extent.height, 1};
+}
+
 template <std::floating_point T = float>
 [[nodiscard]] constexpr auto aspect(const vk::Extent2D& extent) noexcept -> T {
   assert(extent.height != 0 && "Height must be nonzero.");

@@ -6,8 +6,7 @@
 #include <unordered_set>
 
 #include "util.hpp"
-#include "vulkan/vulkan.hpp"
-#include "vulkan/vulkan_hpp_macros.hpp"
+#include "vk_mem_alloc.hpp"
 
 namespace {
 constexpr std::array kRequiredExtensions{
@@ -216,6 +215,20 @@ auto Gpu::create_device() -> vk::UniqueDevice {
 
 auto Gpu::create_allocator(const vk::Instance &instance) const
     -> vma::Allocator {
-  return vma::create_allocator(instance, physicalDevice, *device);
+  auto const &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+
+  auto vma_vk_funcs =
+      vma::VulkanFunctions{}
+          .setVkGetInstanceProcAddr(dispatcher.vkGetInstanceProcAddr)
+          .setVkGetDeviceProcAddr(dispatcher.vkGetDeviceProcAddr);
+
+  auto ci = vma::AllocatorCreateInfo{}
+                .setInstance(instance)
+                .setPhysicalDevice(physicalDevice)
+                .setDevice(*device)
+                .setPVulkanFunctions(&vma_vk_funcs)
+                .setFlags(vma::AllocatorCreateFlagBits::eBufferDeviceAddress);
+
+  return vma::createAllocator(ci);
 }
 };  // namespace vkit::vulkan

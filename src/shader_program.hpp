@@ -1,7 +1,6 @@
 #pragma once
 
-#include "scoped_waiter.hpp"
-#include "vulkan/vulkan.hpp"
+#include "vku/scoped/device_waiter.hpp"
 
 namespace lvk {
 
@@ -64,7 +63,7 @@ class ShaderProgram {
 
   std::vector<vk::UniqueShaderEXT> m_shaders_;
 
-  ScopedWaiter m_waiter_;
+  vku::DeviceWaiter m_waiter_;
 };
 
 };  // namespace lvk

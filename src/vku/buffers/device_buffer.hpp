@@ -17,10 +17,9 @@ class DeviceBuffer : AllocatedBuffer {
       : AllocatedBuffer(allocator, create_info, allocation_create_info) {}
 
   DeviceBuffer(const DeviceBuffer&) = delete;
+  DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
   DeviceBuffer(DeviceBuffer&& src) noexcept = default;
-
-  DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 
   DeviceBuffer& operator=(DeviceBuffer&& src) noexcept {
     static_cast<AllocatedBuffer&>(*this) =
@@ -36,11 +35,11 @@ class DeviceBuffer : AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  void copy_from(vk::Device device, vk::CommandPool command_pool,
-                 vk::Queue queue, R&& r) {
+  void update_from(vk::Device device, vk::CommandPool command_pool,
+                   vk::Queue queue, std::range_format, R&& r) {
     auto total_size = r.size() * sizeof(std::ranges::range_value_t<R>);
     assert(total_size > this->size &&
-           "Bytes size exceeded device buffer size.");
+           "Buffer size exceeded device buffer size.");
 
     auto stage_buffer = MappedBuffer{
         allocator,
@@ -49,16 +48,17 @@ class DeviceBuffer : AllocatedBuffer {
         vk::BufferUsageFlagBits::eTransferSrc,
     };
 
-    vku::execute_command(
-        device, command_pool, queue, [&](vk::CommandBuffer cb) {
-          auto buffer_copy = vk::BufferCopy2{}.setSize(total_size);
-          auto copy_buffer_info = vk::CopyBufferInfo2{}
-                                      .setSrcBuffer(stage_buffer.buffer)
-                                      .setDstBuffer(buffer)
-                                      .setRegions(buffer_copy);
+    auto copy_buffer = [&](vk::CommandBuffer cb) {
+      auto buffer_copy = vk::BufferCopy2{}.setSize(total_size);
+      auto copy_buffer_info = vk::CopyBufferInfo2{}
+                                  .setSrcBuffer(stage_buffer.buffer)
+                                  .setDstBuffer(buffer)
+                                  .setRegions(buffer_copy);
 
-          cb.copyBuffer2(copy_buffer_info);
-        });
+      cb.copyBuffer2(copy_buffer_info);
+    };
+
+    vku::execute_command(device, command_pool, queue, copy_buffer);
   }
 };
 };  // namespace vku

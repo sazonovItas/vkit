@@ -2,9 +2,9 @@
 
 #include <vk_mem_alloc.h>
 
+#include "vku/images/allocated_image.hpp"
 #include "vulkan/util.hpp"
 #include "vulkan/vma/image.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 [[nodiscard]] constexpr auto create_sampler_ci(
@@ -47,7 +47,7 @@ class Texture {
   std::string name;
 
  private:
-  vkit::vulkan::vma::Image m_image_;
+  vku::AllocatedImage m_image_;
   vk::UniqueImageView m_view_;
   vk::UniqueSampler m_sampler_;
 };

@@ -12,6 +12,7 @@
 #include "swapchain.hpp"
 #include "texture.hpp"
 #include "transform.hpp"
+#include "vk_mem_alloc.hpp"
 #include "vulkan/gpu.hpp"
 #include "window.hpp"
 

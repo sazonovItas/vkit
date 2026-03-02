@@ -3,8 +3,6 @@
 #include <array>
 #include <print>
 
-#include "vulkan/vulkan.hpp"
-
 namespace {
 constexpr auto kViewportStatesV =
     vk::PipelineViewportStateCreateInfo({}, 1, {}, 1);

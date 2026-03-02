@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vma/allocator.hpp"
+#include "vk_mem_alloc.hpp"
 
 namespace vkit::vulkan {
 struct QueueFamilies {

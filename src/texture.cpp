@@ -16,7 +16,7 @@ constexpr auto kWhitePixelV = std::array{std::byte{0xFF}, std::byte{0xFF},
 constexpr auto kWhiteBitmapV =
     vkit::vulkan::vma::Bitmap{.bytes = kWhitePixelV, .size = {1, 1}};
 
-Texture::Texture(CreateInfo create_info) {
+Texture::Texture(CreateInfo create_info) : {
   if (create_info.bitmap.bytes.empty() || create_info.bitmap.size.x <= 0 ||
       create_info.bitmap.size.y <= 0) {
     create_info.bitmap = kWhiteBitmapV;
