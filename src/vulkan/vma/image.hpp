@@ -26,7 +26,7 @@ using Image = Scoped<RawImage, ImageDeleter>;
 
 struct ImageCreateInfo {
   std::uint32_t levels{1};
-  vk::Format format{vk::Format::eR8G8B8A8Srgb};
+  vk::Format format{vk::Format::eR8G8B8A8Unorm};
   vk::SampleCountFlagBits sample_count{vk::SampleCountFlagBits::e1};
   std::uint32_t queue_family;
   VmaAllocator allocator;

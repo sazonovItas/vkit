@@ -1,0 +1,180 @@
+#pragma once
+
+#include <concepts>
+#include <cstdint>
+#include <type_traits>
+#include <variant>
+
+#include "allocated_buffer.hpp"
+#include "vk_mem_alloc.hpp"
+
+#define FWD(...) static_cast<decltype(__VA_ARGS__)&&>(__VA_ARGS__)
+
+namespace vku {
+class MappedBuffer : public AllocatedBuffer {
+  static constexpr auto kAllocationFlags =
+      vma::AllocationCreateFlagBits::eHostAccessSequentialWrite |
+      vma::AllocationCreateFlagBits::eMapped;
+
+  static constexpr auto kMemoryUsage = vma::MemoryUsage::eAuto;
+
+ public:
+  void* data;
+
+  MappedBuffer(vma::Allocator allocator,
+               const vk::BufferCreateInfo& create_info,
+               const vma::AllocationCreateInfo& allocation_create_info =
+                   {kAllocationFlags, kMemoryUsage})
+      : AllocatedBuffer{allocator, create_info, allocation_create_info},
+        data{allocator.mapMemory(allocation)} {}
+
+  template <typename T>
+    requires(!std::same_as<T, std::from_range_t> &&
+             std::is_trivially_copyable_v<T>)
+  MappedBuffer(vma::Allocator allocator, const T& value,
+               vk::BufferUsageFlags usage,
+               const vma::AllocationCreateInfo& allocation_create_info =
+                   {kAllocationFlags, kMemoryUsage})
+      : MappedBuffer{allocator,
+                     vk::BufferCreateInfo{
+                         {},
+                         sizeof(T),
+                         usage,
+                     },
+                     allocation_create_info} {
+    *static_cast<T*>(data) = value;
+  }
+
+  template <typename T>
+    requires(!std::same_as<T, std::from_range_t> &&
+             std::is_trivially_copyable_v<T>)
+  MappedBuffer(vma::Allocator allocator, const T& value,
+               vk::BufferUsageFlags usage,
+               vk::ArrayProxy<const std::uint32_t> queue_family_indices,
+               const vma::AllocationCreateInfo& allocation_create_info =
+                   {kAllocationFlags, kMemoryUsage})
+      : MappedBuffer{
+            allocator,
+            vk::BufferCreateInfo{
+                {},
+                sizeof(T),
+                usage,
+                queue_family_indices.size() == 1 ? vk::SharingMode::eExclusive
+                                                 : vk::SharingMode::eConcurrent,
+                queue_family_indices,
+            },
+            allocation_create_info} {
+    *static_cast<T*>(data) = value;
+  }
+
+  template <std::ranges::input_range R>
+    requires(std::ranges::sized_range<R> &&
+             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
+  MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
+               vk::BufferUsageFlags usage,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
+                   {kAllocationFlags, kMemoryUsage})
+      : MappedBuffer{allocator,
+                     vk::BufferCreateInfo{
+                         {},
+                         r.size() * sizeof(std::ranges::range_value_t<R>),
+                         usage,
+                     },
+                     allocationCreateInfo} {
+    std::ranges::copy(FWD(r),
+                      static_cast<std::ranges::range_value_t<R>*>(data));
+  }
+
+  template <std::ranges::input_range R>
+    requires(std::ranges::sized_range<R> &&
+             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
+  MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
+               vk::BufferUsageFlags usage,
+               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
+                   {kAllocationFlags, kMemoryUsage})
+      : MappedBuffer{allocator,
+                     VULKAN_HPP_NAMESPACE::BufferCreateInfo{
+                         {},
+                         r.size() * sizeof(std::ranges::range_value_t<R>),
+                         usage,
+                         queueFamilyIndices.size() == 1
+                             ? VULKAN_HPP_NAMESPACE::SharingMode::eExclusive
+                             : VULKAN_HPP_NAMESPACE::SharingMode::eConcurrent,
+                         queueFamilyIndices,
+                     },
+                     allocationCreateInfo} {
+    std::ranges::copy(FWD(r),
+                      static_cast<std::ranges::range_value_t<R>*>(data));
+  }
+
+  MappedBuffer(const MappedBuffer&) = delete;
+
+  MappedBuffer(MappedBuffer&& src) noexcept = default;
+
+  MappedBuffer& operator=(const MappedBuffer&) = delete;
+
+  MappedBuffer& operator=(MappedBuffer&& src) noexcept {
+    if (allocation) {
+      allocator.unmapMemory(allocation);
+    }
+
+    static_cast<AllocatedBuffer&>(*this) =
+        std::move(static_cast<AllocatedBuffer&>(src));
+    data = src.data;
+    return *this;
+  }
+
+  ~MappedBuffer() override {
+    if (allocation) {
+      allocator.unmapMemory(allocation);
+    }
+  }
+
+  template <typename T>
+  [[nodiscard]] auto as_range(vk::DeviceSize byte_offset = 0) const
+      -> std::span<const T> {
+    assert(byte_offset <= size && "Out of bound: byteOffset > size");
+    return {reinterpret_cast<const T*>(static_cast<const char*>(data) +
+                                       byte_offset),
+            (size - byte_offset) / sizeof(T)};
+  }
+
+  template <typename T>
+  [[nodiscard]] auto as_range(vk::DeviceSize byte_offset = 0) -> std::span<T> {
+    assert(byte_offset <= size && "Out of bound: byteOffset > size");
+    return {reinterpret_cast<T*>(static_cast<char*>(data) + byte_offset),
+            (size - byte_offset) / sizeof(T)};
+  }
+
+  template <typename T>
+  [[nodiscard]] auto as_value(vk::DeviceSize byte_offset = 0) const
+      -> const T& {
+    assert(byte_offset + sizeof(T) <= size &&
+           "Out of bound: byteOffset + sizeof(T) > size");
+    return *reinterpret_cast<const T*>(static_cast<const char*>(data) +
+                                       byte_offset);
+  }
+
+  template <typename T>
+  [[nodiscard]] auto as_value(vk::DeviceSize byte_offset = 0) -> T& {
+    assert(byte_offset + sizeof(T) <= size &&
+           "Out of bound: byteOffset + sizeof(T) > size");
+    return *reinterpret_cast<T*>(static_cast<char*>(data) + byte_offset);
+  }
+
+  [[nodiscard]] auto unmap() && noexcept {
+    allocator.unmapMemory(allocation);
+    return static_cast<AllocatedBuffer>(std::move(*this));
+  }
+
+ private:
+  explicit MappedBuffer(AllocatedBuffer&& allocated_buffer)
+      : AllocatedBuffer{std::move(allocated_buffer)},
+        data{allocator.mapMemory(allocation)} {}
+
+  friend std::variant<AllocatedBuffer, MappedBuffer> create_staging_dst_buffer(
+      vma::Allocator, const vk::BufferCreateInfo&,
+      const vma::AllocationCreateInfo&);
+};
+};  // namespace vku

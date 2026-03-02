@@ -891,7 +891,7 @@ auto App::asset_path(std::string_view uri) const -> fs::path {
 }
 
 void App::load_gltf() {
-  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
+  if (!load_asset(asset_path("models/sword/scene.gltf"))) {
     std::println(stderr, "failed to load gltf model");
     return;
   }
@@ -989,19 +989,16 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
             auto image = Magick::Image{};
             image.read(blob);
 
-            // image.depth(8);
-            // image.colorSpace(Magick::sRGBColorspace);
-            // image.alphaChannel(Magick::ActivateAlphaChannel);
+            image.depth(8);
+            image.colorSpace(Magick::sRGBColorspace);
+            image.alphaChannel(Magick::ActivateAlphaChannel);
 
             auto width = static_cast<int>(image.columns());
             auto height = static_cast<int>(image.rows());
-            // bytes.resize(width * height * 4);
-            //
-            // image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
-            //             bytes.data());
+            bytes.resize(width * height * 4);
 
-            bytes.resize(array.bytes.size());
-            std::memcpy(bytes.data(), array.bytes.data(), array.bytes.size());
+            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
+                        bytes.data());
 
             bitmap = {
                 .bytes = std::move(bytes),

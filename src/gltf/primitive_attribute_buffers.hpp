@@ -8,8 +8,6 @@
 #include "vulkan/vma/buffer.hpp"
 
 namespace vkit::gltf {
-using namespace std::string_view_literals;
-
 class PrimitiveAttributeBuffers {
  public:
   struct AttributeInfo {
@@ -26,7 +24,6 @@ class PrimitiveAttributeBuffers {
     class Config {
      public:
       const BufferDataAdapter& adapter;
-
       const std::uint32_t queue_family = {};
     };
 

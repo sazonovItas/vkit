@@ -72,6 +72,10 @@ target_sources(vma PRIVATE
 )
 target_compile_options(vma PRIVATE -w)
 
+message(STATUS "[vmahpp]")
+add_subdirectory(VulkanMemoryAllocator-Hpp/include)
+add_library(vmahpp::vmahpp ALIAS VulkanMemoryAllocator-Hpp)
+
 message(STATUS "[fastgltf]")
 add_subdirectory(fastgltf)
 
@@ -88,6 +92,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
   glm::glm
   imgui::imgui
   vma::vma
+  vmahpp::vmahpp
   fastgltf::fastgltf
   meshoptimizer
   ${ImageMagick_LIBRARIES}
