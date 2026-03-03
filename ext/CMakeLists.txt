@@ -39,7 +39,6 @@ target_compile_definitions(imgui PUBLIC
 )
 target_sources(imgui PRIVATE
   imgui/imconfig.h
-  imgui/imgui_demo.cpp
   imgui/imgui_draw.cpp
   imgui/imgui_internal.h
   imgui/imgui_tables.cpp
@@ -79,8 +78,10 @@ add_subdirectory(fastgltf)
 message(STATUS "[meshoptimizer]")
 add_subdirectory(meshoptimizer)
 
-message(STATUS "[image magick++]")
-find_package(ImageMagick COMPONENTS Magick++)
+message(STATUS "[gli]")
+set(GLI_TEST_ENABLE OFF CACHE BOOL "" FORCE)
+add_subdirectory(gli)
+add_library(gli::gli ALIAS gli)
 
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(learn-vk::ext ALIAS ${PROJECT_NAME})
@@ -91,15 +92,10 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
   vma::vma
   fastgltf::fastgltf
   meshoptimizer
-  ${ImageMagick_LIBRARIES}
-)
-target_include_directories(${PROJECT_NAME} INTERFACE
-  ${ImageMagick_INCLUDE_DIRS}
+  gli::gli
 )
 target_compile_definitions(${PROJECT_NAME} INTERFACE
   GLFW_INCLUDE_VULKAN
-  MAGICKCORE_QUANTUM_DEPTH=32
-  MAGICKCORE_HDRI_ENABLE=0
 )
 
 target_link_libraries(${PROJECT_NAME} INTERFACE dl)

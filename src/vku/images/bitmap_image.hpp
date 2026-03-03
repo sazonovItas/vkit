@@ -8,17 +8,22 @@
 #include "vku/utils/utils.hpp"
 
 namespace vku {
-struct Bitmap {
-  vk::Extent2D extent;
-  std::span<const std::byte> bytes;
-};
-
 class BitmapImage : public AllocatedImage {
  public:
   BitmapImage(vma::Allocator allocator, const vk::ImageCreateInfo& createInfo,
               const vma::AllocationCreateInfo& allocationCreateInfo =
                   vku::allocation::kDeviceLocal)
       : AllocatedImage(allocator, createInfo, allocationCreateInfo) {}
+
+  BitmapImage(vma::Allocator allocator, const vk::ImageCreateInfo& createInfo,
+              const DeviceCopyInfo& copyInfo, const Bitmap& bitmap,
+              const vma::AllocationCreateInfo& allocationCreateInfo =
+                  vku::allocation::kDeviceLocal)
+      : AllocatedImage(allocator, createInfo, allocationCreateInfo) {
+    update(copyInfo, bitmap);
+  }
+
+  BitmapImage() = default;
 
   BitmapImage(const BitmapImage&) = delete;
   BitmapImage& operator=(const BitmapImage&) = delete;
@@ -31,8 +36,7 @@ class BitmapImage : public AllocatedImage {
     return *this;
   }
 
-  void update(const Bitmap& bitmap, vk::Device device,
-              vk::CommandPool commandPool, vk::Queue queue,
+  void update(const DeviceCopyInfo& copyInfo, const Bitmap& bitmap,
               const ImageBarrierInfo& barrierInfo = {
                   .srcLayout = vk::ImageLayout::eUndefined,
                   .srcAccess = vk::AccessFlagBits2::eNone,
@@ -41,8 +45,8 @@ class BitmapImage : public AllocatedImage {
                   .dstAccess = vk::AccessFlagBits2::eShaderRead,
                   .dstStage = vk::PipelineStageFlagBits2::eFragmentShader,
               }) {
-    assert(bitmap.extent.width == extent.width &&
-           bitmap.extent.height == extent.height &&
+    assert(bitmap.extent.width <= extent.width &&
+           bitmap.extent.height <= extent.height &&
            "Bitmap extent should be equal to image extent.");
 
     auto staging_buffer = MappedBuffer{
@@ -73,7 +77,7 @@ class BitmapImage : public AllocatedImage {
                                        .setAspectMask(inferAspectFlags(format))
                                        .setLayerCount(1)
                                        .setMipLevel(0))
-              .setImageExtent(extent);
+              .setImageExtent(toExtent3D(bitmap.extent));
 
       cb.copyBufferToImage2(
           vk::CopyBufferToImageInfo2{}
@@ -93,7 +97,8 @@ class BitmapImage : public AllocatedImage {
       generateMipmaps(cb, *this, mip_barrier_info);
     };
 
-    execute_command_and_wait(device, commandPool, queue, k_copy_and_mip);
+    executeCommandAndWait(copyInfo.device, copyInfo.commandPool, copyInfo.queue,
+                          k_copy_and_mip);
   }
 };
 };  // namespace vku

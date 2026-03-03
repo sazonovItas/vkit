@@ -6,15 +6,56 @@
 #include "vku/buffers/mapped_buffer.hpp"
 #include "vku/commands.hpp"
 #include "vku/constants.hpp"
+#include "vku/queue.hpp"
+#include "vku/utils/utils.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vku {
 class DeviceBuffer : public AllocatedBuffer {
  public:
-  DeviceBuffer(vma::Allocator allocator,
-               const vk::BufferCreateInfo& create_info,
-               const vma::AllocationCreateInfo& allocation_create_info =
+  DeviceBuffer(vma::Allocator allocator, const vk::BufferCreateInfo& createInfo,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(allocator, create_info, allocation_create_info) {}
+      : AllocatedBuffer(allocator, createInfo, allocationCreateInfo) {}
+
+  template <std::ranges::input_range R>
+    requires(std::ranges::sized_range<R> &&
+             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
+  DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
+               std::from_range_t fromRange, R&& r,
+               vk::BufferUsageFlagBits usage,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
+                   allocation::kDeviceLocal)
+      : AllocatedBuffer(allocator,
+                        vk::BufferCreateInfo{
+                            {},
+                            r.size() * sizeof(std::ranges::range_value_t<R>),
+                            usage | vk::BufferUsageFlagBits::eTransferDst,
+                        },
+                        allocationCreateInfo) {
+    update(cmdCopyInfo, fromRange, r);
+  }
+
+  template <std::ranges::input_range R>
+    requires(std::ranges::sized_range<R> &&
+             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
+  DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
+               std::from_range_t fromRange, R&& r,
+               vk::BufferUsageFlagBits usage,
+               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
+                   allocation::kDeviceLocal)
+      : AllocatedBuffer(allocator,
+                        vk::BufferCreateInfo{
+                            {},
+                            r.size() * sizeof(std::ranges::range_value_t<R>),
+                            usage | vk::BufferUsageFlagBits::eTransferDst,
+                            getSharingMode(queueFamilyIndices),
+                            queueFamilyIndices,
+                        },
+                        allocationCreateInfo) {
+    update(cmdCopyInfo, fromRange, r);
+  }
 
   DeviceBuffer() = default;
 
@@ -29,7 +70,7 @@ class DeviceBuffer : public AllocatedBuffer {
     return *this;
   };
 
-  [[nodiscard]] auto get_address(vk::Device device) const noexcept
+  [[nodiscard]] auto getAddress(vk::Device device) const noexcept
       -> vk::DeviceAddress {
     return device.getBufferAddress(vk::BufferDeviceAddressInfo{buffer});
   }
@@ -37,15 +78,15 @@ class DeviceBuffer : public AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  void update(vk::Device device, vk::CommandPool command_pool, vk::Queue queue,
-              std::from_range_t, R&& r) {
+  void update(const DeviceCopyInfo& cmdCopyInfo, std::from_range_t fromRange,
+              R&& r) {
     auto total_size = r.size() * sizeof(std::ranges::range_value_t<R>);
     assert(total_size <= this->size &&
-           "Buffer size exceeded device buffer size.");
+           "Total size exceedes device buffer size.");
 
     auto stage_buffer = MappedBuffer{
         allocator,
-        std::from_range_t{},
+        fromRange,
         std::forward<R>(r),
         vk::BufferUsageFlagBits::eTransferSrc,
     };
@@ -60,7 +101,37 @@ class DeviceBuffer : public AllocatedBuffer {
       cb.copyBuffer2(copy_buffer_info);
     };
 
-    execute_command_and_wait(device, command_pool, queue, k_copy_buffer);
+    executeCommandAndWait(cmdCopyInfo.device, cmdCopyInfo.commandPool,
+                          cmdCopyInfo.queue, k_copy_buffer);
+  }
+
+  template <std::ranges::input_range R>
+    requires(std::ranges::sized_range<R> &&
+             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
+  void update(const DeviceCopyInfo& cmdCopyInfo, std::from_range_t fromRange,
+              R&& r, vk::ArrayProxy<const std::uint32_t> queueFamilyIndices) {
+    auto total_size = r.size() * sizeof(std::ranges::range_value_t<R>);
+    assert(total_size <= this->size &&
+           "Total size exceedes device buffer size.");
+
+    auto stage_buffer = MappedBuffer{
+        allocator,          fromRange,
+        std::forward<R>(r), vk::BufferUsageFlagBits::eTransferSrc,
+        queueFamilyIndices,
+    };
+
+    auto k_copy_buffer = [&](vk::CommandBuffer cb) {
+      auto buffer_copy = vk::BufferCopy2{}.setSize(total_size);
+      auto copy_buffer_info = vk::CopyBufferInfo2{}
+                                  .setSrcBuffer(stage_buffer.buffer)
+                                  .setDstBuffer(buffer)
+                                  .setRegions(buffer_copy);
+
+      cb.copyBuffer2(copy_buffer_info);
+    };
+
+    executeCommandAndWait(cmdCopyInfo.device, cmdCopyInfo.commandPool,
+                          cmdCopyInfo.queue, k_copy_buffer);
   }
 };
 };  // namespace vku

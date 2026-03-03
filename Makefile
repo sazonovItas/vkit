@@ -1,3 +1,5 @@
+EXECUTABLE ?= ./build/vkit
+
 .PHONY: glslc
 glslc:
 	glslc ./src/glsl/mesh.vert -o ./assets/shaders/mesh.vert
@@ -13,4 +15,4 @@ build: glslc cmake
 
 .PHONY: run
 run: build
-	./build/learn-vk
+	${EXECUTABLE}

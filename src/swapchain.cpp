@@ -163,9 +163,9 @@ auto Swapchain::acquire_next_image(vk::Semaphore const to_signal)
   return RenderTarget{
       .image = m_images_.at(*m_image_index_),
       .image_view = *m_image_views_.at(*m_image_index_),
-      .color_image = m_color_image_->image,
+      .color_image = m_color_image_.image,
       .color_image_view = *m_color_image_view_,
-      .depth_image = m_depth_image_->image,
+      .depth_image = m_depth_image_.image,
       .depth_image_view = *m_depth_image_view_,
       .extent = m_ci_.imageExtent,
   };
@@ -175,26 +175,26 @@ auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_images_.at(m_image_index_.value()))
       .setSubresourceRange(kColorSubresourceRangeV)
-      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
-      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
+      .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+      .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 };
 
 auto Swapchain::base_color_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
-  ret.setImage(m_color_image_->image)
-      .setSubresourceRange(m_color_image_->subresourceRange())
-      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
-      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
+  ret.setImage(m_color_image_.image)
+      .setSubresourceRange(m_color_image_.subresourceRange())
+      .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+      .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 }
 
 auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
-  ret.setImage(m_depth_image_->image)
-      .setSubresourceRange(m_color_image_->subresourceRange())
-      .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
-      .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
+  ret.setImage(m_depth_image_.image)
+      .setSubresourceRange(m_color_image_.subresourceRange())
+      .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+      .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 }
 
@@ -238,10 +238,10 @@ void Swapchain::populate_color_image() {
                       .setSamples(kSampleCount)
                       .setMipLevels(1)
                       .setArrayLayers(1);
-  m_color_image_.emplace(m_allocator_, image_ci);
+  m_color_image_ = {m_allocator_, image_ci};
 
   m_color_image_view_ =
-      m_device_.createImageViewUnique(m_color_image_->getViewCreateInfo());
+      m_device_.createImageViewUnique(m_color_image_.getViewCreateInfo());
 }
 
 void Swapchain::populate_depth_image() {
@@ -253,10 +253,10 @@ void Swapchain::populate_depth_image() {
                       .setSamples(kSampleCount)
                       .setMipLevels(1)
                       .setArrayLayers(1);
-  m_depth_image_.emplace(m_allocator_, image_ci);
+  m_depth_image_ = {m_allocator_, image_ci};
 
   m_depth_image_view_ =
-      m_device_.createImageViewUnique(m_depth_image_->getViewCreateInfo());
+      m_device_.createImageViewUnique(m_depth_image_.getViewCreateInfo());
 }
 
 void Swapchain::create_image_views() {

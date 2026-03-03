@@ -10,5 +10,5 @@ struct AllocatorDeleter {
   }
 };
 
-using Allocator = Scoped<vma::Allocator, AllocatorDeleter>;
+using ScopedAllocator = Scoped<vma::Allocator, AllocatorDeleter>;
 };  // namespace vku

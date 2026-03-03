@@ -3,6 +3,11 @@
 #include "vku/images/image.hpp"
 
 namespace vku {
+struct Bitmap {
+  vk::Extent2D extent;
+  std::span<const std::byte> bytes;
+};
+
 struct ImageBarrierInfo {
   vk::ImageLayout srcLayout;
   vk::AccessFlags2 srcAccess;
@@ -10,6 +15,12 @@ struct ImageBarrierInfo {
   vk::ImageLayout dstLayout;
   vk::AccessFlags2 dstAccess;
   vk::PipelineStageFlags2 dstStage;
+};
+
+struct DeviceCopyInfo {
+  vk::Device device;
+  vk::CommandPool commandPool;
+  vk::Queue queue;
 };
 
 template <typename T>

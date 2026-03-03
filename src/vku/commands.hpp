@@ -8,9 +8,9 @@ namespace vku {
 using namespace std::chrono_literals;
 
 template <std::size_t N = 1>
-[[nodiscard]] auto allocate_command_buffers(vk::Device device,
-                                            vk::CommandPool command_pool,
-                                            vk::CommandBufferLevel level = {})
+[[nodiscard]] auto allocateCommandBuffers(vk::Device device,
+                                          vk::CommandPool command_pool,
+                                          vk::CommandBufferLevel level = {})
     -> std::array<vk::CommandBuffer, N> {
   std::array<vk::CommandBuffer, N> command_buffers;
   vk::CommandBufferAllocateInfo allocate_info{command_pool, level,
@@ -19,7 +19,7 @@ template <std::size_t N = 1>
   return command_buffers;
 }
 template <std::size_t N = 1>
-[[nodiscard]] auto allocate_unique_command_buffers(
+[[nodiscard]] auto allocateUniqueCommandBuffers(
     vk::Device device, vk::CommandPool command_pool,
     vk::CommandBufferLevel level = {})
     -> std::array<vk::UniqueCommandBuffer, N> {
@@ -38,10 +38,10 @@ template <std::size_t N = 1>
 
 template <std::invocable<vk::CommandBuffer> F>
   requires std::is_void_v<std::invoke_result_t<F, vk::CommandBuffer>>
-void execute_command(vk::Device device, vk::CommandPool command_pool,
-                     vk::Queue queue, F&& f, vk::Fence fence) {
+void executeCommand(vk::Device device, vk::CommandPool command_pool,
+                    vk::Queue queue, F&& f, vk::Fence fence) {
   const vk::CommandBuffer command_buffer =
-      allocate_command_buffers(device, command_pool)[0];
+      allocateCommandBuffers(device, command_pool)[0];
 
   command_buffer.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
   std::invoke(std::forward<F>(f), command_buffer);
@@ -58,10 +58,10 @@ void execute_command(vk::Device device, vk::CommandPool command_pool,
 
 template <std::invocable<vk::CommandBuffer> F>
   requires std::is_void_v<std::invoke_result_t<F, vk::CommandBuffer>>
-void execute_command_and_wait(vk::Device device, vk::CommandPool command_pool,
-                              vk::Queue queue, F&& f) {
+void executeCommandAndWait(vk::Device device, vk::CommandPool command_pool,
+                           vk::Queue queue, F&& f) {
   const auto command_buffer =
-      std::move(allocate_unique_command_buffers(device, command_pool)[0]);
+      std::move(allocateUniqueCommandBuffers(device, command_pool)[0]);
 
   command_buffer->begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
   std::invoke(std::forward<F>(f), *command_buffer);

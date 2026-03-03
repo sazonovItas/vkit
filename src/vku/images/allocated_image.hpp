@@ -25,6 +25,8 @@ struct AllocatedImage : Image {
         allocator.createImage(creaeInfo, allocationCreateInfo);
   }
 
+  AllocatedImage() = default;
+
   AllocatedImage(const AllocatedImage&) = delete;
   AllocatedImage& operator=(const AllocatedImage&) = delete;
 

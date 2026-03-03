@@ -83,14 +83,38 @@ Queues::Queues(vk::Device device, const QueueFamilies &queue_families) noexcept
       transfer{device.getQueue(queue_families.transfer, 0)} {}
 
 Gpu::Gpu(const vk::Instance &instance, vk::SurfaceKHR surface)
-    : physicalDevice{select_gpu(instance, surface)},
-      physicalDeviceProperties{physicalDevice.getProperties()},
+    : physicalDevice{selectGpu(instance, surface)},
+      properties{physicalDevice.getProperties()},
       queueFamilies(physicalDevice, surface),
-      device{create_device()},
+      device{createDevice()},
       queues{*device, queueFamilies},
-      allocator{create_allocator(instance)} {}
+      allocator{createAllocator(instance)} {
+  // TODO(itas): move this log somewhere else
+  // TODO(itas): add options for eVirtual, eCpu and eOther
+  std::println("Selected GPU: {}, type: {}",
+               std::string_view{properties.deviceName},
+               properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu
+                   ? "DiscreteGpu"
+                   : "IntegratedGpu");
+}
 
-auto Gpu::select_gpu(const vk::Instance &instance, vk::SurfaceKHR surface) const
+auto Gpu::createCommandPool(const std::uint32_t queueFamilyIndex,
+                            vk::CommandPoolCreateFlagBits flags)
+    -> vk::UniqueCommandPool {
+  auto it = std::ranges::find(queueFamilies.uniqueIndices, queueFamilyIndex);
+  if (it == queueFamilies.uniqueIndices.end()) {
+    throw std::runtime_error{std::format(
+        "failed to create command pool: unknown queue family index `{}`",
+        queueFamilyIndex)};
+  }
+
+  auto ci = vk::CommandPoolCreateInfo{};
+  ci.setQueueFamilyIndex(queueFamilyIndex).setFlags(flags);
+
+  return device->createCommandPoolUnique(ci);
+}
+
+auto Gpu::selectGpu(const vk::Instance &instance, vk::SurfaceKHR surface) const
     -> vk::PhysicalDevice {
   const auto gpu_rater = [&](vk::PhysicalDevice gpu) -> std::uint32_t {
     try {
@@ -152,18 +176,10 @@ auto Gpu::select_gpu(const vk::Instance &instance, vk::SurfaceKHR surface) const
 
   auto properties = best_gpu.getProperties();
 
-  // TODO(itas): move this log somewhere else
-  // TODO(itas): add options for eVirtual, eCpu and eOther
-  std::println("Selected GPU: {}, type: {}",
-               std::string_view{properties.deviceName},
-               properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu
-                   ? "DiscreteGpu"
-                   : "IntegratedGpu");
-
   return best_gpu;
 }
 
-auto Gpu::create_device() -> vk::UniqueDevice {
+auto Gpu::createDevice() -> vk::UniqueDevice {
   const std::vector available_extensions =
       physicalDevice.enumerateDeviceExtensionProperties();
   const std::unordered_set available_extensions_names =
@@ -213,7 +229,7 @@ auto Gpu::create_device() -> vk::UniqueDevice {
   return device;
 }
 
-auto Gpu::create_allocator(const vk::Instance &instance) const
+auto Gpu::createAllocator(const vk::Instance &instance) const
     -> vma::Allocator {
   auto const &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
 

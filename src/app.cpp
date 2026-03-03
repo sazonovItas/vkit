@@ -1,6 +1,5 @@
 #include "app.hpp"
 
-#include <ImageMagick-7/Magick++.h>
 #include <backends/imgui_impl_glfw.h>
 #include <imgui.h>
 
@@ -21,9 +20,6 @@
 #include <vector>
 
 #include "GLFW/glfw3.h"
-#include "Magick++/Blob.h"
-#include "Magick++/Image.h"
-#include "Magick++/Include.h"
 #include "dear_imgui.hpp"
 #include "fastgltf/core.hpp"
 #include "fastgltf/glm_element_traits.hpp"
@@ -39,8 +35,8 @@
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "vku/buffers/device_buffer.hpp"
+#include "vku/utils/utils.hpp"
 #include "vulkan/gpu.hpp"
-#include "vulkan/util.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
@@ -290,6 +286,7 @@ void App::run() {
   create_pipeline_layout();
   create_shader();
   create_cmd_block_pool();
+  create_transfer_command_pool();
 
   create_shader_resources();
   create_descriptor_sets();
@@ -325,8 +322,7 @@ void App::inspect() {
           m_wireframe_ ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
     }
     if (m_wireframe_) {
-      auto const& line_width_range =
-          m_gpu_->physicalDeviceProperties.limits.lineWidthRange;
+      auto const& line_width_range = m_gpu_->properties.limits.lineWidthRange;
       ImGui::SetNextItemWidth(100.0F);
       ImGui::DragFloat("line width", &m_line_width_, 0.25F, line_width_range[0],
                        line_width_range[1]);
@@ -402,7 +398,7 @@ void App::draw_mesh(vk::CommandBuffer const command_buffer,
   for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
     auto constants = PushConstants{
         .transform = m_transform_.model_matrix(),
-        .vertex_buffer = primitive.vertex_buffer.get_address(*m_gpu_->device),
+        .vertex_buffer = primitive.vertex_buffer.getAddress(*m_gpu_->device),
     };
     command_buffer.pushConstants(*m_pipeline_layout_,
                                  vk::ShaderStageFlagBits::eVertex, 0,
@@ -620,7 +616,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
   auto write = vk::WriteDescriptorSet{};
 
   auto const set0 = descriptor_sets[0];
-  auto const view_ubo_info = m_view_ubo_->descriptor_info_at(m_frame_index_);
+  auto const view_ubo_info = m_view_ubo_->descriptorInfoAt(m_frame_index_);
   write.setBufferInfo(view_ubo_info)
       .setDescriptorType(vk::DescriptorType::eUniformBuffer)
       .setDescriptorCount(1)
@@ -644,7 +640,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
 }
 
 void App::create_shader_resources() {
-  m_view_ubo_.emplace(m_gpu_->allocator, m_gpu_->queueFamilies.transfer,
+  m_view_ubo_.emplace(m_gpu_->allocator, m_gpu_->queueFamilies.graphicsPresent,
                       vk::BufferUsageFlagBits::eUniformBuffer);
 
   using Pixel = std::array<std::byte, 4>;
@@ -768,16 +764,16 @@ void App::create_descriptor_pool() {
   m_descriptor_pool_ = m_gpu_->device->createDescriptorPoolUnique(pool_ci);
 }
 
-auto App::create_command_block() const -> vkit::vulkan::util::CommandBlock {
-  return vkit::vulkan::util::CommandBlock{
-      *m_gpu_->device, m_gpu_->queues.graphicsPresent, *m_cmd_block_pool_};
+void App::create_transfer_command_pool() {
+  transferCommnadPool_ =
+      m_gpu_->createCommandPool(m_gpu_->queueFamilies.transfer,
+                                vk::CommandPoolCreateFlagBits::eTransient);
 }
 
 void App::create_cmd_block_pool() {
-  auto command_pool_ci = vk::CommandPoolCreateInfo{};
-  command_pool_ci.setQueueFamilyIndex(m_gpu_->queueFamilies.graphicsPresent)
-      .setFlags(vk::CommandPoolCreateFlagBits::eTransient);
-  m_cmd_block_pool_ = m_gpu_->device->createCommandPoolUnique(command_pool_ci);
+  m_cmd_block_pool_ =
+      m_gpu_->createCommandPool(m_gpu_->queueFamilies.graphicsPresent,
+                                vk::CommandPoolCreateFlagBits::eTransient);
 }
 
 void App::create_shader() {
@@ -794,10 +790,8 @@ void App::create_shader() {
 }
 
 void App::create_render_sync() {
-  auto command_pool_ci = vk::CommandPoolCreateInfo{};
-  command_pool_ci.setFlags(vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
-      .setQueueFamilyIndex(m_gpu_->queueFamilies.graphicsPresent);
-  m_render_cmd_pool_ = m_gpu_->device->createCommandPoolUnique(command_pool_ci);
+  m_render_cmd_pool_ =
+      m_gpu_->createCommandPool(m_gpu_->queueFamilies.graphicsPresent);
 
   auto command_buffer_ai = vk::CommandBufferAllocateInfo{};
   command_buffer_ai.setCommandPool(*m_render_cmd_pool_)
@@ -906,9 +900,8 @@ void App::load_gltf() {
     return;
   }
 
-  for (const auto [idx, image] :
-       std::ranges::views::enumerate(m_asset_->images)) {
-    load_image(image, std::format("test-{}", idx));
+  for (const auto& image : m_asset_->images) {
+    load_image(image);
   }
 
   for (const auto& mesh : m_asset_->meshes) {
@@ -960,131 +953,25 @@ auto App::load_asset(fs::path const& path) -> bool {
   return true;
 }
 
-auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
+auto App::load_image(const fastgltf::Image& image) -> bool {
   assert(m_asset_.has_value());
   auto const& asset = *m_asset_;
 
   std::vector<std::byte> bytes;
   vku::Bitmap bitmap{};
 
-  std::visit(
-      fastgltf::visitor{
-          [&](fastgltf::sources::URI const& path) {
-            assert(path.fileByteOffset == 0);
-            assert(path.uri.isLocalPath());
-
-            auto file_path = m_assets_dir_ / "models" / path.uri.fspath();
-
-            auto image = Magick::Image{};
-            image.read(file_path);
-            image.depth(8);
-            image.colorSpace(Magick::sRGBColorspace);
-            image.alphaChannel(Magick::ActivateAlphaChannel);
-
-            auto width = static_cast<int>(image.columns());
-            auto height = static_cast<int>(image.rows());
-            bytes.resize(width * height * 4);
-
-            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
-                        bytes.data());
-
-            bitmap = {
-                .extent =
-                    {
-                        static_cast<std::uint32_t>(width),
-                        static_cast<std::uint32_t>(height),
-                    },
-                .bytes = std::move(bytes),
-            };
-          },
-          [&](fastgltf::sources::Array const& array) {
-            Magick::Blob blob(array.bytes.data(), array.bytes.size());
-
-            auto image = Magick::Image{};
-            image.read(blob);
-
-            image.depth(8);
-            image.colorSpace(Magick::sRGBColorspace);
-            image.alphaChannel(Magick::ActivateAlphaChannel);
-
-            auto width = static_cast<int>(image.columns());
-            auto height = static_cast<int>(image.rows());
-            bytes.resize(width * height * 4);
-
-            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
-                        bytes.data());
-
-            bitmap = {
-                .extent =
-                    {
-                        static_cast<std::uint32_t>(width),
-                        static_cast<std::uint32_t>(height),
-                    },
-                .bytes = std::move(bytes),
-            };
-          },
-          [&](fastgltf::sources::BufferView const& view) {
-            const auto& buffer_view = asset.bufferViews[view.bufferViewIndex];
-            const auto& buffer = asset.buffers[buffer_view.bufferIndex];
-
-            const std::byte* data = nullptr;
-
-            std::visit(fastgltf::visitor{
-                           [&](fastgltf::sources::Array const& array) {
-                             data = array.bytes.data() + buffer_view.byteOffset;
-                           },
-                           [&](fastgltf::sources::Vector const& vec) {
-                             data = vec.bytes.data() + buffer_view.byteOffset;
-                           },
-                           [&](auto&) {},
-                       },
-                       buffer.data);
-
-            Magick::Blob blob(data, buffer_view.byteLength);
-
-            Magick::Image image;
-            image.read(blob);
-            image.depth(8);
-            image.colorSpace(Magick::sRGBColorspace);
-            image.alphaChannel(Magick::ActivateAlphaChannel);
-
-            int width = image.columns();
-            int height = image.rows();
-
-            bytes.resize(width * height * 4);
-
-            image.write(0, 0, width, height, "RGBA", Magick::CharPixel,
-                        bytes.data());
-
-            bitmap = {
-                .extent =
-                    {
-                        static_cast<std::uint32_t>(width),
-                        static_cast<std::uint32_t>(height),
-                    },
-                .bytes = std::move(bytes),
-            };
-          },
-          [](auto& a) {},
-      },
-      image.data);
-
-  auto ci = Texture::CreateInfo{
-      .name = std::move(name),
-      .format = vk::Format::eR8G8B8A8Srgb,
-      .bitmap = bitmap,
-      .allocator = m_gpu_->allocator,
-      .device = *m_gpu_->device,
-      .commandPool = *m_cmd_block_pool_,
-      .queue = m_gpu_->queues.graphicsPresent,
-  };
-
-  m_textures_->emplace_back(std::move(ci));
+  std::visit(fastgltf::visitor{
+                 [&](fastgltf::sources::URI const& path) {},
+                 [&](fastgltf::sources::Array const& array) {},
+                 [&](fastgltf::sources::BufferView const& view) {},
+                 [](auto& a) {},
+             },
+             image.data);
 
   return true;
 }
 
-auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
+auto App::load_mesh(const fastgltf::Mesh& mesh) -> bool {
   assert(m_asset_.has_value());
   auto const& asset = *m_asset_;
 
@@ -1183,29 +1070,30 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
     }
 
     // vertex buffer
-    auto vertex_span = to_byte_span(vertices);
-    auto vertex_ci =
-        vk::BufferCreateInfo{}
-            .setSize(vertex_span.size_bytes())
-            .setUsage(vk::BufferUsageFlagBits::eVertexBuffer |
-                      vk::BufferUsageFlagBits::eShaderDeviceAddress |
-                      vk::BufferUsageFlagBits::eTransferDst);
-    auto vertex_buffer = vku::DeviceBuffer{m_gpu_->allocator, vertex_ci};
-    vertex_buffer.update(*m_gpu_->device, *m_cmd_block_pool_,
-                         m_gpu_->queues.graphicsPresent, std::from_range_t{},
-                         to_byte_span(vertices));
+    auto vertex_buffer = vku::DeviceBuffer{
+        m_gpu_->allocator,
+        vku::DeviceCopyInfo{
+            .device = *m_gpu_->device,
+            .commandPool = *transferCommnadPool_,
+            .queue = m_gpu_->queues.transfer,
+        },
+        std::from_range_t{},
+        vertices,
+        vk::BufferUsageFlagBits::eShaderDeviceAddress,
+    };
     out_primitive.vertex_buffer = std::move(vertex_buffer);
 
-    // index buffer
-    auto index_span = to_byte_span(indices);
-    auto index_ci = vk::BufferCreateInfo{}
-                        .setSize(index_span.size_bytes())
-                        .setUsage(vk::BufferUsageFlagBits::eIndexBuffer |
-                                  vk::BufferUsageFlagBits::eTransferDst);
-    auto index_buffer = vku::DeviceBuffer{m_gpu_->allocator, index_ci};
-    index_buffer.update(*m_gpu_->device, *m_cmd_block_pool_,
-                        m_gpu_->queues.graphicsPresent, std::from_range_t{},
-                        to_byte_span(indices));
+    auto index_buffer = vku::DeviceBuffer{
+        m_gpu_->allocator,
+        vku::DeviceCopyInfo{
+            .device = *m_gpu_->device,
+            .commandPool = *transferCommnadPool_,
+            .queue = m_gpu_->queues.transfer,
+        },
+        std::from_range_t{},
+        indices,
+        vk::BufferUsageFlagBits::eIndexBuffer,
+    };
     out_primitive.index_buffer = std::move(index_buffer);
 
     // draw command

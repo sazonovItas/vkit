@@ -19,20 +19,29 @@ struct Queues {
 class Gpu {
  public:
   vk::PhysicalDevice physicalDevice;
-  vk::PhysicalDeviceProperties physicalDeviceProperties;
+  vk::PhysicalDeviceProperties properties;
   QueueFamilies queueFamilies;
+
   vk::UniqueDevice device;
   Queues queues;
+
   vma::Allocator allocator;
 
   Gpu(const vk::Instance& instance, vk::SurfaceKHR surface);
 
+  auto createCommandPool(std::uint32_t queueFamilyIndex,
+                         vk::CommandPoolCreateFlagBits flags =
+                             vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
+      -> vk::UniqueCommandPool;
+
+  ~Gpu() { allocator.destroy(); };
+
  private:
-  [[nodiscard]] auto select_gpu(const vk::Instance& instance,
-                                vk::SurfaceKHR surface) const
+  [[nodiscard]] auto selectGpu(const vk::Instance& instance,
+                               vk::SurfaceKHR surface) const
       -> vk::PhysicalDevice;
-  [[nodiscard]] auto create_device() -> vk::UniqueDevice;
-  [[nodiscard]] auto create_allocator(const vk::Instance& instance) const
+  [[nodiscard]] auto createDevice() -> vk::UniqueDevice;
+  [[nodiscard]] auto createAllocator(const vk::Instance& instance) const
       -> vma::Allocator;
 };
 };  // namespace vkit::vulkan

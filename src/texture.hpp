@@ -39,15 +39,17 @@ class Texture {
  public:
   using CreateInfo = TextureCreateInfo;
 
-  explicit Texture(CreateInfo createInfo);
+  explicit Texture(const CreateInfo& createInfo);
 
   [[nodiscard]] auto descriptorInfo() const -> vk::DescriptorImageInfo;
 
   std::string name;
 
  private:
-  std::optional<vku::BitmapImage> m_image_;
+  vku::BitmapImage m_image_;
   vk::UniqueImageView m_view_;
   vk::UniqueSampler m_sampler_;
+
+  auto createImage(const CreateInfo& createInfo) const -> vku::BitmapImage;
 };
 };  // namespace lvk

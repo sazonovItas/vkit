@@ -14,11 +14,10 @@ class MappedBuffer : public AllocatedBuffer {
  public:
   void* data;
 
-  MappedBuffer(vma::Allocator allocator,
-               const vk::BufferCreateInfo& create_info,
-               const vma::AllocationCreateInfo& allocation_create_info =
+  MappedBuffer(vma::Allocator allocator, const vk::BufferCreateInfo& createInfo,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
-      : AllocatedBuffer{allocator, create_info, allocation_create_info},
+      : AllocatedBuffer{allocator, createInfo, allocationCreateInfo},
         data{allocator.mapMemory(allocation)} {}
 
   template <typename T>
@@ -26,7 +25,7 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<T>)
   MappedBuffer(vma::Allocator allocator, const T& value,
                vk::BufferUsageFlags usage,
-               const vma::AllocationCreateInfo& allocation_create_info =
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
@@ -34,7 +33,7 @@ class MappedBuffer : public AllocatedBuffer {
                          sizeof(T),
                          usage,
                      },
-                     allocation_create_info} {
+                     allocationCreateInfo} {
     *static_cast<T*>(data) = value;
   }
 
@@ -43,18 +42,18 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<T>)
   MappedBuffer(vma::Allocator allocator, const T& value,
                vk::BufferUsageFlags usage,
-               vk::ArrayProxy<const std::uint32_t> queue_family_indices,
-               const vma::AllocationCreateInfo& allocation_create_info =
+               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
                          sizeof(T),
                          usage,
-                         get_sharing_mode(queue_family_indices),
-                         queue_family_indices,
+                         getSharingMode(queueFamilyIndices),
+                         queueFamilyIndices,
                      },
-                     allocation_create_info} {
+                     allocationCreateInfo} {
     *static_cast<T*>(data) = value;
   }
 
@@ -63,7 +62,7 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
                vk::BufferUsageFlags usage,
-               const vma::AllocationCreateInfo& allocation_create_info =
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
@@ -71,7 +70,7 @@ class MappedBuffer : public AllocatedBuffer {
                          r.size() * sizeof(std::ranges::range_value_t<R>),
                          usage,
                      },
-                     allocation_create_info} {
+                     allocationCreateInfo} {
     std::ranges::copy(std::forward<R>(r),
                       static_cast<std::ranges::range_value_t<R>*>(data));
   }
@@ -81,27 +80,28 @@ class MappedBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
                vk::BufferUsageFlags usage,
-               vk::ArrayProxy<const std::uint32_t> queue_family_indices,
-               const vma::AllocationCreateInfo& allocation_create_info =
+               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
+               const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
                      vk::BufferCreateInfo{
                          {},
                          r.size() * sizeof(std::ranges::range_value_t<R>),
                          usage,
-                         get_sharing_mode(queue_family_indices),
-                         queue_family_indices,
+                         getSharingMode(queueFamilyIndices),
+                         queueFamilyIndices,
                      },
-                     allocation_create_info} {
+                     allocationCreateInfo} {
     std::ranges::copy(std::forward<R>(r),
                       static_cast<std::ranges::range_value_t<R>*>(data));
   }
 
+  MappedBuffer() = default;
+
   MappedBuffer(const MappedBuffer&) = delete;
+  MappedBuffer& operator=(const MappedBuffer&) = delete;
 
   MappedBuffer(MappedBuffer&& src) noexcept = default;
-
-  MappedBuffer& operator=(const MappedBuffer&) = delete;
 
   MappedBuffer& operator=(MappedBuffer&& src) noexcept {
     if (allocation) {
@@ -121,35 +121,34 @@ class MappedBuffer : public AllocatedBuffer {
   }
 
   template <typename T>
-  [[nodiscard]] auto as_range(vk::DeviceSize byte_offset = 0) const
+  [[nodiscard]] auto as_range(vk::DeviceSize byteOffset = 0) const
       -> std::span<const T> {
-    assert(byte_offset <= size && "Out of bound: byteOffset > size");
-    return {reinterpret_cast<const T*>(static_cast<const char*>(data) +
-                                       byte_offset),
-            (size - byte_offset) / sizeof(T)};
+    assert(byteOffset <= size && "Out of bound: byteOffset > size");
+    return {
+        reinterpret_cast<const T*>(static_cast<const char*>(data) + byteOffset),
+        (size - byteOffset) / sizeof(T)};
   }
 
   template <typename T>
-  [[nodiscard]] auto as_range(vk::DeviceSize byte_offset = 0) -> std::span<T> {
-    assert(byte_offset <= size && "Out of bound: byteOffset > size");
-    return {reinterpret_cast<T*>(static_cast<char*>(data) + byte_offset),
-            (size - byte_offset) / sizeof(T)};
+  [[nodiscard]] auto as_range(vk::DeviceSize byteOffset = 0) -> std::span<T> {
+    assert(byteOffset <= size && "Out of bound: byteOffset > size");
+    return {reinterpret_cast<T*>(static_cast<char*>(data) + byteOffset),
+            (size - byteOffset) / sizeof(T)};
   }
 
   template <typename T>
-  [[nodiscard]] auto as_value(vk::DeviceSize byte_offset = 0) const
-      -> const T& {
-    assert(byte_offset + sizeof(T) <= size &&
+  [[nodiscard]] auto as_value(vk::DeviceSize byteOffset = 0) const -> const T& {
+    assert(byteOffset + sizeof(T) <= size &&
            "Out of bound: byteOffset + sizeof(T) > size");
     return *reinterpret_cast<const T*>(static_cast<const char*>(data) +
-                                       byte_offset);
+                                       byteOffset);
   }
 
   template <typename T>
-  [[nodiscard]] auto as_value(vk::DeviceSize byte_offset = 0) -> T& {
-    assert(byte_offset + sizeof(T) <= size &&
+  [[nodiscard]] auto as_value(vk::DeviceSize byteOffset = 0) -> T& {
+    assert(byteOffset + sizeof(T) <= size &&
            "Out of bound: byteOffset + sizeof(T) > size");
-    return *reinterpret_cast<T*>(static_cast<char*>(data) + byte_offset);
+    return *reinterpret_cast<T*>(static_cast<char*>(data) + byteOffset);
   }
 
   [[nodiscard]] auto unmap() && noexcept {
@@ -158,8 +157,8 @@ class MappedBuffer : public AllocatedBuffer {
   }
 
  private:
-  explicit MappedBuffer(AllocatedBuffer&& allocated_buffer)
-      : AllocatedBuffer{std::move(allocated_buffer)},
+  explicit MappedBuffer(AllocatedBuffer&& allocatedBuffer)
+      : AllocatedBuffer{std::move(allocatedBuffer)},
         data{allocator.mapMemory(allocation)} {}
 };
 };  // namespace vku

@@ -15,7 +15,6 @@
 #include "vk_mem_alloc.hpp"
 #include "vku/scoped/device_waiter.hpp"
 #include "vulkan/gpu.hpp"
-#include "vulkan/util.hpp"
 #include "window.hpp"
 
 namespace fs = std::filesystem;
@@ -44,11 +43,10 @@ class App {
   void create_shader();
   void create_shader_resources();
   void create_cmd_block_pool();
+  void create_transfer_command_pool();
   void create_descriptor_sets();
 
   [[nodiscard]] auto asset_path(std::string_view uri) const -> fs::path;
-  [[nodiscard]] auto create_command_block() const
-      -> vkit::vulkan::util::CommandBlock;
   [[nodiscard]] auto allocate_sets() const -> std::vector<vk::DescriptorSet>;
 
   void main_loop();
@@ -69,8 +67,8 @@ class App {
 
   void load_gltf();
   auto load_asset(fs::path const& path) -> bool;
-  auto load_image(fastgltf::Image const& image, std::string name) -> bool;
-  auto load_mesh(fastgltf::Mesh const& mesh) -> bool;
+  auto load_image(const fastgltf::Image& image) -> bool;
+  auto load_mesh(const fastgltf::Mesh& mesh) -> bool;
 
   fs::path m_assets_dir_;
 
@@ -85,6 +83,7 @@ class App {
 
   vk::UniqueCommandPool m_render_cmd_pool_;
   vk::UniqueCommandPool m_cmd_block_pool_;
+  vk::UniqueCommandPool transferCommnadPool_;
   Buffered<RenderSync> m_render_sync_{};
   std::size_t m_frame_index_{};
 

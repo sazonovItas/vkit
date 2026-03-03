@@ -1,7 +1,7 @@
 #include "texture.hpp"
 
+#include "vku/images/bitmap_image.hpp"
 #include "vku/utils/utils.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 
@@ -13,30 +13,10 @@ constexpr auto kWhiteBitmapV = vku::Bitmap{
     .bytes = kWhitePixelV,
 };
 
-Texture::Texture(CreateInfo createInfo) : name{createInfo.name} {
-  if (createInfo.bitmap.bytes.empty() || createInfo.bitmap.extent.width <= 0 ||
-      createInfo.bitmap.extent.height <= 0) {
-    createInfo.bitmap = kWhiteBitmapV;
-  }
-
-  auto mip_levels = vku::Image::maxMipLevels(createInfo.bitmap.extent);
-  auto image_ci = vk::ImageCreateInfo{}
-                      .setImageType(vk::ImageType::e2D)
-                      .setUsage(vk::ImageUsageFlagBits::eTransferSrc |
-                                vk::ImageUsageFlagBits::eTransferDst |
-                                vk::ImageUsageFlagBits::eSampled)
-                      .setExtent(vku::toExtent3D(createInfo.bitmap.extent))
-                      .setFormat(createInfo.format)
-                      .setSamples(vk::SampleCountFlagBits::e1)
-                      .setMipLevels(mip_levels)
-                      .setArrayLayers(1);
-
-  m_image_.emplace(createInfo.allocator, image_ci);
-  m_image_->update(createInfo.bitmap, createInfo.device, createInfo.commandPool,
-                   createInfo.queue);
-
+Texture::Texture(const CreateInfo& createInfo)
+    : name{createInfo.name}, m_image_{createImage(createInfo)} {
   m_view_ =
-      createInfo.device.createImageViewUnique(m_image_->getViewCreateInfo());
+      createInfo.device.createImageViewUnique(m_image_.getViewCreateInfo());
   m_sampler_ = createInfo.device.createSamplerUnique(createInfo.sampler);
 }
 
@@ -46,5 +26,36 @@ auto Texture::descriptorInfo() const -> vk::DescriptorImageInfo {
       .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
       .setSampler(*m_sampler_);
   return ret;
+}
+
+auto Texture::createImage(const CreateInfo& createInfo) const
+    -> vku::BitmapImage {
+  auto bitmap = createInfo.bitmap;
+  if (bitmap.bytes.empty() || bitmap.extent.width <= 0 ||
+      createInfo.bitmap.extent.height <= 0) {
+    bitmap = kWhiteBitmapV;
+  }
+
+  auto mip_levels = vku::Image::maxMipLevels(bitmap.extent);
+  auto image_ci = vk::ImageCreateInfo{}
+                      .setImageType(vk::ImageType::e2D)
+                      .setUsage(vk::ImageUsageFlagBits::eTransferSrc |
+                                vk::ImageUsageFlagBits::eTransferDst |
+                                vk::ImageUsageFlagBits::eSampled)
+                      .setExtent(vku::toExtent3D(bitmap.extent))
+                      .setFormat(createInfo.format)
+                      .setSamples(vk::SampleCountFlagBits::e1)
+                      .setMipLevels(mip_levels)
+                      .setArrayLayers(1);
+
+  auto image = vku::BitmapImage{createInfo.allocator, image_ci,
+                                vku::DeviceCopyInfo{
+                                    .device = createInfo.device,
+                                    .commandPool = createInfo.commandPool,
+                                    .queue = createInfo.queue,
+                                },
+                                bitmap};
+
+  return image;
 }
 };  // namespace lvk

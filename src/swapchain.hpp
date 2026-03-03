@@ -57,10 +57,10 @@ class Swapchain {
   std::vector<vk::UniqueSemaphore> m_present_semaphorses_;
   std::optional<std::size_t> m_image_index_;
 
-  std::optional<vku::AllocatedImage> m_color_image_;
+  vku::AllocatedImage m_color_image_;
   vk::UniqueImageView m_color_image_view_;
 
-  std::optional<vku::AllocatedImage> m_depth_image_;
+  vku::AllocatedImage m_depth_image_;
   vk::UniqueImageView m_depth_image_view_;
 };
 

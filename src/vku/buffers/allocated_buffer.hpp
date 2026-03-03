@@ -12,13 +12,13 @@ struct AllocatedBuffer : Buffer {
   vma::Allocation allocation;
 
   AllocatedBuffer(vma::Allocator allocator,
-                  const vk::BufferCreateInfo& create_info,
-                  const vma::AllocationCreateInfo& allocation_create_info =
+                  const vk::BufferCreateInfo& createInfo,
+                  const vma::AllocationCreateInfo& allocationCreateInfo =
                       allocation::kDeviceLocal)
       : allocator{allocator} {
-    size = create_info.size;
+    size = createInfo.size;
     std::tie(allocation, buffer) =
-        allocator.createBuffer(create_info, allocation_create_info);
+        allocator.createBuffer(createInfo, allocationCreateInfo);
   }
 
   AllocatedBuffer() = default;

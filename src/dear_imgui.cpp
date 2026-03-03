@@ -8,8 +8,6 @@
 
 #include "glm/gtc/color_space.hpp"
 #include "resource_buffering.hpp"
-#include "vulkan/vulkan.hpp"
-#include "vulkan/vulkan_core.h"
 
 namespace lvk {
 DearImGui::DearImGui(CreateInfo const& create_info) {
@@ -59,7 +57,7 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
   }
   ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.99F;
 
-  m_device_ = vkit::Scoped<vk::Device, Deleter>{create_info.device};
+  m_device_ = vku::Scoped<vk::Device, Deleter>{create_info.device};
 }
 
 void DearImGui::new_frame() {
