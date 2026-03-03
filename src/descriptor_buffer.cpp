@@ -6,12 +6,11 @@
 
 #include "vku/buffers/allocated_buffer.hpp"
 #include "vku/constants.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 DescriptorBuffer::DescriptorBuffer(vma::Allocator allocator,
-                                   std::uint32_t const queue_family,
-                                   vk::BufferUsageFlags const usage)
+                                   std::uint32_t queue_family,
+                                   vk::BufferUsageFlags usage)
     : m_allocator_{allocator}, m_queue_family_{queue_family}, m_usage_{usage} {
   for (auto& buffer : m_buffers_) {
     write_to(buffer, {});

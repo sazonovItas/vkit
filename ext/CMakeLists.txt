@@ -23,8 +23,8 @@ target_compile_definitions(glm PUBLIC
 message(STATUS "[Vulkan-Headers]")
 add_subdirectory(Vulkan-Headers)
 
-message(STATUS "[VulkanMemoryAllocator]")
-add_subdirectory(VulkanMemoryAllocator)
+message(STATUS "[VulkanMemoryAllocator-Hpp]")
+add_subdirectory(VulkanMemoryAllocator-Hpp)
 
 message(STATUS "[Dear ImGui]")
 add_library(imgui)
@@ -61,7 +61,8 @@ target_link_libraries(vma PUBLIC
   GPUOpen::VulkanMemoryAllocator
 )
 target_include_directories(vma SYSTEM PUBLIC
-  VulkanMemoryAllocator/include
+  VulkanMemoryAllocator-Hpp/include
+  VulkanMemoryAllocator-Hpp/VulkanMemoryAllocator/include
 )
 target_compile_definitions(vma PUBLIC
   VMA_STATIC_VULKAN_FUNCTIONS=0
@@ -71,10 +72,6 @@ target_sources(vma PRIVATE
   vk_mem_alloc.cpp
 )
 target_compile_options(vma PRIVATE -w)
-
-message(STATUS "[vmahpp]")
-add_subdirectory(VulkanMemoryAllocator-Hpp/include)
-add_library(vmahpp::vmahpp ALIAS VulkanMemoryAllocator-Hpp)
 
 message(STATUS "[fastgltf]")
 add_subdirectory(fastgltf)
@@ -92,7 +89,6 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
   glm::glm
   imgui::imgui
   vma::vma
-  vmahpp::vmahpp
   fastgltf::fastgltf
   meshoptimizer
   ${ImageMagick_LIBRARIES}

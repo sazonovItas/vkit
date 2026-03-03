@@ -227,7 +227,8 @@ auto Gpu::create_allocator(const vk::Instance &instance) const
                 .setPhysicalDevice(physicalDevice)
                 .setDevice(*device)
                 .setPVulkanFunctions(&vma_vk_funcs)
-                .setFlags(vma::AllocatorCreateFlagBits::eBufferDeviceAddress);
+                .setFlags(vma::AllocatorCreateFlagBits::eBufferDeviceAddress |
+                          vma::AllocatorCreateFlagBits::eKhrMaintenance5);
 
   return vma::createAllocator(ci);
 }

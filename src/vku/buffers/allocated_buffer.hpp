@@ -21,7 +21,10 @@ struct AllocatedBuffer : Buffer {
         allocator.createBuffer(create_info, allocation_create_info);
   }
 
+  AllocatedBuffer() = default;
+
   AllocatedBuffer(const AllocatedBuffer&) = delete;
+  AllocatedBuffer& operator=(const AllocatedBuffer&) = delete;
 
   AllocatedBuffer(AllocatedBuffer&& src) noexcept
       : Buffer{static_cast<Buffer>(src)},
@@ -29,8 +32,6 @@ struct AllocatedBuffer : Buffer {
         allocation{std::exchange(src.allocation, nullptr)} {
     buffer = std::exchange(src.buffer, nullptr);
   }
-
-  AllocatedBuffer& operator=(const AllocatedBuffer&) = delete;
 
   AllocatedBuffer& operator=(AllocatedBuffer&& src) noexcept {
     if (allocation) {

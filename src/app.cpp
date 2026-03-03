@@ -35,13 +35,12 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/glm.hpp"
-#include "gpu.hpp"
 #include "model.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
+#include "vku/buffers/device_buffer.hpp"
 #include "vulkan/gpu.hpp"
 #include "vulkan/util.hpp"
-#include "vulkan/vma/image.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
@@ -143,7 +142,7 @@ constexpr auto layout_binding(std::uint32_t binding,
 
 struct BitmapData {
   std::vector<std::byte> storage;
-  vkit::vulkan::vma::Bitmap bitmap;
+  vku::Bitmap bitmap;
 };
 
 float hash(int x, int y) {
@@ -207,9 +206,13 @@ BitmapData generate_bricks(int width, int height, float brickWidth,
   }
 
   result.bitmap = {
+      .extent =
+          vk::Extent2D{
+              static_cast<std::uint32_t>(width),
+              static_cast<std::uint32_t>(height),
+          },
       .bytes = std::span<const std::byte>(result.storage.data(),
                                           result.storage.size()),
-      .size = {width, height},
   };
 
   return result;
@@ -259,9 +262,13 @@ BitmapData generateStoneTiles(int width, int height, int tileSize,
   }
 
   result.bitmap = {
+      .extent =
+          {
+              static_cast<std::uint32_t>(width),
+              static_cast<std::uint32_t>(height),
+          },
       .bytes = std::span<const std::byte>(result.storage.data(),
                                           result.storage.size()),
-      .size = {width, height},
   };
 
   return result;
@@ -395,13 +402,13 @@ void App::draw_mesh(vk::CommandBuffer const command_buffer,
   for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
     auto constants = PushConstants{
         .transform = m_transform_.model_matrix(),
-        .vertex_buffer = primitive.vertex_buffer.get().address,
+        .vertex_buffer = primitive.vertex_buffer.get_address(*m_gpu_->device),
     };
     command_buffer.pushConstants(*m_pipeline_layout_,
                                  vk::ShaderStageFlagBits::eVertex, 0,
                                  sizeof(PushConstants), &constants);
 
-    command_buffer.bindIndexBuffer(primitive.index_buffer.get().buffer, 0,
+    command_buffer.bindIndexBuffer(primitive.index_buffer.buffer, 0,
                                    vk::IndexType::eUint32);
     command_buffer.drawIndexed(
         primitive.draw.count, primitive.draw.instance_count,
@@ -488,10 +495,10 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
 void App::render(vk::CommandBuffer const command_buffer) {
   auto color_attachment = vk::RenderingAttachmentInfo{};
   color_attachment.setImageView(m_render_target_->color_image_view)
-      .setImageLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setResolveMode(vk::ResolveModeFlagBits::eAverage)
       .setResolveImageView(m_render_target_->image_view)
-      .setResolveImageLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
       .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
@@ -519,7 +526,7 @@ void App::render(vk::CommandBuffer const command_buffer) {
 
   auto imgui_attachment = vk::RenderingAttachmentInfo{};
   imgui_attachment.setImageView(m_render_target_->image_view)
-      .setResolveImageLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eLoad)
       .setStoreOp(vk::AttachmentStoreOp::eStore);
 
@@ -621,7 +628,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
       .setDstBinding(0);
   writes[0] = write;
 
-  auto const image_info = (*m_textures_)[m_curr_tex_idx_].descriptor_info();
+  auto const image_info = (*m_textures_)[m_curr_tex_idx_].descriptorInfo();
   write.setImageInfo(image_info)
       .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
       .setDescriptorCount(1)
@@ -637,12 +644,14 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
 }
 
 void App::create_shader_resources() {
-  m_view_ubo_.emplace(m_gpu_->allocator.get(), m_gpu_->queueFamilies.transfer,
+  m_view_ubo_.emplace(m_gpu_->allocator, m_gpu_->queueFamilies.transfer,
                       vk::BufferUsageFlagBits::eUniformBuffer);
 
   using Pixel = std::array<std::byte, 4>;
   using std::vector;
-  using vkit::vulkan::vma::Bitmap;
+  using vku::Bitmap;
+
+  m_textures_.emplace(std::vector<Texture>{});
 
   static constexpr auto kRgbaPixelsV = std::array{
       Pixel{std::byte{0xFF}, {}, {}, std::byte{0xFF}},
@@ -653,52 +662,53 @@ void App::create_shader_resources() {
   static constexpr auto kRgbaBytesV =
       std::bit_cast<std::array<std::byte, sizeof(kRgbaPixelsV)>>(kRgbaPixelsV);
 
-  m_textures_.emplace(std::vector<Texture>{});
-
   // 4xSquare board texture
   static constexpr auto kRgbyBitmapV = Bitmap{
+      .extent = vk::Extent2D{2, 2},
       .bytes = kRgbaBytesV,
-      .size = {2, 2},
   };
   auto grb_board_ci = Texture::CreateInfo{
       .name = "4xSquare board",
-      .device = *m_gpu_->device,
-      .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queueFamilies.transfer,
-      .command_block = create_command_block(),
+      .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = kRgbyBitmapV,
+      .allocator = m_gpu_->allocator,
+      .device = *m_gpu_->device,
+      .commandPool = *m_cmd_block_pool_,
+      .queue = m_gpu_->queues.graphicsPresent,
   };
   grb_board_ci.sampler.setMagFilter(vk::Filter::eNearest);
 
-  m_textures_->emplace_back(std::move(grb_board_ci));
+  m_textures_->emplace_back(grb_board_ci);
 
   // Bricks texture
   auto bricks = generate_bricks(1024, 1024, 8.0F, 8.0F, 0.125F);
   auto bricks_ci = Texture::CreateInfo{
       .name = "Bricks",
-      .device = *m_gpu_->device,
-      .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queueFamilies.transfer,
-      .command_block = create_command_block(),
+      .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = bricks.bitmap,
+      .allocator = m_gpu_->allocator,
+      .device = *m_gpu_->device,
+      .commandPool = *m_cmd_block_pool_,
+      .queue = m_gpu_->queues.graphicsPresent,
   };
   bricks_ci.sampler.setMagFilter(vk::Filter::eNearest);
 
-  m_textures_->emplace_back(std::move(bricks_ci));
+  m_textures_->emplace_back(bricks_ci);
 
   // Stone texture
   auto stone = generateStoneTiles(128, 128, 8, 0.5F);
   auto stone_ci = Texture::CreateInfo{
       .name = "Stone",
-      .device = *m_gpu_->device,
-      .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queueFamilies.transfer,
-      .command_block = create_command_block(),
+      .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = stone.bitmap,
+      .allocator = m_gpu_->allocator,
+      .device = *m_gpu_->device,
+      .commandPool = *m_cmd_block_pool_,
+      .queue = m_gpu_->queues.graphicsPresent,
   };
   stone_ci.sampler.setMagFilter(vk::Filter::eNearest);
 
-  m_textures_->emplace_back(std::move(stone_ci));
+  m_textures_->emplace_back(stone_ci);
 }
 
 void App::create_descriptor_sets() {
@@ -825,8 +835,8 @@ void App::create_imgui() {
 void App::create_swapchain() {
   auto const size = glfw::framebuffer_size(m_window_.get());
   m_swapchain_.emplace(*m_gpu_->device, m_gpu_->physicalDevice,
-                       m_gpu_->queueFamilies, m_gpu_->allocator.get(),
-                       *m_surface_, size);
+                       m_gpu_->queueFamilies, m_gpu_->allocator, *m_surface_,
+                       size);
 }
 
 void App::create_device() {
@@ -955,7 +965,7 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
   auto const& asset = *m_asset_;
 
   std::vector<std::byte> bytes;
-  vkit::vulkan::vma::Bitmap bitmap{};
+  vku::Bitmap bitmap{};
 
   std::visit(
       fastgltf::visitor{
@@ -979,8 +989,12 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
                         bytes.data());
 
             bitmap = {
+                .extent =
+                    {
+                        static_cast<std::uint32_t>(width),
+                        static_cast<std::uint32_t>(height),
+                    },
                 .bytes = std::move(bytes),
-                .size = {width, height},
             };
           },
           [&](fastgltf::sources::Array const& array) {
@@ -1001,8 +1015,12 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
                         bytes.data());
 
             bitmap = {
+                .extent =
+                    {
+                        static_cast<std::uint32_t>(width),
+                        static_cast<std::uint32_t>(height),
+                    },
                 .bytes = std::move(bytes),
-                .size = {width, height},
             };
           },
           [&](fastgltf::sources::BufferView const& view) {
@@ -1039,8 +1057,12 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
                         bytes.data());
 
             bitmap = {
+                .extent =
+                    {
+                        static_cast<std::uint32_t>(width),
+                        static_cast<std::uint32_t>(height),
+                    },
                 .bytes = std::move(bytes),
-                .size = {width, height},
             };
           },
           [](auto& a) {},
@@ -1049,11 +1071,12 @@ auto App::load_image(fastgltf::Image const& image, std::string name) -> bool {
 
   auto ci = Texture::CreateInfo{
       .name = std::move(name),
-      .device = *m_gpu_->device,
-      .allocator = m_gpu_->allocator.get(),
-      .queue_family = m_gpu_->queueFamilies.graphicsPresent,
-      .command_block = create_command_block(),
+      .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = bitmap,
+      .allocator = m_gpu_->allocator,
+      .device = *m_gpu_->device,
+      .commandPool = *m_cmd_block_pool_,
+      .queue = m_gpu_->queues.graphicsPresent,
   };
 
   m_textures_->emplace_back(std::move(ci));
@@ -1160,27 +1183,29 @@ auto App::load_mesh(fastgltf::Mesh const& mesh) -> bool {
     }
 
     // vertex buffer
-    auto const vertex_ci = vkit::vulkan::vma::BufferCreateInfo{
-        .device = *m_gpu_->device,
-        .allocator = m_gpu_->allocator.get(),
-        .usage = vk::BufferUsageFlagBits::eShaderDeviceAddress,
-        .queue_family = m_gpu_->queueFamilies.transfer,
-    };
-    auto vertex_buffer = vkit::vulkan::vma::create_device_buffer(
-        vertex_ci, create_command_block(),
-        std::array<std::span<std::byte const>, 1>{to_byte_span(vertices)});
+    auto vertex_span = to_byte_span(vertices);
+    auto vertex_ci =
+        vk::BufferCreateInfo{}
+            .setSize(vertex_span.size_bytes())
+            .setUsage(vk::BufferUsageFlagBits::eVertexBuffer |
+                      vk::BufferUsageFlagBits::eShaderDeviceAddress |
+                      vk::BufferUsageFlagBits::eTransferDst);
+    auto vertex_buffer = vku::DeviceBuffer{m_gpu_->allocator, vertex_ci};
+    vertex_buffer.update(*m_gpu_->device, *m_cmd_block_pool_,
+                         m_gpu_->queues.graphicsPresent, std::from_range_t{},
+                         to_byte_span(vertices));
     out_primitive.vertex_buffer = std::move(vertex_buffer);
 
     // index buffer
-    auto const index_ci = vkit::vulkan::vma::BufferCreateInfo{
-        .device = *m_gpu_->device,
-        .allocator = m_gpu_->allocator.get(),
-        .usage = vk::BufferUsageFlagBits::eIndexBuffer,
-        .queue_family = m_gpu_->queueFamilies.transfer,
-    };
-    auto index_buffer = vkit::vulkan::vma::create_device_buffer(
-        index_ci, create_command_block(),
-        std::array<std::span<std::byte const>, 1>{to_byte_span(indices)});
+    auto index_span = to_byte_span(indices);
+    auto index_ci = vk::BufferCreateInfo{}
+                        .setSize(index_span.size_bytes())
+                        .setUsage(vk::BufferUsageFlagBits::eIndexBuffer |
+                                  vk::BufferUsageFlagBits::eTransferDst);
+    auto index_buffer = vku::DeviceBuffer{m_gpu_->allocator, index_ci};
+    index_buffer.update(*m_gpu_->device, *m_cmd_block_pool_,
+                        m_gpu_->queues.graphicsPresent, std::from_range_t{},
+                        to_byte_span(indices));
     out_primitive.index_buffer = std::move(index_buffer);
 
     // draw command

@@ -10,6 +10,7 @@
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 
@@ -96,14 +97,6 @@ constexpr auto kColorSubresourceRangeV = [] {
   return ret;
 }();
 
-constexpr auto kDepthSubresourceRangeV = [] {
-  auto ret = vk::ImageSubresourceRange{};
-  ret.setAspectMask(vk::ImageAspectFlagBits::eDepth |
-                    vk::ImageAspectFlagBits::eStencil)
-      .setLayerCount(1)
-      .setLevelCount(1);
-  return ret;
-}();
 };  // namespace
 
 Swapchain::Swapchain(vk::Device device, vk::PhysicalDevice physical_device,
@@ -190,7 +183,7 @@ auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
 auto Swapchain::base_color_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_color_image_->image)
-      .setSubresourceRange(kColorSubresourceRangeV)
+      .setSubresourceRange(m_color_image_->subresourceRange())
       .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
       .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
   return ret;
@@ -199,7 +192,7 @@ auto Swapchain::base_color_barrier() const -> vk::ImageMemoryBarrier2 {
 auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(m_depth_image_->image)
-      .setSubresourceRange(kDepthSubresourceRangeV)
+      .setSubresourceRange(m_color_image_->subresourceRange())
       .setSrcQueueFamilyIndex(m_queue_families_.graphicsPresent)
       .setDstQueueFamilyIndex(m_queue_families_.graphicsPresent);
   return ret;
@@ -238,7 +231,9 @@ void Swapchain::populate_images() {
 
 void Swapchain::populate_color_image() {
   auto image_ci = vk::ImageCreateInfo{}
-                      .setExtent(vku::to_extent_3d(m_ci_.imageExtent))
+                      .setImageType(vk::ImageType::e2D)
+                      .setUsage(vk::ImageUsageFlagBits::eColorAttachment)
+                      .setExtent(vku::toExtent3D(m_ci_.imageExtent))
                       .setFormat(m_ci_.imageFormat)
                       .setSamples(kSampleCount)
                       .setMipLevels(1)
@@ -246,19 +241,22 @@ void Swapchain::populate_color_image() {
   m_color_image_.emplace(m_allocator_, image_ci);
 
   m_color_image_view_ =
-      m_device_.createImageViewUnique(m_color_image_->get_view_create_info());
+      m_device_.createImageViewUnique(m_color_image_->getViewCreateInfo());
 }
 
 void Swapchain::populate_depth_image() {
   auto image_ci = vk::ImageCreateInfo{}
-                      .setExtent(vku::to_extent_3d(m_ci_.imageExtent))
+                      .setImageType(vk::ImageType::e2D)
+                      .setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment)
+                      .setExtent(vku::toExtent3D(m_ci_.imageExtent))
                       .setFormat(vk::Format::eD32SfloatS8Uint)
+                      .setSamples(kSampleCount)
                       .setMipLevels(1)
                       .setArrayLayers(1);
   m_depth_image_.emplace(m_allocator_, image_ci);
 
   m_depth_image_view_ =
-      m_device_.createImageViewUnique(m_depth_image_->get_view_create_info());
+      m_device_.createImageViewUnique(m_depth_image_->getViewCreateInfo());
 }
 
 void Swapchain::create_image_views() {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan/vma/buffer.hpp"
+#include "vku/buffers/device_buffer.hpp"
 
 namespace lvk {
 struct DrawCommand {
@@ -21,8 +21,8 @@ struct Vertex {
 
 struct Primitive {
   DrawCommand draw{};
-  vkit::vulkan::vma::Buffer vertex_buffer;
-  vkit::vulkan::vma::Buffer index_buffer;
+  vku::DeviceBuffer vertex_buffer;
+  vku::DeviceBuffer index_buffer;
 };
 
 struct Mesh {

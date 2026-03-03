@@ -1,7 +1,5 @@
 #include "transform.hpp"
 
-#include "fastgltf/glm_element_traits.hpp"
-#include "fastgltf/math.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/trigonometric.hpp"

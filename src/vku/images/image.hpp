@@ -8,26 +8,26 @@ struct Image {
   vk::Extent3D extent;
   vk::Format format;
   vk::SampleCountFlagBits samples;
-  std::uint32_t mip_levels;
-  std::uint32_t array_layers;
+  std::uint32_t mipLevels;
+  std::uint32_t arrayLayers;
 
   [[nodiscard]] explicit operator vk::Image() const noexcept { return image; }
 
-  [[nodiscard]] auto get_view_create_info(
+  [[nodiscard]] auto getViewCreateInfo(
       vk::ImageViewType type = vk::ImageViewType::e2D) const noexcept
       -> vk::ImageViewCreateInfo {
-    return get_view_create_info(
+    return getViewCreateInfo(
         {
-            infer_aspect_flags(format),
+            inferAspectFlags(format),
             0,
-            mip_levels,
+            mipLevels,
             0,
-            array_layers,
+            arrayLayers,
         },
         type);
   }
 
-  [[nodiscard]] auto get_view_create_info(
+  [[nodiscard]] auto getViewCreateInfo(
       const vk::ImageSubresourceRange &subresource_range,
       vk::ImageViewType type = vk::ImageViewType::e2D) const noexcept
       -> vk::ImageViewCreateInfo {
@@ -36,12 +36,12 @@ struct Image {
     };
   }
 
-  [[nodiscard]] auto get_mip_view_create_infos(
+  [[nodiscard]] auto getMipViewCreateInfos(
       vk::ImageViewType type = vk::ImageViewType::e2D) const noexcept {
-    return std::ranges::views::iota(0U, mip_levels) |
+    return std::ranges::views::iota(0U, mipLevels) |
            std::views::transform(
-               [this, type, aspect_flags = infer_aspect_flags(format)](
-                   std::uint32_t level) {
+               [this, type,
+                aspect_flags = inferAspectFlags(format)](std::uint32_t level) {
                  auto subresource_range = vk::ImageSubresourceRange{
                      aspect_flags, level, 1, 0, vk::RemainingMipLevels,
                  };
@@ -50,22 +50,21 @@ struct Image {
                });
   }
 
-  [[nodiscard]] auto mip_extent(std::uint32_t mip_level) const -> vk::Extent3D {
-    return mip_extent(extent, mip_level);
+  [[nodiscard]] auto mipExtent(std::uint32_t mip_level) const -> vk::Extent3D {
+    return mipExtent(extent, mip_level);
   }
 
-  [[nodiscard]] auto mip_extent_2d(std::uint32_t mip_level) const
+  [[nodiscard]] auto mipExtent2D(std::uint32_t mip_level) const
       -> vk::Extent2D {
-    return mip_extent(vk::Extent2D{extent.width, extent.height}, mip_level);
+    return mipExtent(vk::Extent2D{extent.width, extent.height}, mip_level);
   }
 
-  [[nodiscard]] auto subresource_range(
-      vk::ImageAspectFlags aspect_flags = vk::ImageAspectFlagBits::eColor)
-      const noexcept -> vk::ImageSubresourceRange {
-    return {aspect_flags, 0, mip_levels, 0, array_layers};
+  [[nodiscard]] auto subresourceRange() const noexcept
+      -> vk::ImageSubresourceRange {
+    return {inferAspectFlags(format), 0, mipLevels, 0, arrayLayers};
   }
 
-  [[nodiscard]] static constexpr auto infer_aspect_flags(vk::Format format)
+  [[nodiscard]] static constexpr auto inferAspectFlags(vk::Format format)
       -> vk::ImageAspectFlags {
     switch (format) {
       case vk::Format::eUndefined:
@@ -85,27 +84,26 @@ struct Image {
     }
   }
 
-  [[nodiscard]] static constexpr auto max_mip_levels(std::uint32_t size)
+  [[nodiscard]] static constexpr auto maxMipLevels(std::uint32_t size)
       -> std::uint32_t {
     assert(size > 0U && "size must be greater than zero");
     return std::bit_width(size);
   }
 
-  [[nodiscard]] static constexpr auto max_mip_levels(const vk::Extent2D &extent)
+  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent2D &extent)
       -> std::uint32_t {
-    return max_mip_levels(std::max(extent.width, extent.height));
+    return maxMipLevels(std::max(extent.width, extent.height));
   }
 
-  [[nodiscard]] static constexpr auto max_mip_levels(const vk::Extent3D &extent)
+  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent3D &extent)
       -> std::uint32_t {
-    return max_mip_levels(
-        std::max({extent.width, extent.height, extent.depth}));
+    return maxMipLevels(std::max({extent.width, extent.height, extent.depth}));
   }
 
-  [[nodiscard]] static constexpr auto mip_extent(
+  [[nodiscard]] static constexpr auto mipExtent(
       const vk::Extent2D &extent, std::uint32_t mip_level) noexcept
       -> vk::Extent2D {
-    assert(mip_level < max_mip_levels(extent) &&
+    assert(mip_level < maxMipLevels(extent) &&
            "mipLevel must be less than maxMipLevels(extent)");
     return {
         std::max(extent.width >> mip_level, 1U),
@@ -113,10 +111,10 @@ struct Image {
     };
   }
 
-  [[nodiscard]] static constexpr auto mip_extent(
+  [[nodiscard]] static constexpr auto mipExtent(
       const vk::Extent3D &extent, std::uint32_t mip_level) noexcept
       -> vk::Extent3D {
-    assert(mip_level < max_mip_levels(extent) &&
+    assert(mip_level < maxMipLevels(extent) &&
            "MipLevel must be less than maxMipLevels(extent).");
     return {
         std::max(extent.width >> mip_level, 1U),

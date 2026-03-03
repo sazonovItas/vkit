@@ -13,7 +13,9 @@
 #include "texture.hpp"
 #include "transform.hpp"
 #include "vk_mem_alloc.hpp"
+#include "vku/scoped/device_waiter.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/util.hpp"
 #include "window.hpp"
 
 namespace fs = std::filesystem;
@@ -81,9 +83,6 @@ class App {
 
   std::optional<Swapchain> m_swapchain_;
 
-  vkit::vulkan::vma::Image m_depth_image_;
-  vk::UniqueImageView m_depth_image_view_;
-
   vk::UniqueCommandPool m_render_cmd_pool_;
   vk::UniqueCommandPool m_cmd_block_pool_;
   Buffered<RenderSync> m_render_sync_{};
@@ -130,6 +129,6 @@ class App {
       .up = glm::vec3(0.0F, 1.0F, 0.0F),
   };
 
-  ScopedWaiter m_waiter_;
+  vku::DeviceWaiter m_waiter_;
 };
 }  // namespace lvk

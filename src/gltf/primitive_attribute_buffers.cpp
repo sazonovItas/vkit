@@ -3,19 +3,17 @@
 #include <unordered_set>
 
 #include "fastgltf/types.hpp"
-#include "vulkan/vma/allocator.hpp"
 
 namespace vkit::gltf {
 template <typename BufferDataAdapter>
 PrimitiveAttributeBuffers::PrimitiveAttributeBuffers(
     const fastgltf::Asset& asset, const fastgltf::Primitive& primitive,
-    const vulkan::vma::Allocator& allocator,
-    const Config<BufferDataAdapter>& config)
+    const vma::Allocator& allocator, const Config<BufferDataAdapter>& config)
     : asset_{asset}, primitive_{primitive} {}
 
 template <typename BufferDataAdapter>
 PrimitiveAttributeBuffers::AttributeInfoCache::AttributeInfoCache(
-    const fastgltf::Asset& asset, const vulkan::vma::Allocator& allocator,
+    const fastgltf::Asset& asset, const vma::Allocator& allocator,
     const Config<BufferDataAdapter>& config) {
   std::unordered_set<std::size_t> accessors;
   std::unordered_set<std::size_t> buffer_views;

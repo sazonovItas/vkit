@@ -10,19 +10,19 @@ struct AllocatedImage : Image {
   vma::Allocation allocation;
 
   AllocatedImage(vma::Allocator allocator,
-                 const vk::ImageCreateInfo& create_info,
-                 const vma::AllocationCreateInfo& allocation_create_info =
+                 const vk::ImageCreateInfo& creaeInfo,
+                 const vma::AllocationCreateInfo& allocationCreateInfo =
                      vku::allocation::kDeviceLocal)
       : Image{
             .image = nullptr,
-            .extent = create_info.extent,
-            .format = create_info.format,
-            .samples = create_info.samples,
-            .mip_levels = create_info.mipLevels,
-            .array_layers = create_info.arrayLayers,
+            .extent = creaeInfo.extent,
+            .format = creaeInfo.format,
+            .samples = creaeInfo.samples,
+            .mipLevels = creaeInfo.mipLevels,
+            .arrayLayers = creaeInfo.arrayLayers,
         }, allocator {allocator} {
     std::tie(allocation, image) =
-        allocator.createImage(create_info, allocation_create_info);
+        allocator.createImage(creaeInfo, allocationCreateInfo);
   }
 
   AllocatedImage(const AllocatedImage&) = delete;
