@@ -5,7 +5,7 @@
 
 #include "fastgltf/types.hpp"
 
-namespace vkit::gltf {
+namespace gltf {
 class AssetExternalBuffers {
   std::unordered_map<std::size_t, std::vector<std::byte>>
       external_buffer_bytes_;
@@ -19,4 +19,4 @@ class AssetExternalBuffers {
   [[nodiscard]] std::span<const std::byte> operator()(
       const fastgltf::Asset& asset, std::size_t buffer_view_idx) const;
 };
-};  // namespace vkit::gltf
+};  // namespace gltf

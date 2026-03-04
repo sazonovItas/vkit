@@ -1,31 +1,31 @@
 #pragma once
 
-#include "asset_external_buffers.hpp"
 #include "fastgltf/core.hpp"
 #include "fastgltf/types.hpp"
+#include "gltf/asset_external_buffers.hpp"
 
-namespace vkit::gltf {
+namespace gltf {
 class Asset {
-  fastgltf::GltfDataBuffer data_buffer_;
+  fastgltf::GltfDataBuffer dataBuffer_;
 
  public:
   std::filesystem::path directory;
   fastgltf::Asset asset;
 
-  AssetExternalBuffers external_buffers{asset, directory};
+  AssetExternalBuffers externalBuffers{asset, directory};
 
-  std::size_t scene_idx;
+  std::size_t sceneIdx;
 
   explicit Asset(const std::filesystem::path& path);
 
-  [[nodiscard]] fastgltf::Scene& get_scene() noexcept {
-    return asset.scenes[scene_idx];
+  [[nodiscard]] fastgltf::Scene& getScene() noexcept {
+    return asset.scenes[sceneIdx];
   }
 
-  [[nodiscard]] auto get_scene() const noexcept -> const fastgltf::Scene& {
-    return asset.scenes[scene_idx];
+  [[nodiscard]] auto getScene() const noexcept -> const fastgltf::Scene& {
+    return asset.scenes[sceneIdx];
   }
 
-  void set_scene(std::size_t scene_idx) { this->scene_idx = scene_idx; }
+  void set_scene(std::size_t sceneIdx) { this->sceneIdx = sceneIdx; }
 };
-}  // namespace vkit::gltf
+}  // namespace gltf

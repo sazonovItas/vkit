@@ -1,6 +1,6 @@
-#include "asset.hpp"
+#include "gltf/asset.hpp"
 
-#include "helpers.hpp"
+#include "gltf/helpers.hpp"
 
 namespace {
 auto parser = fastgltf::Parser{
@@ -11,11 +11,10 @@ auto parser = fastgltf::Parser{
 };
 };  // namespace
 
-namespace vkit::gltf {
+namespace gltf {
 Asset::Asset(const std::filesystem::path& path)
-    : data_buffer_{get_checked(fastgltf::GltfDataBuffer::FromPath(path))},
+    : dataBuffer_{get_checked(fastgltf::GltfDataBuffer::FromPath(path))},
       directory(path.parent_path()),
-      asset{get_checked(parser.loadGltf(data_buffer_, directory))},
-      scene_idx{asset.defaultScene.value_or(0)} {}
-
-};  // namespace vkit::gltf
+      asset{get_checked(parser.loadGltf(dataBuffer_, directory))},
+      sceneIdx{asset.defaultScene.value_or(0)} {}
+};  // namespace gltf

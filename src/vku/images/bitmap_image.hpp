@@ -56,7 +56,7 @@ class BitmapImage : public AllocatedImage {
         vk::BufferUsageFlagBits::eTransferSrc,
     };
 
-    auto k_copy_and_mip = [&](vk::CommandBuffer cb) {
+    auto copy_and_mip_fn = [&](vk::CommandBuffer cb) {
       auto barrier = vk::ImageMemoryBarrier2{}
                          .setImage(image)
                          .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
@@ -98,7 +98,7 @@ class BitmapImage : public AllocatedImage {
     };
 
     executeCommandAndWait(copyInfo.device, copyInfo.commandPool, copyInfo.queue,
-                          k_copy_and_mip);
+                          copy_and_mip_fn);
   }
 };
 };  // namespace vku

@@ -1,6 +1,6 @@
-#include "asset_error.hpp"
+#include "gltf/asset_error.hpp"
 
-namespace vkit::gltf {
+namespace gltf {
 auto format_as(AssetProcessError error) noexcept -> std::string {
   switch (error) {
     case AssetProcessError::kUnsupportedSourceDataType:
@@ -9,4 +9,4 @@ auto format_as(AssetProcessError error) noexcept -> std::string {
 
   std::unreachable();
 };
-};  // namespace vkit::gltf
+};  // namespace gltf

@@ -13,14 +13,14 @@ constexpr auto kWhiteBitmapV = vku::Bitmap{
     .bytes = kWhitePixelV,
 };
 
-Texture::Texture(const CreateInfo& createInfo)
+TextureLVK::TextureLVK(const CreateInfo& createInfo)
     : name{createInfo.name}, m_image_{createImage(createInfo)} {
   m_view_ =
       createInfo.device.createImageViewUnique(m_image_.getViewCreateInfo());
   m_sampler_ = createInfo.device.createSamplerUnique(createInfo.sampler);
 }
 
-auto Texture::descriptorInfo() const -> vk::DescriptorImageInfo {
+auto TextureLVK::descriptorInfo() const -> vk::DescriptorImageInfo {
   auto ret = vk::DescriptorImageInfo{};
   ret.setImageView(*m_view_)
       .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
@@ -28,7 +28,7 @@ auto Texture::descriptorInfo() const -> vk::DescriptorImageInfo {
   return ret;
 }
 
-auto Texture::createImage(const CreateInfo& createInfo) const
+auto TextureLVK::createImage(const CreateInfo& createInfo) const
     -> vku::BitmapImage {
   auto bitmap = createInfo.bitmap;
   if (bitmap.bytes.empty() || bitmap.extent.width <= 0 ||

@@ -1,9 +1,9 @@
-#include "asset_external_buffers.hpp"
+#include "gltf/asset_external_buffers.hpp"
 
 #include <fstream>
 
-#include "asset_error.hpp"
 #include "fastgltf/types.hpp"
+#include "gltf/asset_error.hpp"
 #include "meshoptimizer.h"
 
 namespace {
@@ -30,7 +30,7 @@ auto load_file_as_binary(const std::filesystem::path& path)
 }
 };  // namespace
 
-namespace vkit::gltf {
+namespace gltf {
 AssetExternalBuffers::AssetExternalBuffers(
     const fastgltf::Asset& asset, const std::filesystem::path& directory) {
   const auto get_buffers_bytes =
@@ -134,4 +134,4 @@ auto AssetExternalBuffers::operator()(const fastgltf::Asset& /*asset*/,
     -> std::span<const std::byte> {
   return buffer_view_bytes_[buffer_view_idx];
 }
-};  // namespace vkit::gltf
+};  // namespace gltf

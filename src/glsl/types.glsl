@@ -2,12 +2,12 @@
 #define TYPES_GLSL
 
 struct Material {
-  uint16_t base_color_tex_idx;
-  uint16_t metallic_roughness_tex_idx;
-  uint16_t normal_tex_idx;
-  uint16_t emissive_tex_idx;
-  uint16_t occlusion_tex_idx;
-  uint16_t _padding0[3];
+  int16_t base_color_tex_idx;
+  int16_t metallic_roughness_tex_idx;
+  int16_t normal_tex_idx;
+  int16_t emissive_tex_idx;
+  int16_t occlusion_tex_idx;
+  int16_t _padding0[3];
   vec4 base_color_factor;
   float metallic_factor;
   float roughness_factor;

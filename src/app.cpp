@@ -647,7 +647,7 @@ void App::create_shader_resources() {
   using std::vector;
   using vku::Bitmap;
 
-  m_textures_.emplace(std::vector<Texture>{});
+  m_textures_.emplace(std::vector<TextureLVK>{});
 
   static constexpr auto kRgbaPixelsV = std::array{
       Pixel{std::byte{0xFF}, {}, {}, std::byte{0xFF}},
@@ -663,7 +663,7 @@ void App::create_shader_resources() {
       .extent = vk::Extent2D{2, 2},
       .bytes = kRgbaBytesV,
   };
-  auto grb_board_ci = Texture::CreateInfo{
+  auto grb_board_ci = TextureLVK::CreateInfo{
       .name = "4xSquare board",
       .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = kRgbyBitmapV,
@@ -678,7 +678,7 @@ void App::create_shader_resources() {
 
   // Bricks texture
   auto bricks = generate_bricks(1024, 1024, 8.0F, 8.0F, 0.125F);
-  auto bricks_ci = Texture::CreateInfo{
+  auto bricks_ci = TextureLVK::CreateInfo{
       .name = "Bricks",
       .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = bricks.bitmap,
@@ -693,7 +693,7 @@ void App::create_shader_resources() {
 
   // Stone texture
   auto stone = generateStoneTiles(128, 128, 8, 0.5F);
-  auto stone_ci = Texture::CreateInfo{
+  auto stone_ci = TextureLVK::CreateInfo{
       .name = "Stone",
       .format = vk::Format::eR8G8B8A8Srgb,
       .bitmap = stone.bitmap,
