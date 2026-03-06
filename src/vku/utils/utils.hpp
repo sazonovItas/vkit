@@ -10,11 +10,7 @@ struct Bitmap {
 
 struct ImageBarrierInfo {
   vk::ImageLayout srcLayout;
-  vk::AccessFlags2 srcAccess;
-  vk::PipelineStageFlags2 srcStage;
   vk::ImageLayout dstLayout;
-  vk::AccessFlags2 dstAccess;
-  vk::PipelineStageFlags2 dstStage;
 };
 
 struct DeviceCopyInfo {

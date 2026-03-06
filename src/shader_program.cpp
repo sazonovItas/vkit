@@ -7,28 +7,28 @@
 #include "vulkan/vulkan.hpp"
 
 namespace {
-constexpr auto to_vkbool(bool const value) {
+constexpr auto toVkbool(bool const value) {
   return value ? vk::True : vk::False;
 }
 };  // namespace
 
 namespace lvk {
-ShaderProgram::ShaderProgram(CreateInfo const& create_info) {
+ShaderProgram::ShaderProgram(CreateInfo const& createInfo) {
   auto const create_shader_ci =
-      [&create_info](std::span<std::uint32_t const> spirv) {
+      [&createInfo](std::span<std::uint32_t const> spirv) {
         auto ret = vk::ShaderCreateInfoEXT{};
         ret.setCodeSize(spirv.size_bytes())
             .setPCode(spirv.data())
-            .setSetLayouts(create_info.set_layouts)
-            .setPushConstantRanges(create_info.push_constant_ranges)
+            .setSetLayouts(createInfo.setLayouts)
+            .setPushConstantRanges(createInfo.pushConstantRanges)
             .setCodeType(vk::ShaderCodeTypeEXT::eSpirv)
             .setPName("main");
         return ret;
       };
 
   auto shader_cis = std::array{
-      create_shader_ci(create_info.vertex_spirv),
-      create_shader_ci(create_info.fragment_spirv),
+      create_shader_ci(createInfo.vertexSpirv),
+      create_shader_ci(createInfo.fragmentSpirv),
   };
 
   shader_cis[0]
@@ -36,30 +36,28 @@ ShaderProgram::ShaderProgram(CreateInfo const& create_info) {
       .setNextStage(vk::ShaderStageFlagBits::eFragment);
   shader_cis[1].setStage(vk::ShaderStageFlagBits::eFragment);
 
-  auto result = create_info.device.createShadersEXTUnique(shader_cis);
+  auto result = createInfo.device.createShadersEXTUnique(shader_cis);
   if (result.result != vk::Result::eSuccess) {
     throw std::runtime_error{"failed to create Shader Objects"};
   }
 
-  m_shaders_ = std::move(result.value);
-  m_waiter_ = create_info.device;
+  shaders_ = std::move(result.value);
+  waiter_ = createInfo.device;
 }
 
-void ShaderProgram::bind(vk::CommandBuffer const command_buffer,
-                         glm::ivec2 const offset,
-                         glm::ivec2 const framebuffer_size) const {
-  set_viewport_scissor(command_buffer, offset, framebuffer_size);
-  set_static_states(command_buffer);
-  set_common_states(command_buffer);
-  set_vertex_states(command_buffer);
-  set_fragment_states(command_buffer);
-  bind_shaders(command_buffer);
+void ShaderProgram::bind(vk::CommandBuffer cb, glm::ivec2 framebufferSize,
+                         glm::ivec2 offset) const {
+  setViewportScissor(cb, framebufferSize, offset);
+  setStaticStates(cb);
+  setCommonStates(cb);
+  setVertexStates(cb);
+  setFragmentStates(cb);
+  bindShaders(cb);
 }
 
-void ShaderProgram::set_viewport_scissor(vk::CommandBuffer command_buffer,
-                                         glm::ivec2 offset,
-                                         glm::ivec2 framebuffer_size) {
-  auto const fsize = glm::vec2{framebuffer_size};
+void ShaderProgram::setViewportScissor(vk::CommandBuffer cb, glm::ivec2 size,
+                                       glm::ivec2 offset) {
+  const auto fsize = glm::vec2{size};
   auto viewport = vk::Viewport{};
   viewport.setX(offset.x)
       .setY(fsize.y + offset.y)
@@ -67,59 +65,58 @@ void ShaderProgram::set_viewport_scissor(vk::CommandBuffer command_buffer,
       .setHeight(-fsize.y)
       .setMinDepth(0.0F)
       .setMaxDepth(1.0F);
-  command_buffer.setViewportWithCount(viewport);
+  cb.setViewportWithCount(viewport);
 
-  auto const usize = glm::uvec2{framebuffer_size};
-  auto const scissor =
+  const auto usize = glm::uvec2{size};
+  const auto scissor =
       vk::Rect2D{vk::Offset2D{}, vk::Extent2D{usize.x, usize.y}};
-  command_buffer.setScissorWithCount(scissor);
+  cb.setScissorWithCount(scissor);
 }
-void ShaderProgram::set_static_states(vk::CommandBuffer command_buffer) {
-  command_buffer.setRasterizerDiscardEnable(vk::False);
-  command_buffer.setRasterizationSamplesEXT(kSampleCount);
-  command_buffer.setSampleMaskEXT(kSampleCount, 0xffffffff);
-  command_buffer.setAlphaToCoverageEnableEXT(vk::False);
-  command_buffer.setFrontFace(vk::FrontFace::eCounterClockwise);
-  command_buffer.setCullMode(vk::CullModeFlagBits::eBack);
-  command_buffer.setDepthBoundsTestEnable(vk::False);
-  command_buffer.setDepthBiasEnable(vk::False);
-  command_buffer.setDepthBounds(0.0F, 1.0F);
-  command_buffer.setStencilTestEnable(vk::False);
-  command_buffer.setPrimitiveRestartEnable(vk::False);
-  command_buffer.setColorWriteMaskEXT(0, ~vk::ColorComponentFlagBits{});
-}
-
-void ShaderProgram::set_common_states(vk::CommandBuffer command_buffer) const {
-  auto const depth_test = to_vkbool((flags & kDepthTest) == kDepthTest);
-  command_buffer.setDepthWriteEnable(depth_test);
-  command_buffer.setDepthTestEnable(depth_test);
-  command_buffer.setDepthCompareOp(depth_compare_op);
-  command_buffer.setPolygonModeEXT(polygon_mode);
-  command_buffer.setLineWidth(line_width);
+void ShaderProgram::setStaticStates(vk::CommandBuffer cb) {
+  cb.setRasterizerDiscardEnable(vk::False);
+  cb.setRasterizationSamplesEXT(kSampleCount);
+  cb.setSampleMaskEXT(kSampleCount, 0xff);
+  cb.setAlphaToCoverageEnableEXT(vk::False);
+  cb.setFrontFace(vk::FrontFace::eCounterClockwise);
+  cb.setCullMode(vk::CullModeFlagBits::eBack);
+  cb.setDepthBoundsTestEnable(vk::False);
+  cb.setDepthBiasEnable(vk::False);
+  cb.setDepthBounds(0.0F, 1.0F);
+  cb.setStencilTestEnable(vk::False);
+  cb.setPrimitiveRestartEnable(vk::False);
+  cb.setColorWriteMaskEXT(0, ~vk::ColorComponentFlagBits{});
 }
 
-void ShaderProgram::set_vertex_states(vk::CommandBuffer command_buffer) const {
-  command_buffer.setPrimitiveTopology(topology);
-  command_buffer.setVertexInputEXT({}, {});
+void ShaderProgram::setCommonStates(vk::CommandBuffer cb) const {
+  const auto depth_test = toVkbool((flags & kDepthTest) == kDepthTest);
+  cb.setDepthWriteEnable(depth_test);
+  cb.setDepthTestEnable(depth_test);
+  cb.setDepthCompareOp(depthCompareOp);
+  cb.setPolygonModeEXT(polygonMode);
+  cb.setLineWidth(lineWidth);
 }
 
-void ShaderProgram::set_fragment_states(
-    vk::CommandBuffer command_buffer) const {
-  auto const alpha_blend = to_vkbool((flags & kAlphaBlend) == kAlphaBlend);
-  command_buffer.setColorBlendEnableEXT(0, alpha_blend);
-  command_buffer.setColorBlendEquationEXT(0, color_blend_equation);
+void ShaderProgram::setVertexStates(vk::CommandBuffer cb) const {
+  cb.setPrimitiveTopology(topology);
+  cb.setVertexInputEXT({}, {});
 }
 
-void ShaderProgram::bind_shaders(vk::CommandBuffer command_buffer) const {
+void ShaderProgram::setFragmentStates(vk::CommandBuffer cb) const {
+  const auto alpha_blend = toVkbool((flags & kAlphaBlend) == kAlphaBlend);
+  cb.setColorBlendEnableEXT(0, alpha_blend);
+  cb.setColorBlendEquationEXT(0, colorBlendEquation);
+}
+
+void ShaderProgram::bindShaders(vk::CommandBuffer cb) const {
   static constexpr auto kStagesV = std::array{
       vk::ShaderStageFlagBits::eVertex,
       vk::ShaderStageFlagBits::eFragment,
   };
   auto const shaders = std::array{
-      *m_shaders_[0],
-      *m_shaders_[1],
+      *shaders_[0],
+      *shaders_[1],
   };
-  command_buffer.bindShadersEXT(kStagesV, shaders);
+  cb.bindShadersEXT(kStagesV, shaders);
 }
 
 };  // namespace lvk

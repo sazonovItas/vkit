@@ -22,48 +22,47 @@ static constexpr auto kFlagsV = kAlphaBlend | kDepthTest;
 
 struct ShaderProgramCreateInfo {
   vk::Device device;
-  std::span<std::uint32_t const> vertex_spirv;
-  std::span<std::uint32_t const> fragment_spirv;
-  std::span<vk::DescriptorSetLayout const> set_layouts;
-  std::span<vk::PushConstantRange const> push_constant_ranges;
+  std::span<const std::uint32_t> vertexSpirv;
+  std::span<const std::uint32_t> fragmentSpirv;
+  std::span<const vk::DescriptorSetLayout> setLayouts;
+  std::span<const vk::PushConstantRange> pushConstantRanges;
 };
 
 struct PushConstants {
   glm::mat4 transform;
-  vk::DeviceAddress vertex_buffer;
+  vk::DeviceAddress vertexBuffer;
 };
 
 class ShaderProgram {
  public:
   using CreateInfo = ShaderProgramCreateInfo;
 
-  explicit ShaderProgram(CreateInfo const& create_info);
+  explicit ShaderProgram(const CreateInfo& createInfo);
 
-  void bind(vk::CommandBuffer command_buffer, glm::ivec2 offset,
-            glm::ivec2 framebuffer_size) const;
+  void bind(vk::CommandBuffer cb, glm::ivec2 framebufferSize,
+            glm::ivec2 offset = {0, 0}) const;
 
   vk::PrimitiveTopology topology{vk::PrimitiveTopology::eTriangleList};
-  vk::PolygonMode polygon_mode{vk::PolygonMode::eFill};
-  float line_width{1.0F};
+  vk::PolygonMode polygonMode{vk::PolygonMode::eFill};
+  float lineWidth{1.0F};
 
-  vk::ColorBlendEquationEXT color_blend_equation{kColorBlendEquationV};
-  vk::CompareOp depth_compare_op{vk::CompareOp::eLess};
+  vk::ColorBlendEquationEXT colorBlendEquation{kColorBlendEquationV};
+  vk::CompareOp depthCompareOp{vk::CompareOp::eLess};
 
   std::uint8_t flags{kFlagsV};
 
  private:
-  static void set_viewport_scissor(vk::CommandBuffer command_buffer,
-                                   glm::ivec2 offset,
-                                   glm::ivec2 framebuffer_size);
-  static void set_static_states(vk::CommandBuffer command_buffer);
-  void set_common_states(vk::CommandBuffer command_buffer) const;
-  void set_vertex_states(vk::CommandBuffer command_buffer) const;
-  void set_fragment_states(vk::CommandBuffer command_buffer) const;
-  void bind_shaders(vk::CommandBuffer command_buffer) const;
+  static void setViewportScissor(vk::CommandBuffer cb, glm::ivec2 size,
+                                 glm::ivec2 offset);
+  static void setStaticStates(vk::CommandBuffer cb);
+  void setCommonStates(vk::CommandBuffer cb) const;
+  void setVertexStates(vk::CommandBuffer cb) const;
+  void setFragmentStates(vk::CommandBuffer cb) const;
+  void bindShaders(vk::CommandBuffer cb) const;
 
-  std::vector<vk::UniqueShaderEXT> m_shaders_;
+  std::vector<vk::UniqueShaderEXT> shaders_;
 
-  vku::DeviceWaiter m_waiter_;
+  vku::DeviceWaiter waiter_;
 };
 
 };  // namespace lvk

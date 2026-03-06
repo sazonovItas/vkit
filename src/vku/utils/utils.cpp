@@ -1,5 +1,7 @@
 #include "vku/utils/utils.hpp"
 
+#include "vulkan/vulkan.hpp"
+
 namespace vku {
 void generateMipmaps(vk::CommandBuffer cb, const Image& image,
                      const ImageBarrierInfo& barrierInfo) {
@@ -22,10 +24,8 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
         .setOldLayout(i == 1 ? barrierInfo.srcLayout
                              : vk::ImageLayout::eTransferDstOptimal)
         .setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
-        .setSrcStageMask(i == 1 ? barrierInfo.srcStage
-                                : vk::PipelineStageFlagBits2::eTransfer)
-        .setSrcAccessMask(i == 1 ? barrierInfo.srcAccess
-                                 : vk::AccessFlagBits2::eTransferWrite)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+        .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
         .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
         .setDstAccessMask(vk::AccessFlagBits2::eTransferRead);
 
@@ -34,8 +34,8 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
     barrier.subresourceRange.setBaseMipLevel(i);
 
     barrier.setOldLayout(barrierInfo.srcLayout)
-        .setSrcStageMask(barrierInfo.srcStage)
-        .setSrcAccessMask(barrierInfo.srcAccess)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+        .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
         .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
         .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
         .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite);
@@ -79,8 +79,8 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
         .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
         .setSrcAccessMask(vk::AccessFlagBits2::eTransferRead)
         .setNewLayout(barrierInfo.dstLayout)
-        .setDstStageMask(barrierInfo.dstStage)
-        .setDstAccessMask(barrierInfo.dstAccess);
+        .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+        .setDstAccessMask(vk::AccessFlagBits2::eTransferRead);
 
     cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
 
@@ -92,10 +92,10 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
 
   barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
       .setNewLayout(barrierInfo.dstLayout)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
       .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
-      .setDstStageMask(barrierInfo.dstStage)
-      .setDstAccessMask(barrierInfo.dstAccess);
+      .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+      .setDstAccessMask(vk::AccessFlagBits2::eTransferRead);
 
   cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
 }

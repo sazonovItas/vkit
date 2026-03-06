@@ -9,18 +9,15 @@
 #include "resource_buffering.hpp"
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
-#include "vulkan/gpu.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace lvk {
-
 namespace {
 constexpr auto kSrgbFormatsV = std::array{
     vk::Format::eR8G8B8A8Srgb,
     vk::Format::eB8G8R8A8Srgb,
 };
 
-[[nodiscard]] constexpr auto get_surface_format(
+[[nodiscard]] constexpr auto getSurfaceFormat(
     std::span<vk::SurfaceFormatKHR const> supported) -> vk::SurfaceFormatKHR {
   for (auto const desired : kSrgbFormatsV) {
     auto const is_match = [desired](vk::SurfaceFormatKHR const& in) {
@@ -41,7 +38,7 @@ constexpr auto kSrgbFormatsV = std::array{
 
 constexpr std::uint32_t kMinImagesV{kResourceBufferingV};
 
-[[nodiscard]] constexpr auto get_image_extent(
+[[nodiscard]] constexpr auto getImageExtent(
     vk::SurfaceCapabilitiesKHR const& capabilities, glm::uvec2 const size)
     -> vk::Extent2D {
   constexpr auto kLimitlessV = 0xFFFFFFFF;
@@ -51,15 +48,15 @@ constexpr std::uint32_t kMinImagesV{kResourceBufferingV};
     return capabilities.currentExtent;
   }
 
-  auto const x = std::clamp(size.x, capabilities.minImageExtent.width,
+  const auto x = std::clamp(size.x, capabilities.minImageExtent.width,
                             capabilities.maxImageExtent.width);
-  auto const y = std::clamp(size.y, capabilities.minImageExtent.height,
+  const auto y = std::clamp(size.y, capabilities.minImageExtent.height,
                             capabilities.maxImageExtent.height);
 
   return vk::Extent2D{x, y};
 }
 
-[[nodiscard]] constexpr auto get_image_count(
+[[nodiscard]] constexpr auto getImageCount(
     vk::SurfaceCapabilitiesKHR const& capabilities) -> std::uint32_t {
   if (capabilities.maxImageCount < capabilities.minImageCount) {
     return std::max(kMinImagesV, capabilities.minImageCount);
@@ -69,13 +66,13 @@ constexpr std::uint32_t kMinImagesV{kResourceBufferingV};
                     capabilities.maxImageCount);
 }
 
-void require_success(vk::Result const result, char const* error_msg) {
+void requireSuccess(vk::Result const result, char const* error_msg) {
   if (result != vk::Result::eSuccess) {
     throw std::runtime_error{error_msg};
   }
 }
 
-auto needs_recreation(vk::Result const result) -> bool {
+auto needsRecreation(vk::Result const result) -> bool {
   switch (result) {
     case vk::Result::eSuccess:
     case vk::Result::eSuboptimalKHR:
@@ -100,16 +97,15 @@ constexpr auto kColorSubresourceRangeV = [] {
 };  // namespace
 
 Swapchain::Swapchain(vk::Device device, vk::PhysicalDevice physical_device,
-                     vkit::vulkan::QueueFamilies& queue_families,
-                     vma::Allocator allocator, vk::SurfaceKHR surface,
-                     glm::ivec2 const size)
-    : m_device_(device),
-      m_physical_device_(physical_device),
-      m_queue_families_(queue_families),
-      m_allocator_(allocator) {
+                     const std::uint32_t queueFamily, vma::Allocator allocator,
+                     vk::SurfaceKHR surface, glm::ivec2 const size)
+    : device_(device),
+      physicalDevice_(physical_device),
+      queueFamily_(queueFamily),
+      allocator_(allocator) {
   auto const surface_format =
-      get_surface_format(m_physical_device_.getSurfaceFormatsKHR(surface));
-  m_ci_.setSurface(surface)
+      getSurfaceFormat(physicalDevice_.getSurfaceFormatsKHR(surface));
+  ci_.setSurface(surface)
       .setImageFormat(surface_format.format)
       .setImageColorSpace(surface_format.colorSpace)
       .setImageArrayLayers(1)
@@ -124,142 +120,142 @@ auto Swapchain::recreate(glm::ivec2 size) -> bool {
   if (size.x <= 0 || size.y <= 0) return false;
 
   auto const capabilities =
-      m_physical_device_.getSurfaceCapabilitiesKHR(m_ci_.surface);
-  m_ci_.setImageExtent(get_image_extent(capabilities, size))
-      .setMinImageCount(get_image_count(capabilities))
-      .setOldSwapchain(m_swapchain_ ? *m_swapchain_ : vk::SwapchainKHR{})
-      .setQueueFamilyIndices(m_queue_families_.graphicsPresent);
-  assert(m_ci_.imageExtent.width > 0 && m_ci_.imageExtent.height > 0 &&
-         m_ci_.minImageCount >= kMinImagesV);
+      physicalDevice_.getSurfaceCapabilitiesKHR(ci_.surface);
+  ci_.setImageExtent(getImageExtent(capabilities, size))
+      .setMinImageCount(getImageCount(capabilities))
+      .setOldSwapchain(swapchain_ ? *swapchain_ : vk::SwapchainKHR{})
+      .setQueueFamilyIndices(queueFamily_);
+  assert(ci_.imageExtent.width > 0 && ci_.imageExtent.height > 0 &&
+         ci_.minImageCount >= kMinImagesV);
 
-  m_device_.waitIdle();
-  m_swapchain_ = m_device_.createSwapchainKHRUnique(m_ci_);
+  device_.waitIdle();
+  swapchain_ = device_.createSwapchainKHRUnique(ci_);
 
-  populate_images();
-  create_image_views();
-  create_present_semaphores();
+  populateImages();
+  createImageViews();
+  createPresentSemaphores();
 
-  populate_color_image();
-  populate_depth_image();
+  populateColorImage();
+  populateDepthImage();
 
   return true;
 }
 
-auto Swapchain::acquire_next_image(vk::Semaphore const to_signal)
+auto Swapchain::acquireNextImage(vk::Semaphore const to_signal)
     -> std::optional<RenderTarget> {
-  assert(!m_image_index_);
+  assert(!imageIdx_);
 
   static constexpr auto kTimeoutV = std::numeric_limits<std::uint64_t>::max();
 
   auto image_index = std::uint32_t{};
-  auto const result = m_device_.acquireNextImageKHR(
-      *m_swapchain_, kTimeoutV, to_signal, {}, &image_index);
-  if (needs_recreation(result)) {
+  auto const result = device_.acquireNextImageKHR(*swapchain_, kTimeoutV,
+                                                  to_signal, {}, &image_index);
+  if (needsRecreation(result)) {
     return {};
   }
 
-  m_image_index_ = static_cast<std::size_t>(image_index);
+  imageIdx_ = static_cast<std::size_t>(image_index);
 
   return RenderTarget{
-      .image = m_images_.at(*m_image_index_),
-      .image_view = *m_image_views_.at(*m_image_index_),
-      .color_image = m_color_image_.image,
-      .color_image_view = *m_color_image_view_,
-      .depth_image = m_depth_image_.image,
-      .depth_image_view = *m_depth_image_view_,
-      .extent = m_ci_.imageExtent,
+      .swapchainImage = images_.at(*imageIdx_),
+      .swapchainImageView = *imageViews_.at(*imageIdx_),
+      .colorImage = colorImage_.image,
+      .colorImageView = *colorImageView_,
+      .depthImage = depthImage_.image,
+      .depthImageView = *depthImageView_,
+      .extent = ci_.imageExtent,
   };
 }
 
-auto Swapchain::base_barrier() const -> vk::ImageMemoryBarrier2 {
+auto Swapchain::baseBarrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
-  ret.setImage(m_images_.at(m_image_index_.value()))
+  ret.setImage(images_.at(imageIdx_.value()))
       .setSubresourceRange(kColorSubresourceRangeV)
       .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
       .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 };
 
-auto Swapchain::base_color_barrier() const -> vk::ImageMemoryBarrier2 {
+auto Swapchain::baseColorBarrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
-  ret.setImage(m_color_image_.image)
-      .setSubresourceRange(m_color_image_.subresourceRange())
+  ret.setImage(colorImage_.image)
+      .setSubresourceRange(colorImage_.subresourceRange())
       .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
       .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 }
 
-auto Swapchain::base_depth_barrier() const -> vk::ImageMemoryBarrier2 {
+auto Swapchain::baseDepthBarrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
-  ret.setImage(m_depth_image_.image)
-      .setSubresourceRange(m_color_image_.subresourceRange())
+  ret.setImage(depthImage_.image)
+      .setSubresourceRange(colorImage_.subresourceRange())
       .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
       .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;
 }
 
-auto Swapchain::get_present_semaphore() const -> vk::Semaphore {
-  return *m_present_semaphorses_.at(m_image_index_.value());
+auto Swapchain::getPresentSemaphore() const -> vk::Semaphore {
+  return *presentSemaphores_.at(imageIdx_.value());
 }
 
 auto Swapchain::present(vk::Queue const queue) -> bool {
-  auto const image_index = static_cast<std::uint32_t>(m_image_index_.value());
+  auto const image_index = static_cast<std::uint32_t>(imageIdx_.value());
   auto const wait_semaphore =
-      *m_present_semaphorses_.at(static_cast<std::size_t>(image_index));
+      *presentSemaphores_.at(static_cast<std::size_t>(image_index));
   auto present_info = vk::PresentInfoKHR{};
-  present_info.setSwapchains(*m_swapchain_)
+  present_info.setSwapchains(*swapchain_)
       .setImageIndices(image_index)
       .setWaitSemaphores(wait_semaphore);
 
   auto const result = queue.presentKHR(&present_info);
-  m_image_index_.reset();
+  imageIdx_.reset();
 
-  return !needs_recreation(result);
+  return !needsRecreation(result);
 }
 
-void Swapchain::populate_images() {
+void Swapchain::populateImages() {
   auto image_count = std::uint32_t{};
   auto result =
-      m_device_.getSwapchainImagesKHR(*m_swapchain_, &image_count, nullptr);
-  require_success(result, "failed to get Swapchain Images");
+      device_.getSwapchainImagesKHR(*swapchain_, &image_count, nullptr);
+  requireSuccess(result, "failed to get Swapchain Images");
 
-  m_images_.resize(image_count);
-  result = m_device_.getSwapchainImagesKHR(*m_swapchain_, &image_count,
-                                           m_images_.data());
-  require_success(result, "failed to get swapchain images");
+  images_.resize(image_count);
+  result =
+      device_.getSwapchainImagesKHR(*swapchain_, &image_count, images_.data());
+  requireSuccess(result, "failed to get swapchain images");
 }
 
-void Swapchain::populate_color_image() {
+void Swapchain::populateColorImage() {
   auto image_ci = vk::ImageCreateInfo{}
                       .setImageType(vk::ImageType::e2D)
                       .setUsage(vk::ImageUsageFlagBits::eColorAttachment)
-                      .setExtent(vku::toExtent3D(m_ci_.imageExtent))
-                      .setFormat(m_ci_.imageFormat)
+                      .setExtent(vku::toExtent3D(ci_.imageExtent))
+                      .setFormat(ci_.imageFormat)
                       .setSamples(kSampleCount)
                       .setMipLevels(1)
                       .setArrayLayers(1);
-  m_color_image_ = {m_allocator_, image_ci};
+  colorImage_ = {allocator_, image_ci};
 
-  m_color_image_view_ =
-      m_device_.createImageViewUnique(m_color_image_.getViewCreateInfo());
+  colorImageView_ =
+      device_.createImageViewUnique(colorImage_.getViewCreateInfo());
 }
 
-void Swapchain::populate_depth_image() {
+void Swapchain::populateDepthImage() {
   auto image_ci = vk::ImageCreateInfo{}
                       .setImageType(vk::ImageType::e2D)
                       .setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment)
-                      .setExtent(vku::toExtent3D(m_ci_.imageExtent))
+                      .setExtent(vku::toExtent3D(ci_.imageExtent))
                       .setFormat(vk::Format::eD32SfloatS8Uint)
                       .setSamples(kSampleCount)
                       .setMipLevels(1)
                       .setArrayLayers(1);
-  m_depth_image_ = {m_allocator_, image_ci};
+  depthImage_ = {allocator_, image_ci};
 
-  m_depth_image_view_ =
-      m_device_.createImageViewUnique(m_depth_image_.getViewCreateInfo());
+  depthImageView_ =
+      device_.createImageViewUnique(depthImage_.getViewCreateInfo());
 }
 
-void Swapchain::create_image_views() {
+void Swapchain::createImageViews() {
   auto subresource_range = vk::ImageSubresourceRange{};
   subresource_range.setAspectMask(vk::ImageAspectFlagBits::eColor)
       .setLayerCount(1)
@@ -267,21 +263,22 @@ void Swapchain::create_image_views() {
 
   auto image_view_ci = vk::ImageViewCreateInfo{};
   image_view_ci.setViewType(vk::ImageViewType::e2D)
-      .setFormat(m_ci_.imageFormat)
+      .setFormat(ci_.imageFormat)
       .setSubresourceRange(subresource_range);
-  m_image_views_.clear();
-  m_image_views_.reserve(m_images_.size());
-  for (auto const image : m_images_) {
+
+  imageViews_.clear();
+  imageViews_.reserve(images_.size());
+  for (auto const image : images_) {
     image_view_ci.setImage(image);
-    m_image_views_.push_back(m_device_.createImageViewUnique(image_view_ci));
+    imageViews_.push_back(device_.createImageViewUnique(image_view_ci));
   }
 }
 
-void Swapchain::create_present_semaphores() {
-  m_present_semaphorses_.clear();
-  m_present_semaphorses_.resize(m_images_.size());
-  for (auto& semaphore : m_present_semaphorses_) {
-    semaphore = m_device_.createSemaphoreUnique({});
+void Swapchain::createPresentSemaphores() {
+  presentSemaphores_.clear();
+  presentSemaphores_.resize(images_.size());
+  for (auto& semaphore : presentSemaphores_) {
+    semaphore = device_.createSemaphoreUnique({});
   }
 }
 };  // namespace lvk

@@ -14,43 +14,39 @@ struct PipelineFlag {
 struct PipelineState {
   using Flag = PipelineFlag;
 
-  [[nodiscard]] static constexpr auto default_flags() -> std::uint8_t {
+  [[nodiscard]] static constexpr auto defaultFlags() -> std::uint8_t {
     return Flag::kAlphaBlend | Flag::kDepthTest;
   }
 
-  vk::ShaderModule vertex_shader;
-  vk::ShaderModule fragment_shader;
-
-  std::span<vk::VertexInputAttributeDescription const> vertex_attributes;
-  std::span<vk::VertexInputBindingDescription const> vertex_bindings;
+  vk::ShaderModule vertexShader;
+  vk::ShaderModule fragmentShader;
 
   vk::PrimitiveTopology topology{vk::PrimitiveTopology::eTriangleList};
-  vk::PolygonMode polygon_mode{vk::PolygonMode::eFill};
-  vk::CullModeFlags cull_mode{vk::CullModeFlagBits::eNone};
-  vk::CompareOp depth_compare{vk::CompareOp::eLess};
-  std::uint8_t flags{default_flags()};
+  vk::PolygonMode polygonMode{vk::PolygonMode::eFill};
+  vk::CullModeFlags cullMode{vk::CullModeFlagBits::eNone};
+  vk::CompareOp depthCompare{vk::CompareOp::eLess};
+  std::uint8_t flags{defaultFlags()};
 };
 
 struct PipelineBuilderCreateInfo {
   vk::Device device;
   vk::SampleCountFlagBits samples;
-  vk::Format color_format;
-  vk::Format depth_format;
+  vk::Format colorFormat;
+  vk::Format depthFormat;
 };
 
 class PipelineBuilder {
  public:
   using CreateInfo = PipelineBuilderCreateInfo;
 
-  explicit PipelineBuilder(CreateInfo const& create_info)
-      : m_info_{create_info} {}
+  explicit PipelineBuilder(const CreateInfo& createInfo) : ci_{createInfo} {}
 
   [[nodiscard]] auto build(vk::PipelineLayout layout,
-                           PipelineState const& state) const
+                           const PipelineState& state) const
       -> vk::UniquePipeline;
 
  private:
-  CreateInfo m_info_;
+  CreateInfo ci_;
 };
 
 };  // namespace lvk

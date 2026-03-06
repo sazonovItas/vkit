@@ -6,6 +6,7 @@
 #include "vku/constants.hpp"
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vku {
 class BitmapImage : public AllocatedImage {
@@ -39,11 +40,7 @@ class BitmapImage : public AllocatedImage {
   void update(const DeviceCopyInfo& copyInfo, const Bitmap& bitmap,
               const ImageBarrierInfo& barrierInfo = {
                   .srcLayout = vk::ImageLayout::eUndefined,
-                  .srcAccess = vk::AccessFlagBits2::eNone,
-                  .srcStage = vk::PipelineStageFlagBits2::eTopOfPipe,
                   .dstLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-                  .dstAccess = vk::AccessFlagBits2::eShaderRead,
-                  .dstStage = vk::PipelineStageFlagBits2::eFragmentShader,
               }) {
     assert(bitmap.extent.width <= extent.width &&
            bitmap.extent.height <= extent.height &&
@@ -62,8 +59,8 @@ class BitmapImage : public AllocatedImage {
                          .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
                          .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
                          .setOldLayout(barrierInfo.srcLayout)
-                         .setSrcStageMask(barrierInfo.srcStage)
-                         .setSrcAccessMask(barrierInfo.srcAccess)
+                         .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
+                         .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
                          .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
                          .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
                          .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite)
@@ -88,11 +85,7 @@ class BitmapImage : public AllocatedImage {
 
       auto mip_barrier_info = ImageBarrierInfo{
           .srcLayout = vk::ImageLayout::eTransferDstOptimal,
-          .srcAccess = vk::AccessFlagBits2::eTransferWrite,
-          .srcStage = vk::PipelineStageFlagBits2::eTransfer,
           .dstLayout = barrierInfo.dstLayout,
-          .dstAccess = barrierInfo.dstAccess,
-          .dstStage = barrierInfo.dstStage,
       };
       generateMipmaps(cb, *this, mip_barrier_info);
     };

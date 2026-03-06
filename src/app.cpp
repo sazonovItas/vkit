@@ -34,6 +34,7 @@
 #include "model.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
+#include "stb_image.h"
 #include "vku/buffers/device_buffer.hpp"
 #include "vku/utils/utils.hpp"
 #include "vulkan/gpu.hpp"
@@ -318,7 +319,7 @@ void App::inspect() {
   ImGui::SetNextWindowSize({300.0F, 320.0F}, ImGuiCond_Once);
   if (ImGui::Begin("Inspect")) {
     if (ImGui::Checkbox("wireframe", &m_wireframe_)) {
-      m_shader_->polygon_mode =
+      m_shader_->polygonMode =
           m_wireframe_ ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
     }
     if (m_wireframe_) {
@@ -326,7 +327,7 @@ void App::inspect() {
       ImGui::SetNextItemWidth(100.0F);
       ImGui::DragFloat("line width", &m_line_width_, 0.25F, line_width_range[0],
                        line_width_range[1]);
-      m_shader_->line_width = m_line_width_;
+      m_shader_->lineWidth = m_line_width_;
     }
 
     static auto const kCameraView = [](Camera& out) {
@@ -380,8 +381,8 @@ void App::inspect() {
 }
 
 void App::draw(vk::CommandBuffer const command_buffer) const {
-  m_shader_->bind(command_buffer, glm::ivec2{}, m_framebuffer_size_);
   bind_descriptor_sets(command_buffer);
+  m_shader_->bind(command_buffer, m_framebuffer_size_);
 
   fastgltf::iterateSceneNodes(
       m_asset_.value(), 0, fastgltf::math::fmat4x4(1.0F),
@@ -398,7 +399,7 @@ void App::draw_mesh(vk::CommandBuffer const command_buffer,
   for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
     auto constants = PushConstants{
         .transform = m_transform_.model_matrix(),
-        .vertex_buffer = primitive.vertex_buffer.getAddress(*m_gpu_->device),
+        .vertexBuffer = primitive.vertex_buffer.getAddress(*m_gpu_->device),
     };
     command_buffer.pushConstants(*m_pipeline_layout_,
                                  vk::ShaderStageFlagBits::eVertex, 0,
@@ -429,7 +430,7 @@ auto App::acquire_render_target() -> bool {
     throw std::runtime_error{"failed to wait for render fence"};
   }
 
-  m_render_target_ = m_swapchain_->acquire_next_image(*render_sync.draw);
+  m_render_target_ = m_swapchain_->acquireNextImage(*render_sync.draw);
   if (!m_render_target_) {
     m_swapchain_->recreate(m_framebuffer_size_);
     return false;
@@ -454,16 +455,16 @@ auto App::begin_frame() -> vk::CommandBuffer {
 void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
   auto dependency_info = vk::DependencyInfo{};
 
-  auto color_barrier = m_swapchain_->base_color_barrier();
+  auto color_barrier = m_swapchain_->baseColorBarrier();
   color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
                         vk::AccessFlagBits2::eColorAttachmentWrite)
       .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
       .setDstAccessMask(color_barrier.srcAccessMask)
       .setDstStageMask(color_barrier.srcStageMask);
 
-  auto depth_barrier = m_swapchain_->base_depth_barrier();
+  auto depth_barrier = m_swapchain_->baseDepthBarrier();
   depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eNone)
@@ -473,9 +474,9 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
       .setDstStageMask(vk::PipelineStageFlagBits2::eEarlyFragmentTests |
                        vk::PipelineStageFlagBits2::eLateFragmentTests);
 
-  auto swapchain_color_barrier = m_swapchain_->base_barrier();
+  auto swapchain_color_barrier = m_swapchain_->baseBarrier();
   swapchain_color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eAttachmentOptimal)
+      .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
                         vk::AccessFlagBits2::eColorAttachmentWrite)
       .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
@@ -490,17 +491,17 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
 
 void App::render(vk::CommandBuffer const command_buffer) {
   auto color_attachment = vk::RenderingAttachmentInfo{};
-  color_attachment.setImageView(m_render_target_->color_image_view)
+  color_attachment.setImageView(m_render_target_->colorImageView)
       .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setResolveMode(vk::ResolveModeFlagBits::eAverage)
-      .setResolveImageView(m_render_target_->image_view)
+      .setResolveImageView(m_render_target_->swapchainImageView)
       .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
       .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
 
   auto depth_attachment = vk::RenderingAttachmentInfo{};
-  depth_attachment.setImageView(m_render_target_->depth_image_view)
+  depth_attachment.setImageView(m_render_target_->depthImageView)
       .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
       .setStoreOp(vk::AttachmentStoreOp::eDontCare)
@@ -521,8 +522,7 @@ void App::render(vk::CommandBuffer const command_buffer) {
   command_buffer.endRendering();
 
   auto imgui_attachment = vk::RenderingAttachmentInfo{};
-  imgui_attachment.setImageView(m_render_target_->image_view)
-      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+  imgui_attachment.setImageView(m_render_target_->swapchainImageView)
       .setLoadOp(vk::AttachmentLoadOp::eLoad)
       .setStoreOp(vk::AttachmentStoreOp::eStore);
 
@@ -540,7 +540,7 @@ void App::render(vk::CommandBuffer const command_buffer) {
 }
 
 void App::transition_for_present(vk::CommandBuffer const command_buffer) const {
-  auto barrier = m_swapchain_->base_barrier();
+  auto barrier = m_swapchain_->baseBarrier();
   barrier.setOldLayout(vk::ImageLayout::eAttachmentOptimal)
       .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
@@ -568,7 +568,7 @@ void App::submit_and_present() {
       .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
   auto signal_semaphore_info = vk::SemaphoreSubmitInfo{};
-  signal_semaphore_info.setSemaphore(m_swapchain_->get_present_semaphore())
+  signal_semaphore_info.setSemaphore(m_swapchain_->getPresentSemaphore())
       .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
   submit_info.setCommandBufferInfos(command_buffer_info)
@@ -580,7 +580,7 @@ void App::submit_and_present() {
   m_frame_index_ = (m_frame_index_ + 1) % m_render_sync_.size();
   m_render_target_.reset();
 
-  auto const fb_size_changed = m_framebuffer_size_ != m_swapchain_->get_size();
+  auto const fb_size_changed = m_framebuffer_size_ != m_swapchain_->getSize();
   auto const out_of_date =
       !m_swapchain_->present(m_gpu_->queues.graphicsPresent);
   if (fb_size_changed || out_of_date) {
@@ -781,10 +781,10 @@ void App::create_shader() {
   auto const fragment_spirv = to_spir_v(asset_path("shaders/mesh.frag"));
   auto const shader_ci = ShaderProgram::CreateInfo{
       .device = *m_gpu_->device,
-      .vertex_spirv = vertex_spirv,
-      .fragment_spirv = fragment_spirv,
-      .set_layouts = m_set_layout_views_,
-      .push_constant_ranges = m_push_constant_ranges_,
+      .vertexSpirv = vertex_spirv,
+      .fragmentSpirv = fragment_spirv,
+      .setLayouts = m_set_layout_views_,
+      .pushConstantRanges = m_push_constant_ranges_,
   };
   m_shader_.emplace(shader_ci);
 }
@@ -820,7 +820,7 @@ void App::create_imgui() {
       .queue_family = m_gpu_->queueFamilies.graphicsPresent,
       .device = *m_gpu_->device,
       .queue = m_gpu_->queues.graphicsPresent,
-      .color_format = m_swapchain_->get_format(),
+      .color_format = m_swapchain_->getFormat(),
       .samples = vk::SampleCountFlagBits::e1,
   };
   m_imgui_.emplace(imgui_ci);
@@ -829,8 +829,8 @@ void App::create_imgui() {
 void App::create_swapchain() {
   auto const size = glfw::framebuffer_size(m_window_.get());
   m_swapchain_.emplace(*m_gpu_->device, m_gpu_->physicalDevice,
-                       m_gpu_->queueFamilies, m_gpu_->allocator, *m_surface_,
-                       size);
+                       m_gpu_->queueFamilies.graphicsPresent, m_gpu_->allocator,
+                       *m_surface_, size);
 }
 
 void App::create_device() {
@@ -895,13 +895,14 @@ auto App::asset_path(std::string_view uri) const -> fs::path {
 }
 
 void App::load_gltf() {
-  if (!load_asset(asset_path("models/sword/scene.gltf"))) {
+  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
     std::println(stderr, "failed to load gltf model");
     return;
   }
 
-  for (const auto& image : m_asset_->images) {
-    load_image(image);
+  for (const auto& [idx, image] :
+       std::ranges::views::enumerate(m_asset_->images)) {
+    load_image(idx, image);
   }
 
   for (const auto& mesh : m_asset_->meshes) {
@@ -953,7 +954,7 @@ auto App::load_asset(fs::path const& path) -> bool {
   return true;
 }
 
-auto App::load_image(const fastgltf::Image& image) -> bool {
+auto App::load_image(const size_t idx, const fastgltf::Image& image) -> bool {
   assert(m_asset_.has_value());
   auto const& asset = *m_asset_;
 
@@ -961,12 +962,51 @@ auto App::load_image(const fastgltf::Image& image) -> bool {
   vku::Bitmap bitmap{};
 
   std::visit(fastgltf::visitor{
-                 [&](fastgltf::sources::URI const& path) {},
-                 [&](fastgltf::sources::Array const& array) {},
-                 [&](fastgltf::sources::BufferView const& view) {},
+                 [&](fastgltf::sources::URI const& uri) {},
+                 [&](fastgltf::sources::BufferView const& bufferView) {},
+                 [&](fastgltf::sources::Array const& array) {
+                   int width{};
+                   int height{};
+                   int original_channels{};
+
+                   auto* pixels = stbi_load_from_memory(
+                       reinterpret_cast<const stbi_uc*>(array.bytes.data()),
+                       array.bytes.size_bytes(), &width, &height,
+                       &original_channels, STBI_rgb_alpha);
+                   if (pixels == nullptr) {
+                     std::println("stb failed: {}", stbi_failure_reason());
+                     return;
+                   }
+
+                   bytes.resize(width * height * 4);
+                   std::memcpy(bytes.data(), pixels, width * height * 4);
+
+                   bitmap = {
+                       .extent =
+                           vk::Extent2D{
+                               static_cast<std::uint32_t>(width),
+                               static_cast<std::uint32_t>(height),
+                           },
+                       .bytes = std::move(bytes),
+                   };
+                 },
                  [](auto& a) {},
              },
              image.data);
+
+  if (bytes.size() > 0) {
+    auto ci = TextureLVK::CreateInfo{
+        .name = std::format("test-{}", idx),
+        .format = vk::Format::eR8G8B8A8Srgb,
+        .bitmap = bitmap,
+        .allocator = m_gpu_->allocator,
+        .device = *m_gpu_->device,
+        .commandPool = *m_cmd_block_pool_,
+        .queue = m_gpu_->queues.graphicsPresent,
+    };
+
+    m_textures_->emplace_back(std::move(ci));
+  }
 
   return true;
 }

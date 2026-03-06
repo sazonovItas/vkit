@@ -67,7 +67,7 @@ class App {
 
   void load_gltf();
   auto load_asset(fs::path const& path) -> bool;
-  auto load_image(const fastgltf::Image& image) -> bool;
+  auto load_image(size_t idx, const fastgltf::Image& image) -> bool;
   auto load_mesh(const fastgltf::Mesh& mesh) -> bool;
 
   fs::path m_assets_dir_;
