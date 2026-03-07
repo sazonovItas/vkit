@@ -40,7 +40,11 @@ class BitmapImage : public AllocatedImage {
   void update(const DeviceCopyInfo& copyInfo, const Bitmap& bitmap,
               const ImageBarrierInfo& barrierInfo = {
                   .srcLayout = vk::ImageLayout::eUndefined,
+                  .srcAccess = vk::AccessFlagBits2::eTransferWrite,
+                  .srcStage = vk::PipelineStageFlagBits2::eAllCommands,
                   .dstLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+                  .dstAccess = vk::AccessFlagBits2::eShaderRead,
+                  .dstStage = vk::PipelineStageFlagBits2::eFragmentShader,
               }) {
     assert(bitmap.extent.width <= extent.width &&
            bitmap.extent.height <= extent.height &&

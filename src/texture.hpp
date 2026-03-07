@@ -1,15 +1,13 @@
 #pragma once
 
 #include <filesystem>
-#include <ranges>
+#include <fstream>
+#include <stdexcept>
 
+#include "stb_image.h"
 #include "vk_mem_alloc.hpp"
-#include "vku/buffers/allocated_buffer.hpp"
-#include "vku/commands.hpp"
-#include "vku/constants.hpp"
-#include "vku/images/bitmap_image.hpp"
+#include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 [[nodiscard]] constexpr auto createSamplerCreateInfo(
@@ -35,40 +33,114 @@ constexpr auto kNearestSamplerCiV = createSamplerCreateInfo(
     vk::SamplerAddressMode::eClampToEdge, vk::Filter::eNearest,
     vk::SamplerMipmapMode::eLinear);
 
-constexpr auto kNearestSamplerWithLinerMipModeCiV = createSamplerCreateInfo(
-    vk::SamplerAddressMode::eClampToEdge, vk::Filter::eNearest,
-    vk::SamplerMipmapMode::eLinear);
+struct TextureInfo {
+  int width;
+  int height;
+  vk::Format format{vk::Format::eR8G8B8A8Srgb};
+  int channels{4};
+  int bytePerChannel{1};
+  std::vector<std::byte> bytes;
 
-struct TextureCreateInfo {
-  std::string name;
-  vk::Format format;
-  vku::Bitmap bitmap;
+  static auto fromPath(const std::filesystem::path& path,
+                       vk::Format format = vk::Format::eR8G8B8A8Srgb,
+                       int channels = 4, int bytePerChannel = 1)
+      -> TextureInfo {
+    auto buffer = loadFileFromBinary(path);
+    return fromBuffer(buffer.data(), buffer.size(), format, channels,
+                      bytePerChannel);
+  }
 
-  vma::Allocator allocator;
+  static auto fromBuffer(const std::byte* buffer, const std::size_t size,
+                         const vk::Format format = vk::Format::eR8G8B8A8Srgb,
+                         const int channels = 4, const int bytePerChannel = 1)
+      -> TextureInfo {
+    int width;
+    int height;
+    int original_channels;
 
-  vk::Device device;
-  vk::CommandPool commandPool;
-  vk::Queue queue;
+    void* pixels;
+    switch (bytePerChannel) {
+      case 1:
+        pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(buffer),
+                                       size, &width, &height,
+                                       &original_channels, channels);
+        break;
 
-  vk::SamplerCreateInfo sampler{kNearestSamplerWithLinerMipModeCiV};
-};
+      case 2:
+        pixels = stbi_load_16_from_memory(
+            reinterpret_cast<const stbi_uc*>(buffer), size, &width, &height,
+            &original_channels, channels);
+        break;
 
-class TextureLVK {
- public:
-  using CreateInfo = TextureCreateInfo;
+      default:
+        throw std::runtime_error{std::format(
+            "wrong amount of byte per channle: {}", bytePerChannel)};
+    }
+    if (pixels == nullptr) {
+      throw std::runtime_error{
+          std::format("failed to load image: {}", stbi_failure_reason())};
+    }
 
-  explicit TextureLVK(const CreateInfo& createInfo);
+    size_t byte_count = width * height * channels * bytePerChannel;
 
-  [[nodiscard]] auto descriptorInfo() const -> vk::DescriptorImageInfo;
+    auto info = TextureInfo{
+        .width = width,
+        .height = height,
+        .format = format,
+        .channels = channels,
+        .bytePerChannel = bytePerChannel,
+        .bytes = std::vector<std::byte>(
+            static_cast<std::byte*>(pixels),
+            static_cast<std::byte*>(pixels) + byte_count),
+    };
 
-  std::string name;
+    stbi_image_free(pixels);
+
+    return info;
+  }
+
+  static auto fromRawBuffer(const std::byte* buffer, const int width,
+                            const int height,
+                            const vk::Format format = vk::Format::eR8G8B8A8Srgb,
+                            const int channels = 4,
+                            const int bytePerChannel = 1) -> TextureInfo {
+    size_t byte_count = width * height * channels * bytePerChannel;
+
+    auto info = TextureInfo{
+        .width = width,
+        .height = height,
+        .format = format,
+        .channels = channels,
+        .bytePerChannel = bytePerChannel,
+        .bytes = std::vector<std::byte>(buffer, buffer + byte_count),
+    };
+
+    return info;
+  }
 
  private:
-  vku::BitmapImage m_image_;
-  vk::UniqueImageView m_view_;
-  vk::UniqueSampler m_sampler_;
+  static auto loadFileFromBinary(const std::filesystem::path& path)
+      -> std::vector<std::byte> {
+    auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
+    if (!file) {
+      throw std::runtime_error{"failed to open file: " + path.string()};
+    }
 
-  auto createImage(const CreateInfo& createInfo) const -> vku::BitmapImage;
+    const auto size = file.tellg();
+    if (size < 0) {
+      throw std::runtime_error{"failed to determine file size: " +
+                               path.string()};
+    }
+
+    std::vector<std::byte> buffer(static_cast<std::size_t>(size));
+
+    file.seekg(0, std::ios::beg);
+    if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
+      throw std::runtime_error{"failed to read file: " + path.string()};
+    }
+
+    return buffer;
+  }
 };
 
 struct Texture {
@@ -94,115 +166,44 @@ struct Texture {
 class Texture2D : public Texture {
  public:
   Texture2D(
-      void* data, vk::DeviceSize size, std::uint32_t width,
-      std::uint32_t height, vma::Allocator allocator,
-      const vku::DeviceCopyInfo& copyInfo, vk::Format format,
+      const TextureInfo& info, vma::Allocator allocator,
+      const vku::DeviceCopyInfo& copyInfo, const std::uint32_t mipLevels = 1,
       vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
-      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal) {
-    populateFromData(data, size, width, height, allocator, copyInfo, format,
-                     imageUsageFlags, imageLayout);
-  }
-
-  template <std::ranges::input_range R>
-    requires(std::ranges::sized_range<R> &&
-             std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  Texture2D(
-      std::from_range_t, R&& r, std::uint32_t width, std::uint32_t height,
-      vma::Allocator allocator, const vku::DeviceCopyInfo& copyInfo,
-      vk::Format format,
-      vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
-      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal) {
-    populateFromData(r.data(), r.size() * sizeof(std::ranges::range_value_t<R>),
-                     width, height, allocator, copyInfo, format,
-                     imageUsageFlags, imageLayout);
+      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2 accessFlags = vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2 stageFlags =
+          vk::PipelineStageFlagBits2::eFragmentShader) {
+    populate(info, allocator, copyInfo, mipLevels, imageUsageFlags, imageLayout,
+             accessFlags, stageFlags);
   }
 
  private:
-  void populateFromData(
-      void* data, vk::DeviceSize size, std::uint32_t width,
-      std::uint32_t height, vma::Allocator allocator,
-      const vku::DeviceCopyInfo& copyInfo, vk::Format format,
+  void populate(const TextureInfo& info, vma::Allocator allocator,
+                const vku::DeviceCopyInfo& copyInfo, std::uint32_t mipLevels,
+                vk::ImageUsageFlags imageUsageFlags,
+                vk::ImageLayout imageLayout, vk::AccessFlagBits2 accessFlags,
+                vk::PipelineStageFlagBits2 stageFlags);
+};
+
+class TextureCubeMap : public Texture {
+ public:
+  TextureCubeMap(
+      const TextureInfo& info, vma::Allocator allocator,
+      const vku::DeviceCopyInfo& copyInfo, const std::uint32_t mipLevels = 1,
       vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
-      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal) {
-    auto mip_levels = 1;
-
-    auto staging_buffer_ci = vk::BufferCreateInfo{};
-    staging_buffer_ci.setUsage(vk::BufferUsageFlagBits::eTransferSrc)
-        .setSize(size);
-
-    auto staging_buffer = vku::AllocatedBuffer{allocator, staging_buffer_ci,
-                                               vku::allocation::kHostWrite};
-    allocator.copyMemoryToAllocation(data, staging_buffer.allocation, 0, size);
-
-    auto buffer_copy_region = vk::BufferImageCopy2{};
-    buffer_copy_region
-        .setImageSubresource(vk::ImageSubresourceLayers{
-            vk::ImageAspectFlagBits::eColor, 0, 0, 1})
-        .setImageExtent(vk::Extent3D{width, height, 1});
-
-    auto image_ci = vk::ImageCreateInfo{};
-    image_ci.setImageType(vk::ImageType::e2D)
-        .setFormat(format)
-        .setMipLevels(mip_levels)
-        .setArrayLayers(1)
-        .setSamples(vk::SampleCountFlagBits::e1)
-        .setExtent(vk::Extent3D{width, height, 1})
-        .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferDst);
-
-    image = vku::AllocatedImage{allocator, image_ci};
-
-    auto copy_buffer_to_image_fn = [&](vk::CommandBuffer cb) {
-      auto subresource_range = vk::ImageSubresourceRange{};
-      subresource_range.setAspectMask(vk::ImageAspectFlagBits::eColor)
-          .setLevelCount(mip_levels)
-          .setLayerCount(1);
-
-      {
-        auto barrier = vk::ImageMemoryBarrier2{};
-        barrier.setOldLayout(vk::ImageLayout::eUndefined)
-            .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
-            .setSrcAccessMask(vk::AccessFlagBits2::eNone)
-            .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-            .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite)
-            .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-            .setImage(image.image)
-            .setSubresourceRange(subresource_range);
-
-        cb.pipelineBarrier2(
-            vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
-      }
-
-      auto copy_buffer_info = vk::CopyBufferToImageInfo2{};
-      copy_buffer_info.setSrcBuffer(staging_buffer.buffer)
-          .setDstImage(image.image)
-          .setDstImageLayout(vk::ImageLayout::eTransferDstOptimal)
-          .setRegions(buffer_copy_region);
-
-      cb.copyBufferToImage2(copy_buffer_info);
-
-      this->imageLayout = imageLayout;
-
-      {
-        auto barrier = vk::ImageMemoryBarrier2{};
-        barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
-            .setNewLayout(imageLayout)
-            .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
-            .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-            .setDstAccessMask(vk::AccessFlagBits2::eTransferRead)
-            .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-            .setImage(image.image)
-            .setSubresourceRange(subresource_range);
-
-        cb.pipelineBarrier2(
-            vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
-      }
-    };
-
-    vku::executeCommandAndWait(copyInfo.device, copyInfo.commandPool,
-                               copyInfo.queue, copy_buffer_to_image_fn);
-
-    imageView =
-        copyInfo.device.createImageViewUnique(image.getViewCreateInfo());
+      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2 accessFlags = vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2 stageFlags =
+          vk::PipelineStageFlagBits2::eFragmentShader) {
+    populate(info, allocator, copyInfo, mipLevels, imageUsageFlags, imageLayout,
+             accessFlags, stageFlags);
   }
+
+ private:
+  void populate(const TextureInfo& info, vma::Allocator allocator,
+                const vku::DeviceCopyInfo& copyInfo, std::uint32_t mipLevels,
+                vk::ImageUsageFlags imageUsageFlags,
+                vk::ImageLayout imageLayout, vk::AccessFlagBits2 accessFlags,
+                vk::PipelineStageFlagBits2 stageFlags);
 };
 };  // namespace lvk

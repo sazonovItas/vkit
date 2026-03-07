@@ -27,14 +27,13 @@
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_common.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
-#include "glm/glm.hpp"
 #include "model.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "stb_image.h"
+#include "texture.hpp"
 #include "vku/buffers/device_buffer.hpp"
 #include "vku/utils/utils.hpp"
 #include "vulkan/gpu.hpp"
@@ -46,18 +45,18 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 namespace {
 constexpr auto kVkVersionV = VK_MAKE_VERSION(1, 3, 0);
 
-VKAPI_ATTR VkBool32 VKAPI_CALL
-debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-               VkDebugUtilsMessageTypeFlagsEXT messageType,
-               const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-               void* pUserData) {
+vk::Bool32 VKAPI_CALL
+debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
+              vk::DebugUtilsMessageTypeFlagsEXT /*messageType*/,
+              const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
+              void* /*pUserData*/) {
   if (pCallbackData && pCallbackData->pMessage) {
     std::println("[Validation]: {}", pCallbackData->pMessage);
   }
 
-  return VK_FALSE;
+  return vk::False;
 }
-[[nodiscard]] auto locate_assets_dir() -> fs::path {
+[[nodiscard]] auto locateAssetsDir() -> fs::path {
   static constexpr std::string_view kDirNameV{"assets"};
 
   for (auto path = fs::current_path(); !path.empty() && path.has_parent_path();
@@ -72,7 +71,7 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   return fs::current_path();
 }
 
-[[nodiscard]] auto get_layers(std::span<char const* const> desired)
+[[nodiscard]] auto getLayers(std::span<char const* const> desired)
     -> std::vector<char const*> {
   auto ret = std::vector<char const*>{};
   ret.reserve(desired.size());
@@ -95,8 +94,7 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
   return ret;
 }
 
-[[nodiscard]] auto to_spir_v(fs::path const& path)
-    -> std::vector<std::uint32_t> {
+[[nodiscard]] auto toSpirV(fs::path const& path) -> std::vector<std::uint32_t> {
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
   if (!file.is_open()) {
     throw std::runtime_error{
@@ -118,17 +116,17 @@ debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 }
 
 template <typename T>
-[[nodiscard]] constexpr auto to_byte_array(T const& t) {
+[[nodiscard]] constexpr auto toByteArray(T const& t) {
   return std::bit_cast<std::array<std::byte, sizeof(T)>>(t);
 }
 
 template <typename T>
-[[nodiscard]] constexpr auto to_byte_span(std::vector<T> const& v) {
+[[nodiscard]] constexpr auto toByteSpan(std::vector<T> const& v) {
   return std::as_bytes(std::span{v});
 }
 
-constexpr auto layout_binding(std::uint32_t binding,
-                              vk::DescriptorType const type) {
+constexpr auto layoutBinding(std::uint32_t binding,
+                             vk::DescriptorType const type) {
   return vk::DescriptorSetLayoutBinding{
       binding,
       type,
@@ -148,10 +146,10 @@ float hash(int x, int y) {
          65535.0F;
 }
 
-BitmapData generate_bricks(int width, int height, float brickWidth,
-                           float brickHeight, float mortarThickness) {
-  BitmapData result;
-  result.storage.resize(width * height * 4);
+auto generateBricks(int width, int height, float brickWidth, float brickHeight,
+                    float mortarThickness) -> std::vector<std::byte> {
+  std::vector<std::byte> result;
+  result.resize(width * height * 4);
 
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
@@ -181,10 +179,10 @@ BitmapData generate_bricks(int width, int height, float brickWidth,
 
       if (is_mortar) {
         uint8_t mortar = 200;
-        result.storage[index + 0] = std::byte(mortar);
-        result.storage[index + 1] = std::byte(mortar);
-        result.storage[index + 2] = std::byte(mortar);
-        result.storage[index + 3] = std::byte(255);
+        result[index + 0] = std::byte(mortar);
+        result[index + 1] = std::byte(mortar);
+        result[index + 2] = std::byte(mortar);
+        result[index + 3] = std::byte(255);
       } else {
         float noise = hash(static_cast<int>(std::floor(bx)),
                            static_cast<int>(std::floor(by)));
@@ -194,31 +192,21 @@ BitmapData generate_bricks(int width, int height, float brickWidth,
         auto g = static_cast<uint8_t>(50 * variation);
         auto b = static_cast<uint8_t>(40 * variation);
 
-        result.storage[index + 0] = std::byte(r);
-        result.storage[index + 1] = std::byte(g);
-        result.storage[index + 2] = std::byte(b);
-        result.storage[index + 3] = std::byte(255);
+        result[index + 0] = std::byte(r);
+        result[index + 1] = std::byte(g);
+        result[index + 2] = std::byte(b);
+        result[index + 3] = std::byte(255);
       }
     }
   }
 
-  result.bitmap = {
-      .extent =
-          vk::Extent2D{
-              static_cast<std::uint32_t>(width),
-              static_cast<std::uint32_t>(height),
-          },
-      .bytes = std::span<const std::byte>(result.storage.data(),
-                                          result.storage.size()),
-  };
-
   return result;
 }
 
-BitmapData generateStoneTiles(int width, int height, int tileSize,
-                              float mortarThickness) {
-  BitmapData result;
-  result.storage.resize(width * height * 4);
+auto generateStoneTiles(int width, int height, int tileSize,
+                        float mortarThickness) -> std::vector<std::byte> {
+  std::vector<std::byte> result;
+  result.resize(width * height * 4);
 
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
@@ -234,15 +222,14 @@ BitmapData generateStoneTiles(int width, int height, int tileSize,
 
       if (is_mortar) {
         uint8_t mortar = 180;
-        result.storage[index + 0] = std::byte(mortar);
-        result.storage[index + 1] = std::byte(mortar);
-        result.storage[index + 2] = std::byte(mortar);
-        result.storage[index + 3] = std::byte(255);
+        result[index + 0] = std::byte(mortar);
+        result[index + 1] = std::byte(mortar);
+        result[index + 2] = std::byte(mortar);
+        result[index + 3] = std::byte(255);
       } else {
         float base_noise = hash(tile_x, tile_y);
         float variation = 0.7F + (base_noise * 0.6F);
 
-        // дополнительная мелкая зернистость
         float fine_noise = hash(x, y);
         float grain = 0.9F + (fine_noise * 0.2F);
 
@@ -250,23 +237,13 @@ BitmapData generateStoneTiles(int width, int height, int tileSize,
         auto g = static_cast<uint8_t>(110 * variation * grain);
         auto b = static_cast<uint8_t>(100 * variation * grain);
 
-        result.storage[index + 0] = std::byte(r);
-        result.storage[index + 1] = std::byte(g);
-        result.storage[index + 2] = std::byte(b);
-        result.storage[index + 3] = std::byte(255);
+        result[index + 0] = std::byte(r);
+        result[index + 1] = std::byte(g);
+        result[index + 2] = std::byte(b);
+        result[index + 3] = std::byte(255);
       }
     }
   }
-
-  result.bitmap = {
-      .extent =
-          {
-              static_cast<std::uint32_t>(width),
-              static_cast<std::uint32_t>(height),
-          },
-      .bytes = std::span<const std::byte>(result.storage.data(),
-                                          result.storage.size()),
-  };
 
   return result;
 }
@@ -274,7 +251,7 @@ BitmapData generateStoneTiles(int width, int height, int tileSize,
 
 namespace lvk {
 void App::run() {
-  m_assets_dir_ = locate_assets_dir();
+  m_assets_dir_ = locateAssetsDir();
 
   create_window();
   create_instance();
@@ -356,14 +333,14 @@ void App::inspect() {
 
     ImGui::Separator();
     if (ImGui::TreeNode("Texture")) {
-      if (m_textures_ && !m_textures_->empty()) {
-        const char* preview = (*m_textures_)[m_curr_tex_idx_].name.c_str();
+      if (!m_texture_names_.empty()) {
+        const char* preview = m_texture_names_[m_curr_tex_idx_].c_str();
 
         if (ImGui::BeginCombo("Current", preview)) {
-          for (uint32_t i = 0; i < m_textures_->size(); ++i) {
+          for (uint32_t i = 0; i < m_textures_.size(); ++i) {
             bool selected = (m_curr_tex_idx_ == i);
 
-            if (ImGui::Selectable((*m_textures_)[i].name.c_str(), selected)) {
+            if (ImGui::Selectable(m_texture_names_[i].c_str(), selected)) {
               m_curr_tex_idx_ = i;
             }
 
@@ -624,7 +601,7 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
       .setDstBinding(0);
   writes[0] = write;
 
-  auto const image_info = (*m_textures_)[m_curr_tex_idx_].descriptorInfo();
+  auto const image_info = m_textures_[m_curr_tex_idx_].descriptorInfo();
   write.setImageInfo(image_info)
       .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
       .setDescriptorCount(1)
@@ -642,12 +619,9 @@ void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
 void App::create_shader_resources() {
   m_view_ubo_.emplace(m_gpu_->allocator, m_gpu_->queueFamilies.graphicsPresent,
                       vk::BufferUsageFlagBits::eUniformBuffer);
+  m_default_sampler_ = m_gpu_->device->createSamplerUnique(kNearestSamplerCiV);
 
   using Pixel = std::array<std::byte, 4>;
-  using std::vector;
-  using vku::Bitmap;
-
-  m_textures_.emplace(std::vector<TextureLVK>{});
 
   static constexpr auto kRgbaPixelsV = std::array{
       Pixel{std::byte{0xFF}, {}, {}, std::byte{0xFF}},
@@ -658,53 +632,51 @@ void App::create_shader_resources() {
   static constexpr auto kRgbaBytesV =
       std::bit_cast<std::array<std::byte, sizeof(kRgbaPixelsV)>>(kRgbaPixelsV);
 
-  // 4xSquare board texture
-  static constexpr auto kRgbyBitmapV = Bitmap{
-      .extent = vk::Extent2D{2, 2},
-      .bytes = kRgbaBytesV,
+  auto rgb_square = Texture2D{
+      TextureInfo::fromRawBuffer(kRgbaBytesV.data(), 2, 2),
+      m_gpu_->allocator,
+      vku::DeviceCopyInfo{
+          .device = *m_gpu_->device,
+          .commandPool = *m_cmd_block_pool_,
+          .queue = m_gpu_->queues.graphicsPresent,
+      },
+      vku::Image::maxMipLevels(2),
   };
-  auto grb_board_ci = TextureLVK::CreateInfo{
-      .name = "4xSquare board",
-      .format = vk::Format::eR8G8B8A8Srgb,
-      .bitmap = kRgbyBitmapV,
-      .allocator = m_gpu_->allocator,
-      .device = *m_gpu_->device,
-      .commandPool = *m_cmd_block_pool_,
-      .queue = m_gpu_->queues.graphicsPresent,
-  };
-  grb_board_ci.sampler.setMagFilter(vk::Filter::eNearest);
-
-  m_textures_->emplace_back(grb_board_ci);
+  rgb_square.setSampler(*m_default_sampler_);
+  m_textures_.push_back(std::move(rgb_square));
+  m_texture_names_.emplace_back("4xRGBSquare");
 
   // Bricks texture
-  auto bricks = generate_bricks(1024, 1024, 8.0F, 8.0F, 0.125F);
-  auto bricks_ci = TextureLVK::CreateInfo{
-      .name = "Bricks",
-      .format = vk::Format::eR8G8B8A8Srgb,
-      .bitmap = bricks.bitmap,
-      .allocator = m_gpu_->allocator,
-      .device = *m_gpu_->device,
-      .commandPool = *m_cmd_block_pool_,
-      .queue = m_gpu_->queues.graphicsPresent,
+  auto brick = generateBricks(1024, 1024, 8.0F, 8.0F, 0.125F);
+  auto brick_tex = Texture2D{
+      TextureInfo::fromRawBuffer(brick.data(), 1024, 1024),
+      m_gpu_->allocator,
+      vku::DeviceCopyInfo{
+          .device = *m_gpu_->device,
+          .commandPool = *m_cmd_block_pool_,
+          .queue = m_gpu_->queues.graphicsPresent,
+      },
+      vku::Image::maxMipLevels(1024),
   };
-  bricks_ci.sampler.setMagFilter(vk::Filter::eNearest);
-
-  m_textures_->emplace_back(bricks_ci);
+  brick_tex.setSampler(*m_default_sampler_);
+  m_textures_.push_back(std::move(brick_tex));
+  m_texture_names_.emplace_back("Bricks");
 
   // Stone texture
   auto stone = generateStoneTiles(128, 128, 8, 0.5F);
-  auto stone_ci = TextureLVK::CreateInfo{
-      .name = "Stone",
-      .format = vk::Format::eR8G8B8A8Srgb,
-      .bitmap = stone.bitmap,
-      .allocator = m_gpu_->allocator,
-      .device = *m_gpu_->device,
-      .commandPool = *m_cmd_block_pool_,
-      .queue = m_gpu_->queues.graphicsPresent,
+  auto stone_tex = Texture2D{
+      TextureInfo::fromRawBuffer(stone.data(), 128, 128),
+      m_gpu_->allocator,
+      vku::DeviceCopyInfo{
+          .device = *m_gpu_->device,
+          .commandPool = *m_cmd_block_pool_,
+          .queue = m_gpu_->queues.graphicsPresent,
+      },
+      vku::Image::maxMipLevels(128),
   };
-  stone_ci.sampler.setMagFilter(vk::Filter::eNearest);
-
-  m_textures_->emplace_back(stone_ci);
+  stone_tex.setSampler(*m_default_sampler_);
+  m_textures_.push_back(std::move(stone_tex));
+  m_texture_names_.emplace_back("Stone");
 }
 
 void App::create_descriptor_sets() {
@@ -722,8 +694,8 @@ auto App::allocate_sets() const -> std::vector<vk::DescriptorSet> {
 
 void App::create_pipeline_layout() {
   static constexpr auto kSet0BindingsV = std::array{
-      layout_binding(0, vk::DescriptorType::eUniformBuffer),
-      layout_binding(1, vk::DescriptorType::eCombinedImageSampler),
+      layoutBinding(0, vk::DescriptorType::eUniformBuffer),
+      layoutBinding(1, vk::DescriptorType::eCombinedImageSampler),
   };
 
   auto set_layout_cis = std::array<vk::DescriptorSetLayoutCreateInfo, 1>{};
@@ -777,8 +749,8 @@ void App::create_cmd_block_pool() {
 }
 
 void App::create_shader() {
-  auto const vertex_spirv = to_spir_v(asset_path("shaders/mesh.vert"));
-  auto const fragment_spirv = to_spir_v(asset_path("shaders/mesh.frag"));
+  auto const vertex_spirv = toSpirV(asset_path("shaders/mesh.vert"));
+  auto const fragment_spirv = toSpirV(asset_path("shaders/mesh.frag"));
   auto const shader_ci = ShaderProgram::CreateInfo{
       .device = *m_gpu_->device,
       .vertexSpirv = vertex_spirv,
@@ -856,7 +828,7 @@ void App::create_instance() {
   static constexpr auto kLayersV = std::array{
       "VK_LAYER_KHRONOS_validation",
   };
-  auto const layers = get_layers(kLayersV);
+  auto const layers = getLayers(kLayersV);
 
   auto glfw_extensions = glfw::instance_extensions();
   auto extensions =
@@ -872,7 +844,7 @@ void App::create_instance() {
       vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
       vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
       vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance);
-  debug_create_info.setPfnUserCallback(debug_callback);
+  debug_create_info.setPfnUserCallback(&debugCallback);
 
   auto instance_ci = vk::InstanceCreateInfo{};
   instance_ci.setPApplicationInfo(&app_info)
@@ -930,7 +902,6 @@ auto App::load_asset(fs::path const& path) -> bool {
         fastgltf::Options::DontRequireValidAssetMember |
         fastgltf::Options::AllowDouble |
         fastgltf::Options::LoadExternalBuffers |
-        fastgltf::Options::LoadExternalImages |
         fastgltf::Options::GenerateMeshIndices;
 
     auto gltf_file = fastgltf::MappedGltfFile::FromPath(path);
@@ -958,55 +929,55 @@ auto App::load_image(const size_t idx, const fastgltf::Image& image) -> bool {
   assert(m_asset_.has_value());
   auto const& asset = *m_asset_;
 
-  std::vector<std::byte> bytes;
-  vku::Bitmap bitmap{};
-
   std::visit(fastgltf::visitor{
-                 [&](fastgltf::sources::URI const& uri) {},
+                 [&](fastgltf::sources::URI const& uri) {
+                   auto info = TextureInfo::fromPath(
+                       asset_path("models/cannon") / uri.uri.path());
+
+                   auto tex = Texture2D{
+                       info,
+                       m_gpu_->allocator,
+                       vku::DeviceCopyInfo{
+                           .device = *m_gpu_->device,
+                           .commandPool = *m_cmd_block_pool_,
+                           .queue = m_gpu_->queues.graphicsPresent,
+                       },
+                       vku::Image::maxMipLevels(vk::Extent2D{
+                           static_cast<std::uint32_t>(info.width),
+                           static_cast<std::uint32_t>(info.height),
+                       }),
+                   };
+                   tex.setSampler(*m_default_sampler_);
+
+                   m_textures_.push_back(std::move(tex));
+                   m_texture_names_.push_back(std::format("test-{}", idx));
+                 },
                  [&](fastgltf::sources::BufferView const& bufferView) {},
                  [&](fastgltf::sources::Array const& array) {
-                   int width{};
-                   int height{};
-                   int original_channels{};
-
-                   auto* pixels = stbi_load_from_memory(
-                       reinterpret_cast<const stbi_uc*>(array.bytes.data()),
-                       array.bytes.size_bytes(), &width, &height,
-                       &original_channels, STBI_rgb_alpha);
-                   if (pixels == nullptr) {
-                     std::println("stb failed: {}", stbi_failure_reason());
-                     return;
-                   }
-
-                   bytes.resize(width * height * 4);
-                   std::memcpy(bytes.data(), pixels, width * height * 4);
-
-                   bitmap = {
-                       .extent =
-                           vk::Extent2D{
-                               static_cast<std::uint32_t>(width),
-                               static_cast<std::uint32_t>(height),
-                           },
-                       .bytes = std::move(bytes),
-                   };
+                   // auto info = TextureInfo::fromBuffer(array.bytes.data(),
+                   //                                     array.bytes.size());
+                   //
+                   // auto tex = Texture2D{
+                   //     info,
+                   //     m_gpu_->allocator,
+                   //     vku::DeviceCopyInfo{
+                   //         .device = *m_gpu_->device,
+                   //         .commandPool = *m_cmd_block_pool_,
+                   //         .queue = m_gpu_->queues.graphicsPresent,
+                   //     },
+                   //     vku::Image::maxMipLevels(vk::Extent2D{
+                   //         static_cast<std::uint32_t>(info.width),
+                   //         static_cast<std::uint32_t>(info.height),
+                   //     }),
+                   // };
+                   // tex.setSampler(*m_default_sampler_);
+                   //
+                   // m_textures_.push_back(std::move(tex));
+                   // m_texture_names_.push_back(std::format("test-{}", idx));
                  },
                  [](auto& a) {},
              },
              image.data);
-
-  if (bytes.size() > 0) {
-    auto ci = TextureLVK::CreateInfo{
-        .name = std::format("test-{}", idx),
-        .format = vk::Format::eR8G8B8A8Srgb,
-        .bitmap = bitmap,
-        .allocator = m_gpu_->allocator,
-        .device = *m_gpu_->device,
-        .commandPool = *m_cmd_block_pool_,
-        .queue = m_gpu_->queues.graphicsPresent,
-    };
-
-    m_textures_->emplace_back(std::move(ci));
-  }
 
   return true;
 }

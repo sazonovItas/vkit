@@ -10,7 +10,11 @@ struct Bitmap {
 
 struct ImageBarrierInfo {
   vk::ImageLayout srcLayout;
+  vk::AccessFlags2 srcAccess;
+  vk::PipelineStageFlagBits2 srcStage;
   vk::ImageLayout dstLayout;
+  vk::AccessFlags2 dstAccess;
+  vk::PipelineStageFlagBits2 dstStage;
 };
 
 struct DeviceCopyInfo {
@@ -52,5 +56,6 @@ template <std::floating_point T = float>
 }
 
 void generateMipmaps(vk::CommandBuffer cb, const Image& image,
-                     const ImageBarrierInfo& barrierInfo);
+                     const ImageBarrierInfo& barrierInfo,
+                     std::uint32_t baseArrayLayer = 0);
 }  // namespace vku

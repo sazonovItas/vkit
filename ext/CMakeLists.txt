@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(learn-vk-ext)
+project(ext)
 
 set(GLFW_INSTALL OFF)
 set(GLFW_BUILD_DOCS OFF)
@@ -9,7 +9,7 @@ message(STATUS "[glfw]")
 add_subdirectory(glfw)
 add_library(glfw::glfw ALIAS glfw)
 
-set(GLM_ENABLE_CXX_20 ON CACHE BOOL "" FORCE)
+set(GLM_ENABLE_CXX_20 ON)
 
 message(STATUS "[glm]")
 add_subdirectory(glm)
@@ -19,8 +19,6 @@ target_compile_definitions(glm PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE
     GLM_FORCE_SILENT_WARNINGS
     GLM_ENABLE_EXPERIMENTAL
-
-    GLM_STATIC_ASSERT=static_assert
 )
 
 message(STATUS "[Vulkan-Headers]")
@@ -103,10 +101,10 @@ target_sources(stb PRIVATE
     stb_image.cpp
 )
 
-# -------------------------------------------
 
+message(STATUS "[ext]")
 add_library(${PROJECT_NAME} INTERFACE)
-add_library(learn-vk::ext ALIAS ${PROJECT_NAME})
+add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
 target_link_libraries(${PROJECT_NAME} INTERFACE
     glm::glm

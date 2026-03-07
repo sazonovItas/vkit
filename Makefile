@@ -7,7 +7,7 @@ glslc:
 
 .PHONY: cmake
 cmake:
-	cmake -S . -B build
+	cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++
 
 .PHONY: build
 build: glslc cmake
