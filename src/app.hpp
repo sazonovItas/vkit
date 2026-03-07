@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <optional>
 
+#include "bindless_set_manager.hpp"
 #include "dear_imgui.hpp"
 #include "descriptor_buffer.hpp"
 #include "fastgltf/types.hpp"
@@ -38,6 +39,7 @@ class App {
   void create_swapchain();
   void create_render_sync();
   void create_imgui();
+  void create_bindless_set_manager();
   void create_descriptor_pool();
   void create_pipeline_layout();
   void create_shader();
@@ -67,8 +69,9 @@ class App {
 
   void load_gltf();
   auto load_asset(fs::path const& path) -> bool;
-  auto load_image(size_t idx, const fastgltf::Image& image) -> bool;
   auto load_mesh(const fastgltf::Mesh& mesh) -> bool;
+  auto load_texture(size_t idx, const fastgltf::Texture& texture) -> bool;
+  auto load_material(const fastgltf::Material& material) -> bool;
 
   fs::path m_assets_dir_;
 
@@ -90,6 +93,7 @@ class App {
   std::optional<DearImGui> m_imgui_;
 
   vk::UniqueDescriptorPool m_descriptor_pool_;
+  std::optional<BindlessSetManager> bindlessSetManager_;
   std::vector<vk::UniqueDescriptorSetLayout> m_set_layouts_;
   std::vector<vk::DescriptorSetLayout> m_set_layout_views_;
   std::vector<vk::PushConstantRange> m_push_constant_ranges_;

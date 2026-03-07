@@ -42,7 +42,8 @@ void Texture2D::populate(const TextureInfo& info, vma::Allocator allocator,
           static_cast<std::uint32_t>(info.height),
           1,
       })
-      .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferDst);
+      .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferSrc |
+                vk::ImageUsageFlagBits::eTransferDst);
 
   image = vku::AllocatedImage{allocator, image_ci};
 
@@ -139,7 +140,8 @@ void TextureCubeMap::populate(const TextureInfo& info, vma::Allocator allocator,
       .setSamples(vk::SampleCountFlagBits::e1)
       .setExtent(vk::Extent3D{static_cast<std::uint32_t>(info.width),
                               static_cast<std::uint32_t>(info.height), 1})
-      .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferDst);
+      .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferSrc |
+                vk::ImageUsageFlagBits::eTransferDst);
 
   image = vku::AllocatedImage{allocator, image_ci};
 

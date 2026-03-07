@@ -12,7 +12,7 @@ layout (location = 2) out vec3 out_normal;
 layout (location = 3) out vec4 out_tangent;
 
 void main() {
-  Vertex v = pcs.vertex_buffer.vertices[gl_VertexIndex];
+  Vertex v = pcs.vertices.data[gl_VertexIndex];
 
   const mat4 model_mat = pcs.transform;
   const vec4 world_pos = model_mat * vec4(v.position, 1.0);

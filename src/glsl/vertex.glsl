@@ -12,7 +12,7 @@ struct Vertex {
 };
 
 layout (buffer_reference, std430) readonly buffer VertexBuffer {
-	Vertex vertices[];
+	Vertex data[];
 };
 
 #endif // VERTEX_GLSL

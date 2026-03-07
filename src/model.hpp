@@ -21,8 +21,9 @@ struct Vertex {
 
 struct Primitive {
   DrawCommand draw{};
-  vku::DeviceBuffer vertex_buffer;
-  vku::DeviceBuffer index_buffer;
+  std::int32_t materialIdx{-1};
+  vku::DeviceBuffer vertexBuffer;
+  vku::DeviceBuffer indexBuffer;
 };
 
 struct Mesh {
@@ -30,11 +31,16 @@ struct Mesh {
 };
 
 struct Material {
-  glm::vec4 base_color{};
-  glm::vec4 metallic_roughness_emissive{};
-  std::uint32_t diffuse_tex{};
-  std::uint32_t normal_tex{};
-  std::uint32_t metallic_roughness_tex{};
-  std::uint32_t emissive_tex{};
+  std::int16_t baseColorTexIdx{-1};
+  std::int16_t metallicRoughnessTexIdx{-1};
+  std::int16_t normalTexIdx{-1};
+  std::int16_t emissiveTexIdx{-1};
+  std::int16_t occlusionTexIdx{-1};
+  std::int16_t _padding0[3];
+  glm::vec4 baseColorFactor{1.0, 1.0, 1.0, 1.0};
+  glm::vec4 emmisiveFactor;
+  float metallicFactor;
+  float roughnessFactor;
+  float _padding1[2];
 };
 };  // namespace lvk

@@ -4,9 +4,11 @@
 #include <print>
 #include <ranges>
 #include <unordered_set>
+#include <utility>
 
 #include "util.hpp"
 #include "vk_mem_alloc.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace {
 constexpr std::array kRequiredExtensions{
@@ -19,6 +21,28 @@ constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
                                        .setWideLines(vk::True)
                                        .setSamplerAnisotropy(vk::True)
                                        .setSampleRateShading(vk::True);
+
+constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
+  switch (type) {
+    case vk::PhysicalDeviceType::eDiscreteGpu:
+      return "DiscreteGpu";
+      break;
+    case vk::PhysicalDeviceType::eIntegratedGpu:
+      return "IntegreatedGpu";
+      break;
+    case vk::PhysicalDeviceType::eCpu:
+      return "Cpu";
+      break;
+    case vk::PhysicalDeviceType::eVirtualGpu:
+      return "VirtualGpu";
+      break;
+    case vk::PhysicalDeviceType::eOther:
+      return "Other";
+      break;
+  }
+
+  std::unreachable();
+}
 };  // namespace
 
 namespace vkit::vulkan {
@@ -93,9 +117,7 @@ Gpu::Gpu(const vk::Instance &instance, vk::SurfaceKHR surface)
   // TODO(itas): add options for eVirtual, eCpu and eOther
   std::println("Selected GPU: {}, type: {}",
                std::string_view{properties.deviceName},
-               properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu
-                   ? "DiscreteGpu"
-                   : "IntegratedGpu");
+               deviceTypeToString(properties.deviceType));
 }
 
 auto Gpu::createCommandPool(const std::uint32_t queueFamilyIndex,
@@ -243,8 +265,7 @@ auto Gpu::createAllocator(const vk::Instance &instance) const
                 .setPhysicalDevice(physicalDevice)
                 .setDevice(*device)
                 .setPVulkanFunctions(&vma_vk_funcs)
-                .setFlags(vma::AllocatorCreateFlagBits::eBufferDeviceAddress |
-                          vma::AllocatorCreateFlagBits::eKhrMaintenance5);
+                .setFlags(vma::AllocatorCreateFlagBits::eBufferDeviceAddress);
 
   return vma::createAllocator(ci);
 }

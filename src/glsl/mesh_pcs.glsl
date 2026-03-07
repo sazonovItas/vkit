@@ -6,5 +6,5 @@
 layout (push_constant, scalar) uniform constants
 {
     mat4 transform;
-    VertexBuffer vertex_buffer;
+    VertexBuffer vertices;
 } pcs;

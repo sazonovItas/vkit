@@ -23,6 +23,12 @@ struct DeviceCopyInfo {
   vk::Queue queue;
 };
 
+inline void requireSuccess(vk::Result const result, char const* error_msg) {
+  if (result != vk::Result::eSuccess) {
+    throw std::runtime_error{error_msg};
+  }
+}
+
 template <typename T>
 [[nodiscard]] constexpr auto contains(vk::Flags<T> flags, T flag) noexcept
     -> bool {

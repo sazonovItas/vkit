@@ -7,6 +7,7 @@
 #include <array>
 #include <cassert>
 #include <chrono>
+#include <cstddef>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
@@ -20,6 +21,7 @@
 #include <vector>
 
 #include "GLFW/glfw3.h"
+#include "bindless_set_manager.hpp"
 #include "dear_imgui.hpp"
 #include "fastgltf/core.hpp"
 #include "fastgltf/glm_element_traits.hpp"
@@ -41,6 +43,8 @@
 #include "window.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
+
+#define MODEL_PATH "models/cannon"
 
 namespace {
 constexpr auto kVkVersionV = VK_MAKE_VERSION(1, 3, 0);
@@ -260,6 +264,7 @@ void App::run() {
   create_swapchain();
   create_render_sync();
   create_imgui();
+  create_bindless_set_manager();
   create_descriptor_pool();
   create_pipeline_layout();
   create_shader();
@@ -358,8 +363,8 @@ void App::inspect() {
 }
 
 void App::draw(vk::CommandBuffer const command_buffer) const {
-  bind_descriptor_sets(command_buffer);
   m_shader_->bind(command_buffer, m_framebuffer_size_);
+  bind_descriptor_sets(command_buffer);
 
   fastgltf::iterateSceneNodes(
       m_asset_.value(), 0, fastgltf::math::fmat4x4(1.0F),
@@ -373,16 +378,19 @@ void App::draw(vk::CommandBuffer const command_buffer) const {
 
 void App::draw_mesh(vk::CommandBuffer const command_buffer,
                     const std::size_t mesh_idx) const {
-  for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
-    auto constants = PushConstants{
-        .transform = m_transform_.model_matrix(),
-        .vertexBuffer = primitive.vertex_buffer.getAddress(*m_gpu_->device),
-    };
-    command_buffer.pushConstants(*m_pipeline_layout_,
-                                 vk::ShaderStageFlagBits::eVertex, 0,
-                                 sizeof(PushConstants), &constants);
+  auto transform = m_transform_.model_matrix();
+  command_buffer.pushConstants(*m_pipeline_layout_,
+                               vk::ShaderStageFlagBits::eVertex, 0,
+                               sizeof(glm::mat4), &transform);
 
-    command_buffer.bindIndexBuffer(primitive.index_buffer.buffer, 0,
+  for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
+    auto vertex_address = primitive.vertexBuffer.getAddress(*m_gpu_->device);
+    command_buffer.pushConstants(*m_pipeline_layout_,
+                                 vk::ShaderStageFlagBits::eVertex,
+                                 offsetof(PushConstants, vertexBuffer),
+                                 sizeof(vk::DeviceAddress), &vertex_address);
+
+    command_buffer.bindIndexBuffer(primitive.indexBuffer.buffer, 0,
                                    vk::IndexType::eUint32);
     command_buffer.drawIndexed(
         primitive.draw.count, primitive.draw.instance_count,
@@ -682,13 +690,14 @@ void App::create_shader_resources() {
 void App::create_descriptor_sets() {
   for (auto& descriptor_set : m_descriptor_sets_) {
     descriptor_set = allocate_sets();
+    descriptor_set.push_back(*bindlessSetManager_->set);
   }
 }
 
 auto App::allocate_sets() const -> std::vector<vk::DescriptorSet> {
   auto allocate_info = vk::DescriptorSetAllocateInfo{};
   allocate_info.setDescriptorPool(*m_descriptor_pool_)
-      .setSetLayouts(m_set_layout_views_);
+      .setSetLayouts(m_set_layout_views_[0]);
   return m_gpu_->device->allocateDescriptorSets(allocate_info);
 }
 
@@ -707,6 +716,8 @@ void App::create_pipeline_layout() {
     m_set_layout_views_.push_back(*m_set_layouts_.back());
   }
 
+  m_set_layout_views_.push_back(*bindlessSetManager_->bindless);
+
   auto push_constants_ranges = std::array<vk::PushConstantRange, 1>{};
   push_constants_ranges[0]
       .setOffset(0)
@@ -722,6 +733,10 @@ void App::create_pipeline_layout() {
       .setPushConstantRanges(push_constants_ranges);
   m_pipeline_layout_ =
       m_gpu_->device->createPipelineLayoutUnique(pipeline_layout_ci);
+}
+
+void App::create_bindless_set_manager() {
+  bindlessSetManager_.emplace(*m_gpu_);
 }
 
 void App::create_descriptor_pool() {
@@ -867,18 +882,21 @@ auto App::asset_path(std::string_view uri) const -> fs::path {
 }
 
 void App::load_gltf() {
-  if (!load_asset(asset_path("models/cannon/scene.gltf"))) {
+  if (!load_asset(asset_path(MODEL_PATH) / "scene.gltf")) {
     std::println(stderr, "failed to load gltf model");
     return;
   }
 
-  for (const auto& [idx, image] :
-       std::ranges::views::enumerate(m_asset_->images)) {
-    load_image(idx, image);
+  for (const auto& [idx, texture] :
+       std::ranges::views::enumerate(m_asset_->textures)) {
+    load_texture(idx, texture);
   }
 
   for (const auto& mesh : m_asset_->meshes) {
     load_mesh(mesh);
+  }
+
+  for (const auto& material : m_asset_->materials) {
   }
 }
 
@@ -925,59 +943,41 @@ auto App::load_asset(fs::path const& path) -> bool {
   return true;
 }
 
-auto App::load_image(const size_t idx, const fastgltf::Image& image) -> bool {
+auto App::load_texture(const size_t idx, const fastgltf::Texture& texture)
+    -> bool {
   assert(m_asset_.has_value());
   auto const& asset = *m_asset_;
 
-  std::visit(fastgltf::visitor{
-                 [&](fastgltf::sources::URI const& uri) {
-                   auto info = TextureInfo::fromPath(
-                       asset_path("models/cannon") / uri.uri.path());
+  if (auto image = asset.images[texture.imageIndex.value_or(0)];
+      texture.imageIndex.has_value()) {
+    std::visit(fastgltf::visitor{
+                   [&](fastgltf::sources::URI const& uri) {
+                     auto info = TextureInfo::fromPath(asset_path(MODEL_PATH) /
+                                                       uri.uri.path());
 
-                   auto tex = Texture2D{
-                       info,
-                       m_gpu_->allocator,
-                       vku::DeviceCopyInfo{
-                           .device = *m_gpu_->device,
-                           .commandPool = *m_cmd_block_pool_,
-                           .queue = m_gpu_->queues.graphicsPresent,
-                       },
-                       vku::Image::maxMipLevels(vk::Extent2D{
-                           static_cast<std::uint32_t>(info.width),
-                           static_cast<std::uint32_t>(info.height),
-                       }),
-                   };
-                   tex.setSampler(*m_default_sampler_);
+                     auto tex = Texture2D{
+                         info,
+                         m_gpu_->allocator,
+                         vku::DeviceCopyInfo{
+                             .device = *m_gpu_->device,
+                             .commandPool = *m_cmd_block_pool_,
+                             .queue = m_gpu_->queues.graphicsPresent,
+                         },
+                         vku::Image::maxMipLevels(vk::Extent2D{
+                             static_cast<std::uint32_t>(info.width),
+                             static_cast<std::uint32_t>(info.height),
+                         }),
+                     };
+                     tex.setSampler(*m_default_sampler_);
 
-                   m_textures_.push_back(std::move(tex));
-                   m_texture_names_.push_back(std::format("test-{}", idx));
-                 },
-                 [&](fastgltf::sources::BufferView const& bufferView) {},
-                 [&](fastgltf::sources::Array const& array) {
-                   // auto info = TextureInfo::fromBuffer(array.bytes.data(),
-                   //                                     array.bytes.size());
-                   //
-                   // auto tex = Texture2D{
-                   //     info,
-                   //     m_gpu_->allocator,
-                   //     vku::DeviceCopyInfo{
-                   //         .device = *m_gpu_->device,
-                   //         .commandPool = *m_cmd_block_pool_,
-                   //         .queue = m_gpu_->queues.graphicsPresent,
-                   //     },
-                   //     vku::Image::maxMipLevels(vk::Extent2D{
-                   //         static_cast<std::uint32_t>(info.width),
-                   //         static_cast<std::uint32_t>(info.height),
-                   //     }),
-                   // };
-                   // tex.setSampler(*m_default_sampler_);
-                   //
-                   // m_textures_.push_back(std::move(tex));
-                   // m_texture_names_.push_back(std::format("test-{}", idx));
-                 },
-                 [](auto& a) {},
-             },
-             image.data);
+                     m_textures_.push_back(std::move(tex));
+                   },
+                   [&](fastgltf::sources::BufferView const& bufferView) {},
+                   [&](fastgltf::sources::Array const& array) {},
+                   [](auto& a) {},
+               },
+               image.data);
+  }
 
   return true;
 }
@@ -1092,7 +1092,7 @@ auto App::load_mesh(const fastgltf::Mesh& mesh) -> bool {
         vertices,
         vk::BufferUsageFlagBits::eShaderDeviceAddress,
     };
-    out_primitive.vertex_buffer = std::move(vertex_buffer);
+    out_primitive.vertexBuffer = std::move(vertex_buffer);
 
     auto index_buffer = vku::DeviceBuffer{
         m_gpu_->allocator,
@@ -1105,7 +1105,7 @@ auto App::load_mesh(const fastgltf::Mesh& mesh) -> bool {
         indices,
         vk::BufferUsageFlagBits::eIndexBuffer,
     };
-    out_primitive.index_buffer = std::move(index_buffer);
+    out_primitive.indexBuffer = std::move(index_buffer);
 
     // draw command
     auto& draw = out_primitive.draw;

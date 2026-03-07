@@ -66,12 +66,6 @@ constexpr std::uint32_t kMinImagesV{kResourceBufferingV};
                     capabilities.maxImageCount);
 }
 
-void requireSuccess(vk::Result const result, char const* error_msg) {
-  if (result != vk::Result::eSuccess) {
-    throw std::runtime_error{error_msg};
-  }
-}
-
 auto needsRecreation(vk::Result const result) -> bool {
   switch (result) {
     case vk::Result::eSuccess:
@@ -217,12 +211,12 @@ void Swapchain::populateImages() {
   auto image_count = std::uint32_t{};
   auto result =
       device_.getSwapchainImagesKHR(*swapchain_, &image_count, nullptr);
-  requireSuccess(result, "failed to get Swapchain Images");
+  vku::requireSuccess(result, "failed to get Swapchain Images");
 
   images_.resize(image_count);
   result =
       device_.getSwapchainImagesKHR(*swapchain_, &image_count, images_.data());
-  requireSuccess(result, "failed to get swapchain images");
+  vku::requireSuccess(result, "failed to get swapchain images");
 }
 
 void Swapchain::populateColorImage() {
