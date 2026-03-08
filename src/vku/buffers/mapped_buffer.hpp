@@ -24,7 +24,7 @@ class MappedBuffer : public AllocatedBuffer {
     requires(!std::same_as<T, std::from_range_t> &&
              std::is_trivially_copyable_v<T>)
   MappedBuffer(vma::Allocator allocator, const T& value,
-               vk::BufferUsageFlags usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
@@ -41,7 +41,7 @@ class MappedBuffer : public AllocatedBuffer {
     requires(!std::same_as<T, std::from_range_t> &&
              std::is_trivially_copyable_v<T>)
   MappedBuffer(vma::Allocator allocator, const T& value,
-               vk::BufferUsageFlags usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
@@ -61,7 +61,7 @@ class MappedBuffer : public AllocatedBuffer {
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
-               vk::BufferUsageFlags usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)
       : MappedBuffer{allocator,
@@ -79,7 +79,7 @@ class MappedBuffer : public AllocatedBuffer {
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   MappedBuffer(vma::Allocator allocator, std::from_range_t, R&& r,
-               vk::BufferUsageFlags usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kHostWrite)

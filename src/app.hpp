@@ -107,7 +107,7 @@ class App {
 
   Transform m_transform_;
 
-  std::optional<DescriptorBuffer> m_view_ubo_;
+  std::optional<DescriptorBuffer<kResourceBufferingV>> m_view_ubo_;
   std::uint32_t m_curr_tex_idx_{0};
   Buffered<std::vector<vk::DescriptorSet>> m_descriptor_sets_{};
 

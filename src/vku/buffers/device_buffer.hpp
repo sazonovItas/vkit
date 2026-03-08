@@ -19,7 +19,7 @@ class DeviceBuffer : public AllocatedBuffer {
 
   DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
                vk::Buffer srcBuffer, vk::DeviceSize offset, vk::DeviceSize size,
-               vk::BufferUsageFlagBits usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
       : AllocatedBuffer(allocator,
@@ -34,7 +34,7 @@ class DeviceBuffer : public AllocatedBuffer {
 
   DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
                vk::Buffer srcBuffer, vk::DeviceSize offset, vk::DeviceSize size,
-               vk::BufferUsageFlagBits usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
@@ -55,7 +55,7 @@ class DeviceBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
                std::from_range_t fromRange, R&& r,
-               vk::BufferUsageFlagBits usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
       : AllocatedBuffer(allocator,
@@ -73,7 +73,7 @@ class DeviceBuffer : public AllocatedBuffer {
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
   DeviceBuffer(vma::Allocator allocator, const DeviceCopyInfo& cmdCopyInfo,
                std::from_range_t fromRange, R&& r,
-               vk::BufferUsageFlagBits usage,
+               vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)

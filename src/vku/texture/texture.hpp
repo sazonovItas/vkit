@@ -9,7 +9,7 @@
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
 
-namespace lvk {
+namespace vku {
 [[nodiscard]] constexpr auto createSamplerCreateInfo(
     vk::SamplerAddressMode wrap, vk::Filter filter,
     vk::SamplerMipmapMode mode) {
@@ -206,4 +206,4 @@ class TextureCubeMap : public Texture {
                 vk::ImageLayout imageLayout, vk::AccessFlagBits2 accessFlags,
                 vk::PipelineStageFlagBits2 stageFlags);
 };
-};  // namespace lvk
+};  // namespace vku

@@ -591,7 +591,7 @@ void App::update_view() {
   auto const bytes =
       std::bit_cast<std::array<std::byte, sizeof(mat_vp)>>(mat_vp);
 
-  m_view_ubo_->write_at(m_frame_index_, bytes);
+  m_view_ubo_->writeAt(m_frame_index_, bytes);
 }
 
 void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
@@ -690,7 +690,7 @@ void App::create_shader_resources() {
 void App::create_descriptor_sets() {
   for (auto& descriptor_set : m_descriptor_sets_) {
     descriptor_set = allocate_sets();
-    descriptor_set.push_back(*bindlessSetManager_->set);
+    descriptor_set.push_back(*bindlessSetManager_->set_);
   }
 }
 
@@ -716,7 +716,7 @@ void App::create_pipeline_layout() {
     m_set_layout_views_.push_back(*m_set_layouts_.back());
   }
 
-  m_set_layout_views_.push_back(*bindlessSetManager_->bindless);
+  m_set_layout_views_.push_back(*bindlessSetManager_->bindless_);
 
   auto push_constants_ranges = std::array<vk::PushConstantRange, 1>{};
   push_constants_ranges[0]
@@ -764,8 +764,8 @@ void App::create_cmd_block_pool() {
 }
 
 void App::create_shader() {
-  auto const vertex_spirv = toSpirV(asset_path("shaders/mesh.vert"));
-  auto const fragment_spirv = toSpirV(asset_path("shaders/mesh.frag"));
+  auto const vertex_spirv = toSpirV(asset_path("shaders/primitive.vert"));
+  auto const fragment_spirv = toSpirV(asset_path("shaders/primitive.frag"));
   auto const shader_ci = ShaderProgram::CreateInfo{
       .device = *m_gpu_->device,
       .vertexSpirv = vertex_spirv,

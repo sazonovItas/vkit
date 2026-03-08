@@ -2,8 +2,8 @@ EXECUTABLE ?= ./build/vkit
 
 .PHONY: glslc
 glslc:
-	glslc ./src/glsl/mesh.vert -o ./assets/shaders/mesh.vert
-	glslc ./src/glsl/mesh.frag -o ./assets/shaders/mesh.frag
+	glslc ./src/glsl/primitive.vert -o ./assets/shaders/primitive.vert
+	glslc ./src/glsl/primitive.frag -o ./assets/shaders/primitive.frag
 
 .PHONY: cmake
 cmake:

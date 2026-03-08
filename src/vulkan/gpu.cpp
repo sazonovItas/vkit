@@ -11,17 +11,6 @@
 #include "vulkan/vulkan.hpp"
 
 namespace {
-constexpr std::array kRequiredExtensions{
-    vk::KHRSwapchainExtensionName,
-    vk::EXTShaderObjectExtensionName,
-};
-
-constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
-                                       .setFillModeNonSolid(vk::True)
-                                       .setWideLines(vk::True)
-                                       .setSamplerAnisotropy(vk::True)
-                                       .setSampleRateShading(vk::True);
-
 constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
   switch (type) {
     case vk::PhysicalDeviceType::eDiscreteGpu:
@@ -43,6 +32,17 @@ constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
 
   std::unreachable();
 }
+
+constexpr std::array kRequiredExtensions{
+    vk::KHRSwapchainExtensionName,
+    vk::EXTShaderObjectExtensionName,
+};
+
+constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
+                                       .setFillModeNonSolid(vk::True)
+                                       .setWideLines(vk::True)
+                                       .setSamplerAnisotropy(vk::True)
+                                       .setSampleRateShading(vk::True);
 };  // namespace
 
 namespace vkit::vulkan {

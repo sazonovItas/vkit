@@ -1,5 +1,5 @@
-#ifndef LIGHT_DATA_H
-#define LIGHT_DATA_H
+#ifndef LIGHT_GLSL
+#define LIGHT_GLSL
 
 #define TYPE_DIRECTIONAL_LIGHT 0
 #define TYPE_POINT_LIGHT 1
@@ -7,19 +7,19 @@
 
 struct Light
 {
-    vec3 position;
-    uint type;
+  vec3 position;
+  uint type;
 
-    vec3 direction;
-    float range;
+  vec3 direction;
+  float range;
 
-    vec3 color;
-    float intensity;
+  vec3 color;
+  float intensity;
 
-    vec2 scaleOffset;
-    uint shadowMapID;
+  vec2 scaleOffset;
+  uint shadowMapID;
 
-    float unused;
+  float unused;
 };
 
-#endif // LIGHT_DATA_H
+#endif // LIGHT_GLSL

@@ -5,9 +5,9 @@
 
 struct Vertex {
   vec3 position;
-  float uv_x;
+  float uvX;
   vec3 normal;
-  float uv_y;
+  float uvY;
   vec4 tangent;
 };
 

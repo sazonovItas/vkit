@@ -4,7 +4,7 @@
 #include "vku/commands.hpp"
 #include "vku/utils/utils.hpp"
 
-namespace lvk {
+namespace vku {
 void Texture2D::populate(const TextureInfo& info, vma::Allocator allocator,
                          const vku::DeviceCopyInfo& copyInfo,
                          std::uint32_t mipLevels,
@@ -195,4 +195,4 @@ void TextureCubeMap::populate(const TextureInfo& info, vma::Allocator allocator,
   imageView = copyInfo.device.createImageViewUnique(
       image.getViewCreateInfo(vk::ImageViewType::eCube));
 }
-};  // namespace lvk
+};  // namespace vku
