@@ -13,7 +13,7 @@ constexpr auto toVkbool(bool const value) {
 };  // namespace
 
 namespace lvk {
-ShaderProgram::ShaderProgram(CreateInfo const& createInfo) {
+ShaderProgram::ShaderProgram(const CreateInfo& createInfo) {
   auto const create_shader_ci =
       [&createInfo](std::span<std::uint32_t const> spirv) {
         auto ret = vk::ShaderCreateInfoEXT{};

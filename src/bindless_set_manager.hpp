@@ -1,13 +1,14 @@
 #pragma once
 
-#include "texture.hpp"
+#include "vku/texture/texture.hpp"
 #include "vulkan/descriptor_set_layout/bindless.hpp"
 #include "vulkan/gpu.hpp"
 
 namespace lvk {
 class BindlessSetManager {
   using Gpu = vkit::vulkan::Gpu;
-  using BindlessLayout = vkit::vulkan::dsl::Bindless;
+  using Texture = vku::Texture;
+  using BindlessLayout = vkit::vulkan::dsl::BindlessLayout;
 
  public:
   constexpr static auto kLinearSamplerId = 0;
@@ -22,7 +23,7 @@ class BindlessSetManager {
                         gpu.properties.limits.maxSamplerAnisotropy);
   }
 
-  auto getDescriptorSet() -> vk::DescriptorSet { return *set_; }
+  auto getSet() const -> vk::DescriptorSet { return *set_; }
 
   void addTexture2D(vk::Device device, const std::uint32_t id,
                     const Texture& texture) {
@@ -96,14 +97,13 @@ class BindlessSetManager {
 
   auto createDescriptorSet(vk::Device device) -> vk::UniqueDescriptorSet {
     auto alloc_info = vk::DescriptorSetAllocateInfo{};
-    alloc_info.setDescriptorPool(*pool_).setDescriptorSetCount(1).setSetLayouts(
-        *bindless_);
+    alloc_info.setDescriptorPool(*pool_).setSetLayouts(*bindless_);
 
     auto descriptor_counts =
         std::array<const std::uint32_t, 1>{BindlessLayout::kMaxTextures};
 
     auto count_info = vk::DescriptorSetVariableDescriptorCountAllocateInfo{};
-    count_info.setDescriptorSetCount(1).setDescriptorCounts(descriptor_counts);
+    count_info.setDescriptorCounts(descriptor_counts);
 
     return std::move(device.allocateDescriptorSetsUnique(
         vk::StructureChain{alloc_info, count_info}.get())[0]);
@@ -120,7 +120,7 @@ class BindlessSetManager {
 
       auto sampler = device.createSamplerUnique(sampler_ci);
       addSampler(device, kLinearSamplerId, *sampler);
-      samplers_.push_back(std::move(sampler));
+      samplers_.emplace_back(std::move(sampler));
     }
 
     {
@@ -133,7 +133,7 @@ class BindlessSetManager {
 
       auto sampler = device.createSamplerUnique(sampler_ci);
       addSampler(device, kNearestSamplerId, *sampler);
-      samplers_.push_back(std::move(sampler));
+      samplers_.emplace_back(std::move(sampler));
     }
   }
 };

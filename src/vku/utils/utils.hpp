@@ -1,5 +1,8 @@
 #pragma once
 
+#include <filesystem>
+#include <fstream>
+
 #include "vku/images/image.hpp"
 
 namespace vku {
@@ -60,6 +63,13 @@ template <std::floating_point T = float>
   assert(extent.height != 0 && "Height must be nonzero.");
   return static_cast<T>(extent.width) / static_cast<T>(extent.height);
 }
+
+constexpr auto toVkbool(bool const value) {
+  return value ? vk::True : vk::False;
+}
+
+[[nodiscard]] auto toSpirV(std::filesystem::path const& path)
+    -> std::vector<std::uint32_t>;
 
 void generateMipmaps(vk::CommandBuffer cb, const Image& image,
                      const ImageBarrierInfo& barrierInfo,

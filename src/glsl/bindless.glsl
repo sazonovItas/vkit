@@ -6,9 +6,9 @@
 #define LINEAR_SAMPLER_ID 0
 #define NEAREST_SAMPLER_ID 1
 
-layout(set = 1, binding = 0) uniform texture2D textures[];
-layout(set = 1, binding = 1) uniform textureCube textureCubes[];
-layout(set = 1, binding = 2) uniform sampler samplers[];
+layout(set = 2, binding = 0) uniform texture2D textures[];
+layout(set = 2, binding = 1) uniform textureCube textureCubes[];
+layout(set = 2, binding = 2) uniform sampler samplers[];
 
 vec4 sampleTexture2DLinear(uint texID, vec2 uv) {
     return texture(sampler2D(nonuniformEXT(textures[texID]), samplers[LINEAR_SAMPLER_ID]), uv);

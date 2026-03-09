@@ -14,7 +14,8 @@ auto parser = fastgltf::Parser{
     fastgltf::Extensions::KHR_materials_variants |
         fastgltf::Extensions::KHR_texture_transform |
         fastgltf::Extensions::KHR_mesh_quantization |
-        fastgltf::Extensions::EXT_meshopt_compression,
+        fastgltf::Extensions::EXT_meshopt_compression |
+        fastgltf::Extensions::KHR_draco_mesh_compression,
 };
 
 auto options = fastgltf::Options::GenerateMeshIndices |

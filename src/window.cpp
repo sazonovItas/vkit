@@ -6,13 +6,13 @@
 #include "GLFW/glfw3.h"
 #include "vulkan/vulkan.hpp"
 
-namespace lvk::glfw {
+namespace glfw {
 void Deleter::operator()(GLFWwindow* window) const noexcept {
   glfwDestroyWindow(window);
   glfwTerminate();
 }
 
-auto create_window(glm::ivec2 size, const char* title) -> Window {
+auto createWindow(glm::ivec2 size, const char* title) -> Window {
   static auto const kOnError = [](int const code, char const* description) {
     std::println(stderr, "[GLFW] ERROR {}: {}", code, description);
   };
@@ -23,7 +23,7 @@ auto create_window(glm::ivec2 size, const char* title) -> Window {
   }
 
   if (glfwVulkanSupported() != GLFW_TRUE) {
-    throw std::runtime_error{"vulkan not supported"};
+    throw std::runtime_error{"glfw vulkan is not supported"};
   }
 
   auto ret = Window{};
@@ -36,13 +36,13 @@ auto create_window(glm::ivec2 size, const char* title) -> Window {
   return ret;
 }
 
-auto instance_extensions() -> std::span<char const* const> {
+auto instanceExtensions() -> std::span<char const* const> {
   auto count = std::uint32_t{};
   auto const* extensions = glfwGetRequiredInstanceExtensions(&count);
   return {extensions, static_cast<std::size_t>(count)};
 }
 
-auto create_surface(GLFWwindow* window, vk::Instance const instance)
+auto createSurface(GLFWwindow* window, vk::Instance const instance)
     -> vk::UniqueSurfaceKHR {
   VkSurfaceKHR ret{};
   auto const result = glfwCreateWindowSurface(instance, window, nullptr, &ret);
@@ -53,9 +53,9 @@ auto create_surface(GLFWwindow* window, vk::Instance const instance)
   return vk::UniqueSurfaceKHR{ret, instance};
 }
 
-auto framebuffer_size(GLFWwindow* window) -> glm::ivec2 {
+auto framebufferSize(GLFWwindow* window) -> glm::ivec2 {
   auto ret = glm::ivec2{};
   glfwGetFramebufferSize(window, &ret.x, &ret.y);
   return ret;
 }
-}  // namespace lvk::glfw
+}  // namespace glfw

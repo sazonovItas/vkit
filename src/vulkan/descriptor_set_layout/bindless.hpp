@@ -3,7 +3,7 @@
 #include "vulkan/descriptor_set_layout/dsl.hpp"
 
 namespace vkit::vulkan::dsl {
-struct Bindless final : DescriptorSetLayout {
+struct BindlessLayout final : DescriptorSetLayout {
   static constexpr auto kMaxTextures = std::uint32_t{16536};
   static constexpr auto kMaxSamplers = std::uint32_t{32};
 
@@ -36,7 +36,7 @@ struct Bindless final : DescriptorSetLayout {
           vk::DescriptorBindingFlagBits::ePartiallyBound,
       };
 
-  explicit Bindless(vk::Device device)
+  explicit BindlessLayout(vk::Device device)
       : DescriptorSetLayout{
             device,
             vk::StructureChain{

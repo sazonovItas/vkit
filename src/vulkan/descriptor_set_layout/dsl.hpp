@@ -8,8 +8,8 @@ constexpr auto layoutBinding(std::uint32_t binding, vk::DescriptorType type,
 }
 
 struct DescriptorSetLayout : public vk::UniqueDescriptorSetLayout {
-  explicit DescriptorSetLayout(
-      vk::Device device, const vk::DescriptorSetLayoutCreateInfo& createInfo)
+  DescriptorSetLayout(vk::Device device,
+                      const vk::DescriptorSetLayoutCreateInfo& createInfo)
       : vk::UniqueDescriptorSetLayout{
             device.createDescriptorSetLayoutUnique(createInfo),
         } {}

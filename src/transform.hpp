@@ -1,13 +1,12 @@
 #pragma once
 
-#include "fastgltf/math.hpp"
 namespace lvk {
 struct Transform {
   glm::vec3 position{};
   glm::vec3 rotation{};
   glm::vec3 scale{1.0F};
 
-  [[nodiscard]] auto model_matrix() const -> glm::mat4;
-  [[nodiscard]] auto view_matrix() const -> glm::mat4;
+  [[nodiscard]] auto modelMatrix() const -> glm::mat4;
+  [[nodiscard]] auto viewMatrix() const -> glm::mat4;
 };
 };  // namespace lvk

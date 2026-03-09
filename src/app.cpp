@@ -8,43 +8,31 @@
 #include <cassert>
 #include <chrono>
 #include <cstddef>
-#include <cstdio>
-#include <cstring>
-#include <filesystem>
-#include <fstream>
 #include <optional>
 #include <print>
 #include <ranges>
 #include <stdexcept>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "GLFW/glfw3.h"
-#include "bindless_set_manager.hpp"
-#include "dear_imgui.hpp"
-#include "fastgltf/core.hpp"
-#include "fastgltf/glm_element_traits.hpp"
-#include "fastgltf/math.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
-#include "model.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "stb_image.h"
-#include "texture.hpp"
-#include "vku/buffers/device_buffer.hpp"
 #include "vku/utils/utils.hpp"
+#include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/pipeline_layout/pbr.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/cannon"
+#define MODEL_PATH "models/cannon/scene.gltf"
 
 namespace {
 constexpr auto kVkVersionV = VK_MAKE_VERSION(1, 3, 0);
@@ -60,19 +48,20 @@ debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
 
   return vk::False;
 }
-[[nodiscard]] auto locateAssetsDir() -> fs::path {
+
+[[nodiscard]] auto locateAssetsDir() -> std::filesystem::path {
   static constexpr std::string_view kDirNameV{"assets"};
 
-  for (auto path = fs::current_path(); !path.empty() && path.has_parent_path();
-       path = path.parent_path()) {
+  for (auto path = std::filesystem::current_path();
+       !path.empty() && path.has_parent_path(); path = path.parent_path()) {
     auto ret = path / kDirNameV;
-    if (fs::is_directory(ret)) {
+    if (std::filesystem::is_directory(ret)) {
       return ret;
     }
   }
 
-  std::println("[lvk] warning could not locate '{}' directory", kDirNameV);
-  return fs::current_path();
+  std::println("[vkit] warning could not locate '{}' directory", kDirNameV);
+  return std::filesystem::current_path();
 }
 
 [[nodiscard]] auto getLayers(std::span<char const* const> desired)
@@ -95,27 +84,6 @@ debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
     ret.push_back(layer);
   }
 
-  return ret;
-}
-
-[[nodiscard]] auto toSpirV(fs::path const& path) -> std::vector<std::uint32_t> {
-  auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
-  if (!file.is_open()) {
-    throw std::runtime_error{
-        std::format("failed to open file: '{}'", path.generic_string())};
-  }
-
-  auto const size = file.tellg();
-  auto const usize = static_cast<std::uint64_t>(size);
-  if (0 != usize % sizeof(std::uint32_t)) {
-    throw std::runtime_error{std::format("invalid SPIR-V size: {}", usize)};
-  }
-
-  file.seekg({}, std::ios::beg);
-  auto ret = std::vector<std::uint32_t>{};
-  ret.resize(usize / sizeof(std::uint32_t));
-  void* data = ret.data();
-  file.read(static_cast<char*>(data), size);
   return ret;
 }
 
@@ -255,63 +223,222 @@ auto generateStoneTiles(int width, int height, int tileSize,
 
 namespace lvk {
 void App::run() {
-  m_assets_dir_ = locateAssetsDir();
+  assetDir_ = locateAssetsDir();
 
-  create_window();
-  create_instance();
-  create_surface();
-  create_device();
-  create_swapchain();
-  create_render_sync();
-  create_imgui();
-  create_bindless_set_manager();
-  create_descriptor_pool();
-  create_pipeline_layout();
-  create_shader();
-  create_cmd_block_pool();
-  create_transfer_command_pool();
+  createWindow();
+  createInstance();
+  createSurface();
+  createDevice();
+  createSwapchain();
 
-  create_shader_resources();
-  create_descriptor_sets();
+  createRenderCommandPool();
+  createRenderSync();
 
-  load_gltf();
+  createDescriptorLayouts();
+  createPipelineLayouts();
+  createShaders();
 
-  main_loop();
+  createDescriptorResources();
+  createDescriptorPool();
+  createDescriptorSets();
+  createBindlessSetManager();
+
+  createGraphicsCommandPool();
+
+  createImgui();
+
+  loadGLTF(assetPath(MODEL_PATH));
+
+  mainLoop();
 }
 
-void App::main_loop() {
-  while (glfwWindowShouldClose(m_window_.get()) == GLFW_FALSE) {
+void App::mainLoop() {
+  while (glfwWindowShouldClose(window_.get()) == GLFW_FALSE) {
     glfwPollEvents();
 
-    if (!acquire_render_target()) {
+    if (!acquireRenderTarget()) {
       continue;
     }
 
-    auto const command_buffer = begin_frame();
+    const auto cb = beginFrame();
 
-    transition_for_render(command_buffer);
-    render(command_buffer);
+    transitionForRender(cb);
+    render(cb);
 
-    transition_for_present(command_buffer);
-    submit_and_present();
+    transitionForPresent(cb);
+    submitAndPresent();
   }
+}
+
+auto App::assetPath(std::string_view uri) const -> std::filesystem::path {
+  return assetDir_ / uri;
+}
+
+void App::loadGLTF(const std::filesystem::path& path) {
+  const auto copy_info = vku::DeviceCopyInfo{
+      .device = *gpu_->device,
+      .commandPool = *graphicsCommandPool_,
+      .queue = gpu_->queues.graphicsPresent,
+  };
+
+  gltfAsset_.emplace(path, gpu_->allocator, copy_info);
+
+  for (const auto& [idx, texture] : gltfAsset_->textures) {
+    bindlessSetManager_->addTexture2D(*gpu_->device, idx, *texture.get());
+  }
+
+  materials_.reserve(gltfAsset_->materials.size());
+  for (const auto& [idx, m] : gltfAsset_->materials) {
+    auto material = Material{
+        .baseColorFactor = m.baseColorFactor,
+        .emissiveFactor = m.emissiveFactor,
+        .baseColorTextureIdx =
+            m.baseColorTexture
+                ? static_cast<int32_t>(m.baseColorTexture.value())
+                : -1,
+        .metallicRoughnessTextureIdx =
+            m.metallicRoughnessTexture
+                ? static_cast<int32_t>(m.baseColorTexture.value())
+                : -1,
+        .normalTextureIdx =
+            m.normalTexture ? static_cast<int32_t>(m.baseColorTexture.value())
+                            : -1,
+        .occlusionTextureIdx =
+            m.occlusionTexture
+                ? static_cast<int32_t>(m.baseColorTexture.value())
+                : -1,
+        .metallicFactor = m.metallicFactor,
+        .roughnessFactor = m.roughnessFactor,
+    };
+
+    materials_.emplace_back(material);
+  }
+
+  updateMaterials();
+}
+
+void App::draw(vk::CommandBuffer cb) const {
+  shader_->bind(cb, frameBufferSize_);
+  bindDescriptorSets(cb);
+
+  fastgltf::iterateSceneNodes(
+      gltfAsset_->asset, gltfAsset_->sceneIdx, fastgltf::math::fmat4x4(),
+      [&](const fastgltf::Node& node,
+          const fastgltf::math::fmat4x4& /*transform*/) {
+        drawNode(cb, node, fastgltf::AlphaMode::Opaque);
+      });
+}
+
+void App::bindDescriptorSets(vk::CommandBuffer cb) const {
+  const auto descriptor_sets = std::array<vk::DescriptorSet, 3>{
+      *sceneSets_.at(frameIndex_),
+      *materialsSets_.at(frameIndex_),
+      bindlessSetManager_->getSet(),
+  };
+
+  cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                        pbrPipelineLayout_->get(), 0, descriptor_sets, {});
+}
+
+void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
+                   fastgltf::AlphaMode /*alphaMode*/) const {
+  using PbrPushConstants = vkit::vulkan::pl::PBRPipelineLayout::PushConstants;
+
+  if (node.meshIndex) {
+    auto it = gltfAsset_->meshes.find(node.meshIndex.value());
+    assert(it != gltfAsset_->meshes.end());
+
+    const auto& mesh = it->second;
+
+    auto push_constants = PbrPushConstants{
+        .meshIdx = static_cast<uint32_t>(node.meshIndex.value()),
+    };
+    for (const auto& primitive : mesh->primitives) {
+      push_constants.materialIdx = primitive.materialIdx;
+      push_constants.vertices =
+          primitive.vertexBuffer.getAddress(*gpu_->device);
+
+      cb.pushConstants(
+          pbrPipelineLayout_->get(),
+          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+          0, sizeof(PbrPushConstants), &push_constants);
+
+      cb.bindIndexBuffer(primitive.indexBuffer.buffer, 0,
+                         vk::IndexType::eUint32);
+
+      cb.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
+    }
+  }
+}
+
+void App::update() {
+  auto const half_size = 0.5F * glm::vec2{frameBufferSize_};
+
+  auto model = transform_.modelMatrix();
+  auto view = glm::lookAt(camera_.position, camera_.target, camera_.up);
+  auto projection = glm::perspective(glm::radians(90.0F),
+                                     static_cast<float>(frameBufferSize_.x) /
+                                         static_cast<float>(frameBufferSize_.y),
+                                     0.1F, 1000.0F);
+
+  ubo_ = UBO{
+      .model = model,
+      .view = view,
+      .projection = projection,
+      .cameraPosition = camera_.position,
+  };
+
+  const auto ubo_bytes =
+      std::bit_cast<std::array<std::byte, sizeof(ubo_)>>(ubo_);
+
+  uboBuffers_->writeAt(frameIndex_, ubo_bytes);
+
+  const auto ubo_params_bytes =
+      std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
+  uboParamsBuffers_->writeAt(frameIndex_, ubo_params_bytes);
+}
+
+void App::updateMaterials() {
+  materialsBuffer_->writeAt(0, toByteSpan(materials_));
+}
+
+void App::updateDescriptorSets() const {
+  auto writes = std::array<vk::WriteDescriptorSet, 3>{};
+
+  auto write = vk::WriteDescriptorSet{};
+
+  const auto scene_set = *sceneSets_.at(frameIndex_);
+  const auto ubo_info = uboBuffers_->descriptorInfoAt(frameIndex_);
+  write.setBufferInfo(ubo_info)
+      .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+      .setDescriptorCount(1)
+      .setDstSet(scene_set)
+      .setDstBinding(vkit::vulkan::dsl::SceneLayout::kUBOBindingIdx);
+  writes[0] = write;
+
+  const auto ubo_params_info = uboParamsBuffers_->descriptorInfoAt(frameIndex_);
+  write.setBufferInfo(ubo_params_info)
+      .setDescriptorType(vk::DescriptorType::eUniformBuffer)
+      .setDescriptorCount(1)
+      .setDstSet(scene_set)
+      .setDstBinding(vkit::vulkan::dsl::SceneLayout::kUBOParamsBindingIdx);
+  writes[1] = write;
+
+  const auto materials_set = *materialsSets_.at(frameIndex_);
+  const auto materials_info = materialsBuffer_->descriptorInfoAt(0);
+  write.setBufferInfo(materials_info)
+      .setDescriptorType(vk::DescriptorType::eStorageBuffer)
+      .setDescriptorCount(1)
+      .setDstSet(materials_set)
+      .setDstBinding(0);
+  writes[2] = write;
+
+  gpu_->device->updateDescriptorSets(writes, {});
 }
 
 void App::inspect() {
   ImGui::SetNextWindowSize({300.0F, 320.0F}, ImGuiCond_Once);
   if (ImGui::Begin("Inspect")) {
-    if (ImGui::Checkbox("wireframe", &m_wireframe_)) {
-      m_shader_->polygonMode =
-          m_wireframe_ ? vk::PolygonMode::eLine : vk::PolygonMode::eFill;
-    }
-    if (m_wireframe_) {
-      auto const& line_width_range = m_gpu_->properties.limits.lineWidthRange;
-      ImGui::SetNextItemWidth(100.0F);
-      ImGui::DragFloat("line width", &m_line_width_, 0.25F, line_width_range[0],
-                       line_width_range[1]);
-      m_shader_->lineWidth = m_line_width_;
-    }
-
     static auto const kCameraView = [](Camera& out) {
       ImGui::DragFloat3("position", &out.position.x);
       ImGui::DragFloat3("target", &out.target.x);
@@ -319,8 +446,8 @@ void App::inspect() {
     };
 
     ImGui::Separator();
-    if (ImGui::TreeNode("View")) {
-      kCameraView(m_camera_);
+    if (ImGui::TreeNode("Camera")) {
+      kCameraView(camera_);
       ImGui::TreePop();
     }
 
@@ -331,116 +458,67 @@ void App::inspect() {
     };
 
     ImGui::Separator();
-    if (ImGui::TreeNode("Instance")) {
-      kInspectTransform(m_transform_);
+    if (ImGui::TreeNode("Transform")) {
+      kInspectTransform(transform_);
       ImGui::TreePop();
     }
 
+    static auto const kInspectUBOParams = [](UBOParams& out) {
+      ImGui::DragFloat3("lightDir", &out.lightDir.x);
+    };
+
     ImGui::Separator();
-    if (ImGui::TreeNode("Texture")) {
-      if (!m_texture_names_.empty()) {
-        const char* preview = m_texture_names_[m_curr_tex_idx_].c_str();
-
-        if (ImGui::BeginCombo("Current", preview)) {
-          for (uint32_t i = 0; i < m_textures_.size(); ++i) {
-            bool selected = (m_curr_tex_idx_ == i);
-
-            if (ImGui::Selectable(m_texture_names_[i].c_str(), selected)) {
-              m_curr_tex_idx_ = i;
-            }
-
-            if (selected) ImGui::SetItemDefaultFocus();
-          }
-
-          ImGui::EndCombo();
-        }
-      }
-
+    if (ImGui::TreeNode("Params")) {
+      kInspectUBOParams(uboParams_);
       ImGui::TreePop();
     }
   }
   ImGui::End();
 }
 
-void App::draw(vk::CommandBuffer const command_buffer) const {
-  m_shader_->bind(command_buffer, m_framebuffer_size_);
-  bind_descriptor_sets(command_buffer);
-
-  fastgltf::iterateSceneNodes(
-      m_asset_.value(), 0, fastgltf::math::fmat4x4(1.0F),
-      [&](const fastgltf::Node& node,
-          const fastgltf::math::fmat4x4 /*matrix*/) {
-        if (node.meshIndex.has_value()) {
-          draw_mesh(command_buffer, node.meshIndex.value());
-        }
-      });
-}
-
-void App::draw_mesh(vk::CommandBuffer const command_buffer,
-                    const std::size_t mesh_idx) const {
-  auto transform = m_transform_.model_matrix();
-  command_buffer.pushConstants(*m_pipeline_layout_,
-                               vk::ShaderStageFlagBits::eVertex, 0,
-                               sizeof(glm::mat4), &transform);
-
-  for (const auto& primitive : meshes_.at(mesh_idx).primitives) {
-    auto vertex_address = primitive.vertexBuffer.getAddress(*m_gpu_->device);
-    command_buffer.pushConstants(*m_pipeline_layout_,
-                                 vk::ShaderStageFlagBits::eVertex,
-                                 offsetof(PushConstants, vertexBuffer),
-                                 sizeof(vk::DeviceAddress), &vertex_address);
-
-    command_buffer.bindIndexBuffer(primitive.indexBuffer.buffer, 0,
-                                   vk::IndexType::eUint32);
-    command_buffer.drawIndexed(
-        primitive.draw.count, primitive.draw.instance_count,
-        primitive.draw.first_index, primitive.draw.vertex_offset,
-        primitive.draw.first_instance);
-  }
-}
-
-auto App::acquire_render_target() -> bool {
-  m_framebuffer_size_ = glfw::framebuffer_size(m_window_.get());
-  if (m_framebuffer_size_.x <= 0 || m_framebuffer_size_.y <= 0) {
+auto App::acquireRenderTarget() -> bool {
+  frameBufferSize_ = glfw::framebufferSize(window_.get());
+  if (frameBufferSize_.x <= 0 || frameBufferSize_.y <= 0) {
     return false;
   }
 
-  auto& render_sync = m_render_sync_.at(m_frame_index_);
+  auto& render_sync = renderSync_.at(frameIndex_);
 
   static constexpr auto kFenceTimeoutV = static_cast<std::uint64_t>(
       std::chrono::nanoseconds{std::chrono::seconds{3}}.count());
-  auto result = m_gpu_->device->waitForFences(*render_sync.drawn, vk::True,
-                                              kFenceTimeoutV);
+  auto result =
+      gpu_->device->waitForFences(*render_sync.drawn, vk::True, kFenceTimeoutV);
   if (result != vk::Result::eSuccess) {
     throw std::runtime_error{"failed to wait for render fence"};
   }
 
-  m_render_target_ = m_swapchain_->acquireNextImage(*render_sync.draw);
-  if (!m_render_target_) {
-    m_swapchain_->recreate(m_framebuffer_size_);
+  renderTarget_ = swapchain_->acquireNextImage(*render_sync.draw);
+  if (!renderTarget_) {
+    swapchain_->recreate(frameBufferSize_);
     return false;
   }
 
-  m_gpu_->device->resetFences(*render_sync.drawn);
+  gpu_->device->resetFences(*render_sync.drawn);
 
-  m_imgui_->new_frame();
+  imgui_->newFrame();
 
   return true;
 }
 
-auto App::begin_frame() -> vk::CommandBuffer {
-  auto const& render_sync = m_render_sync_.at(m_frame_index_);
+auto App::beginFrame() -> vk::CommandBuffer {
+  auto const& render_sync = renderSync_.at(frameIndex_);
 
-  auto command_buffer_bi = vk::CommandBufferBeginInfo{};
-  command_buffer_bi.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-  render_sync.command_buffer.begin(command_buffer_bi);
-  return render_sync.command_buffer;
+  auto bi = vk::CommandBufferBeginInfo{};
+  bi.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+  render_sync.cb.begin(bi);
+
+  return render_sync.cb;
 }
 
-void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
+void App::transitionForRender(vk::CommandBuffer cb) const {
   auto dependency_info = vk::DependencyInfo{};
 
-  auto color_barrier = m_swapchain_->baseColorBarrier();
+  auto color_barrier = swapchain_->baseColorBarrier();
   color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
@@ -449,7 +527,7 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
       .setDstAccessMask(color_barrier.srcAccessMask)
       .setDstStageMask(color_barrier.srcStageMask);
 
-  auto depth_barrier = m_swapchain_->baseDepthBarrier();
+  auto depth_barrier = swapchain_->baseDepthBarrier();
   depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eNone)
@@ -459,7 +537,7 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
       .setDstStageMask(vk::PipelineStageFlagBits2::eEarlyFragmentTests |
                        vk::PipelineStageFlagBits2::eLateFragmentTests);
 
-  auto swapchain_color_barrier = m_swapchain_->baseBarrier();
+  auto swapchain_color_barrier = swapchain_->baseBarrier();
   swapchain_color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
@@ -471,43 +549,44 @@ void App::transition_for_render(vk::CommandBuffer const command_buffer) const {
   auto barriers =
       std::array{color_barrier, depth_barrier, swapchain_color_barrier};
   dependency_info.setImageMemoryBarriers(barriers);
-  command_buffer.pipelineBarrier2(dependency_info);
+  cb.pipelineBarrier2(dependency_info);
 }
 
-void App::render(vk::CommandBuffer const command_buffer) {
+void App::render(vk::CommandBuffer cb) {
   auto color_attachment = vk::RenderingAttachmentInfo{};
-  color_attachment.setImageView(m_render_target_->colorImageView)
+  color_attachment.setImageView(renderTarget_->colorImageView)
       .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setResolveMode(vk::ResolveModeFlagBits::eAverage)
-      .setResolveImageView(m_render_target_->swapchainImageView)
+      .setResolveImageView(renderTarget_->swapchainImageView)
       .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
       .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
 
   auto depth_attachment = vk::RenderingAttachmentInfo{};
-  depth_attachment.setImageView(m_render_target_->depthImageView)
+  depth_attachment.setImageView(renderTarget_->depthImageView)
       .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
       .setStoreOp(vk::AttachmentStoreOp::eDontCare)
       .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
 
   auto rendering_info = vk::RenderingInfo{};
-  auto const render_area = vk::Rect2D{vk::Offset2D{}, m_render_target_->extent};
+  auto const render_area = vk::Rect2D{vk::Offset2D{}, renderTarget_->extent};
   rendering_info.setRenderArea(render_area)
       .setLayerCount(1)
       .setColorAttachmentCount(1)
       .setPColorAttachments(&color_attachment)
       .setPDepthAttachment(&depth_attachment);
 
-  command_buffer.beginRendering(rendering_info);
-  update_view();
-  update_instances();
-  draw(command_buffer);
-  command_buffer.endRendering();
+  update();
+  updateDescriptorSets();
+
+  cb.beginRendering(rendering_info);
+  draw(cb);
+  cb.endRendering();
 
   auto imgui_attachment = vk::RenderingAttachmentInfo{};
-  imgui_attachment.setImageView(m_render_target_->swapchainImageView)
+  imgui_attachment.setImageView(renderTarget_->swapchainImageView)
       .setLoadOp(vk::AttachmentLoadOp::eLoad)
       .setStoreOp(vk::AttachmentStoreOp::eStore);
 
@@ -517,15 +596,16 @@ void App::render(vk::CommandBuffer const command_buffer) {
       .setColorAttachmentCount(1)
       .setPColorAttachments(&imgui_attachment);
 
-  command_buffer.beginRendering(imgui_rendering);
   inspect();
-  m_imgui_->end_frame();
-  m_imgui_->render(command_buffer);
-  command_buffer.endRendering();
+  imgui_->endFrame();
+
+  cb.beginRendering(imgui_rendering);
+  imgui_->render(cb);
+  cb.endRendering();
 }
 
-void App::transition_for_present(vk::CommandBuffer const command_buffer) const {
-  auto barrier = m_swapchain_->baseBarrier();
+void App::transitionForPresent(vk::CommandBuffer cb) const {
+  auto barrier = swapchain_->baseBarrier();
   barrier.setOldLayout(vk::ImageLayout::eAttachmentOptimal)
       .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
       .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
@@ -537,299 +617,193 @@ void App::transition_for_present(vk::CommandBuffer const command_buffer) const {
   auto dependency_info = vk::DependencyInfo{};
   dependency_info.setImageMemoryBarriers(barrier);
 
-  command_buffer.pipelineBarrier2(dependency_info);
+  cb.pipelineBarrier2(dependency_info);
 }
 
-void App::submit_and_present() {
-  auto const& render_sync = m_render_sync_.at(m_frame_index_);
-  render_sync.command_buffer.end();
+void App::submitAndPresent() {
+  auto const& render_sync = renderSync_.at(frameIndex_);
+  render_sync.cb.end();
 
   auto submit_info = vk::SubmitInfo2{};
-  auto const command_buffer_info =
-      vk::CommandBufferSubmitInfo{render_sync.command_buffer};
+  auto const cb_info = vk::CommandBufferSubmitInfo{render_sync.cb};
 
   auto wait_semaphore_info = vk::SemaphoreSubmitInfo{};
   wait_semaphore_info.setSemaphore(*render_sync.draw)
       .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
   auto signal_semaphore_info = vk::SemaphoreSubmitInfo{};
-  signal_semaphore_info.setSemaphore(m_swapchain_->getPresentSemaphore())
+  signal_semaphore_info.setSemaphore(swapchain_->getPresentSemaphore())
       .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
 
-  submit_info.setCommandBufferInfos(command_buffer_info)
+  submit_info.setCommandBufferInfos(cb_info)
       .setWaitSemaphoreInfos(wait_semaphore_info)
       .setSignalSemaphoreInfos(signal_semaphore_info);
 
-  m_gpu_->queues.graphicsPresent.submit2(submit_info, *render_sync.drawn);
+  gpu_->queues.graphicsPresent.submit2(submit_info, *render_sync.drawn);
 
-  m_frame_index_ = (m_frame_index_ + 1) % m_render_sync_.size();
-  m_render_target_.reset();
+  frameIndex_ = (frameIndex_ + 1) % renderSync_.size();
+  renderTarget_.reset();
 
-  auto const fb_size_changed = m_framebuffer_size_ != m_swapchain_->getSize();
-  auto const out_of_date =
-      !m_swapchain_->present(m_gpu_->queues.graphicsPresent);
-  if (fb_size_changed || out_of_date) {
-    m_swapchain_->recreate(m_framebuffer_size_);
+  auto const fb_size_changed = frameBufferSize_ != swapchain_->getSize();
+  auto const out_of_date = !swapchain_->present(gpu_->queues.graphicsPresent);
+  if (fb_size_changed || out_of_date) swapchain_->recreate(frameBufferSize_);
+}
+
+void App::createDescriptorLayouts() {
+  sceneSetLayout_.emplace(*gpu_->device);
+  materialSetLayout_.emplace(*gpu_->device);
+  bindlessSetLayout_.emplace(*gpu_->device);
+}
+
+void App::createPipelineLayouts() {
+  pbrPipelineLayout_.emplace(
+      *gpu_->device,
+      std::tie(*sceneSetLayout_, *materialSetLayout_, *bindlessSetLayout_));
+}
+
+void App::createShaders() {
+  {
+    const auto vertex_shader_spirv =
+        vku::toSpirV(assetPath("shaders/primitive.vert"));
+    const auto fragment_shader_spirv =
+        vku::toSpirV(assetPath("shaders/primitive.frag"));
+
+    auto set_layouts = std::array<vk::DescriptorSetLayout, 3>{
+        sceneSetLayout_->get(),
+        materialSetLayout_->get(),
+        bindlessSetLayout_->get(),
+    };
+
+    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
+        vkit::vulkan::pl::PBRPipelineLayout::kPushConstantRange,
+    };
+
+    const auto ci = ShaderProgramCreateInfo{
+        .device = *gpu_->device,
+        .vertexSpirv = vertex_shader_spirv,
+        .fragmentSpirv = fragment_shader_spirv,
+        .setLayouts = set_layouts,
+        .pushConstantRanges = push_constant_ranges,
+    };
+    shader_.emplace(ci);
   }
 }
 
-void App::update_instances() {}
-
-void App::update_view() {
-  auto const half_size = 0.5F * glm::vec2{m_framebuffer_size_};
-  auto mat_projection =
-      glm::perspective(glm::radians(90.0F),
-                       static_cast<float>(m_framebuffer_size_.x) /
-                           static_cast<float>(m_framebuffer_size_.y),
-                       0.1F, 1000.0F);
-
-  auto const mat_view =
-      glm::lookAt(m_camera_.position, m_camera_.target, m_camera_.up);
-
-  auto const mat_vp = mat_projection * mat_view;
-
-  auto const bytes =
-      std::bit_cast<std::array<std::byte, sizeof(mat_vp)>>(mat_vp);
-
-  m_view_ubo_->writeAt(m_frame_index_, bytes);
-}
-
-void App::bind_descriptor_sets(vk::CommandBuffer const command_buffer) const {
-  auto writes = std::array<vk::WriteDescriptorSet, 2>{};
-
-  auto const& descriptor_sets = m_descriptor_sets_.at(m_frame_index_);
-  auto write = vk::WriteDescriptorSet{};
-
-  auto const set0 = descriptor_sets[0];
-  auto const view_ubo_info = m_view_ubo_->descriptorInfoAt(m_frame_index_);
-  write.setBufferInfo(view_ubo_info)
-      .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-      .setDescriptorCount(1)
-      .setDstSet(set0)
-      .setDstBinding(0);
-  writes[0] = write;
-
-  auto const image_info = m_textures_[m_curr_tex_idx_].descriptorInfo();
-  write.setImageInfo(image_info)
-      .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
-      .setDescriptorCount(1)
-      .setDstSet(set0)
-      .setDstBinding(1);
-  writes[1] = write;
-
-  m_gpu_->device->updateDescriptorSets(writes, {});
-
-  command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                                    *m_pipeline_layout_, 0, descriptor_sets,
-                                    {});
-}
-
-void App::create_shader_resources() {
-  m_view_ubo_.emplace(m_gpu_->allocator, m_gpu_->queueFamilies.graphicsPresent,
+void App::createDescriptorResources() {
+  uboBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
                       vk::BufferUsageFlagBits::eUniformBuffer);
-  m_default_sampler_ = m_gpu_->device->createSamplerUnique(kNearestSamplerCiV);
-
-  using Pixel = std::array<std::byte, 4>;
-
-  static constexpr auto kRgbaPixelsV = std::array{
-      Pixel{std::byte{0xFF}, {}, {}, std::byte{0xFF}},
-      Pixel{std::byte{}, std::byte{0xFF}, {}, std::byte{0xFF}},
-      Pixel{std::byte{}, {}, std::byte{0xFF}, std::byte{0xFF}},
-      Pixel{std::byte{0xFF}, std::byte{0xFF}, {}, std::byte{0xFF}},
-  };
-  static constexpr auto kRgbaBytesV =
-      std::bit_cast<std::array<std::byte, sizeof(kRgbaPixelsV)>>(kRgbaPixelsV);
-
-  auto rgb_square = Texture2D{
-      TextureInfo::fromRawBuffer(kRgbaBytesV.data(), 2, 2),
-      m_gpu_->allocator,
-      vku::DeviceCopyInfo{
-          .device = *m_gpu_->device,
-          .commandPool = *m_cmd_block_pool_,
-          .queue = m_gpu_->queues.graphicsPresent,
-      },
-      vku::Image::maxMipLevels(2),
-  };
-  rgb_square.setSampler(*m_default_sampler_);
-  m_textures_.push_back(std::move(rgb_square));
-  m_texture_names_.emplace_back("4xRGBSquare");
-
-  // Bricks texture
-  auto brick = generateBricks(1024, 1024, 8.0F, 8.0F, 0.125F);
-  auto brick_tex = Texture2D{
-      TextureInfo::fromRawBuffer(brick.data(), 1024, 1024),
-      m_gpu_->allocator,
-      vku::DeviceCopyInfo{
-          .device = *m_gpu_->device,
-          .commandPool = *m_cmd_block_pool_,
-          .queue = m_gpu_->queues.graphicsPresent,
-      },
-      vku::Image::maxMipLevels(1024),
-  };
-  brick_tex.setSampler(*m_default_sampler_);
-  m_textures_.push_back(std::move(brick_tex));
-  m_texture_names_.emplace_back("Bricks");
-
-  // Stone texture
-  auto stone = generateStoneTiles(128, 128, 8, 0.5F);
-  auto stone_tex = Texture2D{
-      TextureInfo::fromRawBuffer(stone.data(), 128, 128),
-      m_gpu_->allocator,
-      vku::DeviceCopyInfo{
-          .device = *m_gpu_->device,
-          .commandPool = *m_cmd_block_pool_,
-          .queue = m_gpu_->queues.graphicsPresent,
-      },
-      vku::Image::maxMipLevels(128),
-  };
-  stone_tex.setSampler(*m_default_sampler_);
-  m_textures_.push_back(std::move(stone_tex));
-  m_texture_names_.emplace_back("Stone");
+  uboParamsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
+                            vk::BufferUsageFlagBits::eUniformBuffer);
+  materialsBuffer_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
+                           vk::BufferUsageFlagBits::eStorageBuffer);
 }
 
-void App::create_descriptor_sets() {
-  for (auto& descriptor_set : m_descriptor_sets_) {
-    descriptor_set = allocate_sets();
-    descriptor_set.push_back(*bindlessSetManager_->set_);
-  }
-}
-
-auto App::allocate_sets() const -> std::vector<vk::DescriptorSet> {
-  auto allocate_info = vk::DescriptorSetAllocateInfo{};
-  allocate_info.setDescriptorPool(*m_descriptor_pool_)
-      .setSetLayouts(m_set_layout_views_[0]);
-  return m_gpu_->device->allocateDescriptorSets(allocate_info);
-}
-
-void App::create_pipeline_layout() {
-  static constexpr auto kSet0BindingsV = std::array{
-      layoutBinding(0, vk::DescriptorType::eUniformBuffer),
-      layoutBinding(1, vk::DescriptorType::eCombinedImageSampler),
-  };
-
-  auto set_layout_cis = std::array<vk::DescriptorSetLayoutCreateInfo, 1>{};
-  set_layout_cis[0].setBindings(kSet0BindingsV);
-
-  for (auto const& set_layout_ci : set_layout_cis) {
-    m_set_layouts_.push_back(
-        m_gpu_->device->createDescriptorSetLayoutUnique(set_layout_ci));
-    m_set_layout_views_.push_back(*m_set_layouts_.back());
-  }
-
-  m_set_layout_views_.push_back(*bindlessSetManager_->bindless_);
-
-  auto push_constants_ranges = std::array<vk::PushConstantRange, 1>{};
-  push_constants_ranges[0]
-      .setOffset(0)
-      .setSize(sizeof(PushConstants))
-      .setStageFlags(vk::ShaderStageFlagBits::eVertex);
-
-  for (const auto& push_constant_range : push_constants_ranges) {
-    m_push_constant_ranges_.push_back(push_constant_range);
-  }
-
-  auto pipeline_layout_ci = vk::PipelineLayoutCreateInfo{};
-  pipeline_layout_ci.setSetLayouts(m_set_layout_views_)
-      .setPushConstantRanges(push_constants_ranges);
-  m_pipeline_layout_ =
-      m_gpu_->device->createPipelineLayoutUnique(pipeline_layout_ci);
-}
-
-void App::create_bindless_set_manager() {
-  bindlessSetManager_.emplace(*m_gpu_);
-}
-
-void App::create_descriptor_pool() {
+void App::createDescriptorPool() {
   static constexpr auto kPoolSizeV = std::array{
-      vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer,
-                             kResourceBufferingV},
-      vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
-                             kResourceBufferingV},
+      vk::DescriptorPoolSize{
+          vk::DescriptorType::eUniformBuffer,
+          2 * kResourceBufferingV,
+      },
+      vk::DescriptorPoolSize{
+          vk::DescriptorType::eStorageBuffer,
+          kResourceBufferingV,
+      },
   };
+
   auto pool_ci = vk::DescriptorPoolCreateInfo{};
   pool_ci.setPoolSizes(kPoolSizeV).setMaxSets(16);
-  m_descriptor_pool_ = m_gpu_->device->createDescriptorPoolUnique(pool_ci);
+  descriptorPool_ = gpu_->device->createDescriptorPoolUnique(pool_ci);
 }
 
-void App::create_transfer_command_pool() {
-  transferCommnadPool_ =
-      m_gpu_->createCommandPool(m_gpu_->queueFamilies.transfer,
-                                vk::CommandPoolCreateFlagBits::eTransient);
+void App::createDescriptorSets() {
+  {
+    auto layouts = std::array<vk::DescriptorSetLayout, kResourceBufferingV>{};
+    layouts.fill(sceneSetLayout_->get());
+
+    auto alloc_info = vk::DescriptorSetAllocateInfo{};
+    alloc_info.setDescriptorPool(*descriptorPool_).setSetLayouts(layouts);
+
+    auto descriptor_sets =
+        gpu_->device->allocateDescriptorSetsUnique(alloc_info);
+    assert(descriptor_sets.size() == kResourceBufferingV);
+
+    for (auto&& [idx, set] : std::ranges::views::enumerate(descriptor_sets)) {
+      sceneSets_[idx] = std::move(set);
+    }
+  }
+
+  {
+    auto layouts = std::array<vk::DescriptorSetLayout, kResourceBufferingV>{};
+    layouts.fill(materialSetLayout_->get());
+
+    auto alloc_info = vk::DescriptorSetAllocateInfo{};
+    alloc_info.setDescriptorPool(*descriptorPool_).setSetLayouts(layouts);
+
+    auto descriptor_sets =
+        gpu_->device->allocateDescriptorSetsUnique(alloc_info);
+    assert(descriptor_sets.size() == kResourceBufferingV);
+
+    for (auto&& [idx, set] : std::ranges::views::enumerate(descriptor_sets)) {
+      materialsSets_[idx] = std::move(set);
+    }
+  }
 }
 
-void App::create_cmd_block_pool() {
-  m_cmd_block_pool_ =
-      m_gpu_->createCommandPool(m_gpu_->queueFamilies.graphicsPresent,
-                                vk::CommandPoolCreateFlagBits::eTransient);
+void App::createBindlessSetManager() {
+  bindlessSetManager_.emplace(*gpu_, *bindlessSetLayout_);
 }
 
-void App::create_shader() {
-  auto const vertex_spirv = toSpirV(asset_path("shaders/primitive.vert"));
-  auto const fragment_spirv = toSpirV(asset_path("shaders/primitive.frag"));
-  auto const shader_ci = ShaderProgram::CreateInfo{
-      .device = *m_gpu_->device,
-      .vertexSpirv = vertex_spirv,
-      .fragmentSpirv = fragment_spirv,
-      .setLayouts = m_set_layout_views_,
-      .pushConstantRanges = m_push_constant_ranges_,
-  };
-  m_shader_.emplace(shader_ci);
+void App::createGraphicsCommandPool() {
+  graphicsCommandPool_ =
+      gpu_->createCommandPool(gpu_->queueFamilies.graphicsPresent,
+                              vk::CommandPoolCreateFlagBits::eTransient);
 }
 
-void App::create_render_sync() {
-  m_render_cmd_pool_ =
-      m_gpu_->createCommandPool(m_gpu_->queueFamilies.graphicsPresent);
+void App::createRenderCommandPool() {
+  renderCommandPool_ = gpu_->createCommandPool(
+      gpu_->queueFamilies.graphicsPresent,
+      vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
+}
 
-  auto command_buffer_ai = vk::CommandBufferAllocateInfo{};
-  command_buffer_ai.setCommandPool(*m_render_cmd_pool_)
+void App::createRenderSync() {
+  auto cb_ai = vk::CommandBufferAllocateInfo{};
+  cb_ai.setCommandPool(*renderCommandPool_)
       .setCommandBufferCount(static_cast<std::uint32_t>(kResourceBufferingV))
       .setLevel(vk::CommandBufferLevel::ePrimary);
-  auto const command_buffers =
-      m_gpu_->device->allocateCommandBuffers(command_buffer_ai);
-  assert(command_buffers.size() == m_render_sync_.size());
+
+  const auto cbs = gpu_->device->allocateCommandBuffers(cb_ai);
+  assert(cbs.size() == renderSync_.size());
 
   static constexpr auto kFenceCreateInfoV =
       vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled};
+
   for (auto [sync, command_buffer] :
-       std::ranges::views::zip(m_render_sync_, command_buffers)) {
-    sync.command_buffer = command_buffer;
-    sync.draw = m_gpu_->device->createSemaphoreUnique({});
-    sync.drawn = m_gpu_->device->createFenceUnique(kFenceCreateInfoV);
+       std::ranges::views::zip(renderSync_, cbs)) {
+    sync.cb = command_buffer;
+    sync.draw = gpu_->device->createSemaphoreUnique({});
+    sync.drawn = gpu_->device->createFenceUnique(kFenceCreateInfoV);
   }
 }
 
-void App::create_imgui() {
+void App::createImgui() {
   auto const imgui_ci = DearImGui::CreateInfo{
-      .window = m_window_.get(),
-      .api_vesrion = kVkVersionV,
-      .instance = *m_instance_,
-      .physical_device = m_gpu_->physicalDevice,
-      .queue_family = m_gpu_->queueFamilies.graphicsPresent,
-      .device = *m_gpu_->device,
-      .queue = m_gpu_->queues.graphicsPresent,
-      .color_format = m_swapchain_->getFormat(),
+      .window = window_.get(),
+      .apiVersion = kVkVersionV,
+      .instance = *instance_,
+      .physicalDevice = gpu_->physicalDevice,
+      .queueFamily = gpu_->queueFamilies.graphicsPresent,
+      .device = *gpu_->device,
+      .queue = gpu_->queues.graphicsPresent,
+      .colorFormat = swapchain_->getFormat(),
       .samples = vk::SampleCountFlagBits::e1,
   };
-  m_imgui_.emplace(imgui_ci);
+
+  imgui_.emplace(imgui_ci);
 }
 
-void App::create_swapchain() {
-  auto const size = glfw::framebuffer_size(m_window_.get());
-  m_swapchain_.emplace(*m_gpu_->device, m_gpu_->physicalDevice,
-                       m_gpu_->queueFamilies.graphicsPresent, m_gpu_->allocator,
-                       *m_surface_, size);
-}
+void App::createWindow() { window_ = glfw::createWindow({1280, 720}, "vkit"); }
 
-void App::create_device() {
-  m_gpu_.emplace(m_instance_.get(), m_surface_.get());
-  m_waiter_ = *m_gpu_->device;
-}
-
-void App::create_surface() {
-  m_surface_ = glfw::create_surface(m_window_.get(), *m_instance_);
-}
-
-void App::create_instance() {
+void App::createInstance() {
   VULKAN_HPP_DEFAULT_DISPATCHER.init();
 
   auto const loader_version = vk::enumerateInstanceVersion();
@@ -845,7 +819,7 @@ void App::create_instance() {
   };
   auto const layers = getLayers(kLayersV);
 
-  auto glfw_extensions = glfw::instance_extensions();
+  auto glfw_extensions = glfw::instanceExtensions();
   auto extensions =
       std::vector<const char*>(glfw_extensions.begin(), glfw_extensions.end());
   extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -866,259 +840,26 @@ void App::create_instance() {
       .setPEnabledExtensionNames(extensions)
       .setPNext(debug_create_info);
 
-  m_instance_ = vk::createInstanceUnique(instance_ci);
-  VULKAN_HPP_DEFAULT_DISPATCHER.init(*m_instance_);
+  instance_ = vk::createInstanceUnique(instance_ci);
+  VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance_);
 
-  m_debug_messenger_ = m_instance_->createDebugUtilsMessengerEXTUnique(
+  debugMessanger_ = instance_->createDebugUtilsMessengerEXTUnique(
       debug_create_info, nullptr, VULKAN_HPP_DEFAULT_DISPATCHER);
 }
 
-void App::create_window() {
-  m_window_ = glfw::create_window({1280, 720}, "learn vulkan");
+void App::createSurface() {
+  surface_ = glfw::createSurface(window_.get(), *instance_);
 }
 
-auto App::asset_path(std::string_view uri) const -> fs::path {
-  return m_assets_dir_ / uri;
+void App::createDevice() {
+  gpu_.emplace(*instance_, *surface_);
+  deviceWaiter_ = *gpu_->device;
 }
 
-void App::load_gltf() {
-  if (!load_asset(asset_path(MODEL_PATH) / "scene.gltf")) {
-    std::println(stderr, "failed to load gltf model");
-    return;
-  }
-
-  for (const auto& [idx, texture] :
-       std::ranges::views::enumerate(m_asset_->textures)) {
-    load_texture(idx, texture);
-  }
-
-  for (const auto& mesh : m_asset_->meshes) {
-    load_mesh(mesh);
-  }
-
-  for (const auto& material : m_asset_->materials) {
-  }
+void App::createSwapchain() {
+  auto const size = glfw::framebufferSize(window_.get());
+  swapchain_.emplace(*gpu_->device, gpu_->physicalDevice,
+                     gpu_->queueFamilies.graphicsPresent, gpu_->allocator,
+                     *surface_, size);
 }
-
-auto App::load_asset(fs::path const& path) -> bool {
-  if (!fs::exists(path)) {
-    std::println(stderr, "failed to find file: `{}`", path.generic_string());
-    return false;
-  }
-
-  std::println("Loading gltf from file: `{}`", path.generic_string());
-
-  {
-    static constexpr auto kSupportedExtensions =
-        fastgltf::Extensions::KHR_mesh_quantization |
-        fastgltf::Extensions::KHR_texture_transform |
-        fastgltf::Extensions::KHR_materials_variants;
-
-    fastgltf::Parser parser{kSupportedExtensions};
-
-    static constexpr auto kGltfOptions =
-        fastgltf::Options::DontRequireValidAssetMember |
-        fastgltf::Options::AllowDouble |
-        fastgltf::Options::LoadExternalBuffers |
-        fastgltf::Options::GenerateMeshIndices;
-
-    auto gltf_file = fastgltf::MappedGltfFile::FromPath(path);
-    if (!static_cast<bool>(gltf_file)) {
-      std::println(stderr, "failed to open glTF file: {}",
-                   fastgltf::getErrorMessage(gltf_file.error()));
-      return false;
-    }
-
-    auto expected_asset =
-        parser.loadGltf(gltf_file.get(), path.parent_path(), kGltfOptions);
-    if (expected_asset.error() != fastgltf::Error::None) {
-      std::println(stderr, "failed to load glTF: {}",
-                   fastgltf::getErrorMessage(expected_asset.error()));
-      return false;
-    }
-
-    m_asset_.emplace(std::move(expected_asset.get()));
-  }
-
-  return true;
-}
-
-auto App::load_texture(const size_t idx, const fastgltf::Texture& texture)
-    -> bool {
-  assert(m_asset_.has_value());
-  auto const& asset = *m_asset_;
-
-  if (auto image = asset.images[texture.imageIndex.value_or(0)];
-      texture.imageIndex.has_value()) {
-    std::visit(fastgltf::visitor{
-                   [&](fastgltf::sources::URI const& uri) {
-                     auto info = TextureInfo::fromPath(asset_path(MODEL_PATH) /
-                                                       uri.uri.path());
-
-                     auto tex = Texture2D{
-                         info,
-                         m_gpu_->allocator,
-                         vku::DeviceCopyInfo{
-                             .device = *m_gpu_->device,
-                             .commandPool = *m_cmd_block_pool_,
-                             .queue = m_gpu_->queues.graphicsPresent,
-                         },
-                         vku::Image::maxMipLevels(vk::Extent2D{
-                             static_cast<std::uint32_t>(info.width),
-                             static_cast<std::uint32_t>(info.height),
-                         }),
-                     };
-                     tex.setSampler(*m_default_sampler_);
-
-                     m_textures_.push_back(std::move(tex));
-                   },
-                   [&](fastgltf::sources::BufferView const& bufferView) {},
-                   [&](fastgltf::sources::Array const& array) {},
-                   [](auto& a) {},
-               },
-               image.data);
-  }
-
-  return true;
-}
-
-auto App::load_mesh(const fastgltf::Mesh& mesh) -> bool {
-  assert(m_asset_.has_value());
-  auto const& asset = *m_asset_;
-
-  auto out_mesh = Mesh{};
-  out_mesh.primitives.resize(mesh.primitives.size());
-
-  for (int i = 0; i < mesh.primitives.size(); i++) {
-    const auto& primitive = mesh.primitives[i];
-
-    assert(primitive.indicesAccessor.has_value());
-
-    auto& out_primitive = out_mesh.primitives[i];
-
-    auto vertices = std::vector<Vertex>{};
-    auto indices = std::vector<std::uint32_t>{};
-
-    // POSITIONS
-    {
-      const auto* pos_it = primitive.findAttribute("POSITION");
-      assert(pos_it != primitive.attributes.end());
-
-      const auto& pos_accessor = asset.accessors[pos_it->accessorIndex];
-      if (!pos_accessor.bufferViewIndex.has_value()) continue;
-
-      vertices.resize(pos_accessor.count);
-
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(
-          asset, pos_accessor, [&](glm::vec3 pos, std::size_t idx) {
-            vertices[idx].position = pos;
-            vertices[idx].uv_x = 0.0F;
-            vertices[idx].normal = glm::vec3(0.0F);
-            vertices[idx].uv_y = 0.0F;
-            vertices[idx].tangent = glm::vec4(0.0F);
-          });
-    }
-
-    // NORMALS
-    {
-      const auto* normal_it = primitive.findAttribute("NORMAL");
-      assert(normal_it != primitive.attributes.end());
-
-      const auto& normal_accessor = asset.accessors[normal_it->accessorIndex];
-      assert(normal_accessor.bufferViewIndex.has_value());
-
-      fastgltf::iterateAccessorWithIndex<glm::vec3>(
-          asset, normal_accessor, [&](glm::vec3 normal, std::size_t idx) {
-            vertices[idx].normal = normal;
-          });
-    }
-
-    // TANGENTS
-    {
-      const auto* tangent_it = primitive.findAttribute("TANGENT");
-      if (tangent_it != primitive.attributes.end()) {
-        const auto& tangent_accessor =
-            asset.accessors[tangent_it->accessorIndex];
-        assert(tangent_accessor.bufferViewIndex.has_value());
-
-        fastgltf::iterateAccessorWithIndex<glm::vec4>(
-            asset, tangent_accessor, [&](glm::vec4 tangent, std::size_t idx) {
-              vertices[idx].tangent = tangent;
-            });
-      }
-    }
-
-    // TEXTURE COORDINATES
-    {
-      auto texcoord_attr = std::string("TEXCOORD_0");
-      const auto* texcoord_it = primitive.findAttribute(texcoord_attr);
-      assert(texcoord_it != primitive.attributes.end());
-
-      const auto& texcoord_accessor =
-          asset.accessors[texcoord_it->accessorIndex];
-      assert(texcoord_accessor.bufferViewIndex.has_value());
-
-      fastgltf::iterateAccessorWithIndex<glm::vec2>(
-          asset, texcoord_accessor, [&](glm::vec2 uv, std::size_t idx) {
-            vertices[idx].uv_x = uv.x;
-            vertices[idx].uv_y = uv.y;
-          });
-    }
-
-    // INDICES
-    {
-      assert(primitive.indicesAccessor.has_value());
-      const auto& index_accessor =
-          asset.accessors[primitive.indicesAccessor.value()];
-
-      assert(index_accessor.bufferViewIndex.has_value());
-      assert(index_accessor.componentType ==
-             fastgltf::ComponentType::UnsignedInt);
-
-      indices.resize(index_accessor.count);
-      fastgltf::copyFromAccessor<std::uint32_t>(asset, index_accessor,
-                                                indices.data());
-    }
-
-    // vertex buffer
-    auto vertex_buffer = vku::DeviceBuffer{
-        m_gpu_->allocator,
-        vku::DeviceCopyInfo{
-            .device = *m_gpu_->device,
-            .commandPool = *transferCommnadPool_,
-            .queue = m_gpu_->queues.transfer,
-        },
-        std::from_range_t{},
-        vertices,
-        vk::BufferUsageFlagBits::eShaderDeviceAddress,
-    };
-    out_primitive.vertexBuffer = std::move(vertex_buffer);
-
-    auto index_buffer = vku::DeviceBuffer{
-        m_gpu_->allocator,
-        vku::DeviceCopyInfo{
-            .device = *m_gpu_->device,
-            .commandPool = *transferCommnadPool_,
-            .queue = m_gpu_->queues.transfer,
-        },
-        std::from_range_t{},
-        indices,
-        vk::BufferUsageFlagBits::eIndexBuffer,
-    };
-    out_primitive.indexBuffer = std::move(index_buffer);
-
-    // draw command
-    auto& draw = out_primitive.draw;
-    draw.count = indices.size();
-    draw.instance_count = 1;
-    draw.first_index = 0;
-    draw.vertex_offset = 0;
-    draw.first_instance = 0;
-  }
-
-  meshes_.emplace_back(std::move(out_mesh));
-
-  return true;
-};
-
-}  // namespace lvk
+};  // namespace lvk

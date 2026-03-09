@@ -6,13 +6,13 @@
 namespace lvk {
 struct DearImGuiCreateInfo {
   GLFWwindow* window;
-  std::uint32_t api_vesrion;
+  std::uint32_t apiVersion;
   vk::Instance instance;
-  vk::PhysicalDevice physical_device;
-  std::uint32_t queue_family;
+  vk::PhysicalDevice physicalDevice;
+  std::uint32_t queueFamily;
   vk::Device device;
   vk::Queue queue;
-  vk::Format color_format;
+  vk::Format colorFormat;
   vk::SampleCountFlagBits samples;
 };
 
@@ -20,10 +20,10 @@ class DearImGui {
  public:
   using CreateInfo = DearImGuiCreateInfo;
 
-  explicit DearImGui(CreateInfo const& create_info);
+  explicit DearImGui(const CreateInfo& createInfo);
 
-  void new_frame();
-  void end_frame();
+  void newFrame();
+  void endFrame();
   void render(vk::CommandBuffer cb) const;
 
  private:
@@ -33,8 +33,8 @@ class DearImGui {
     void operator()(vk::Device device) const;
   };
 
-  State m_state_;
+  State state_;
 
-  vku::Scoped<vk::Device, Deleter> m_device_;
+  vku::Scoped<vk::Device, Deleter> device_;
 };
 };  // namespace lvk

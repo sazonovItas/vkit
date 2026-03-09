@@ -29,12 +29,12 @@ struct Matricies {
 }
 };  // namespace
 
-auto Transform::model_matrix() const -> glm::mat4 {
+auto Transform::modelMatrix() const -> glm::mat4 {
   auto const [t, r, s] = to_matricies(position, rotation, scale);
   return t * r * s;
 }
 
-auto Transform::view_matrix() const -> glm::mat4 {
+auto Transform::viewMatrix() const -> glm::mat4 {
   auto const [t, r, s] = to_matricies(-position, -rotation, scale);
   return r * t * s;
 }

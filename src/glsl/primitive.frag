@@ -21,7 +21,7 @@ layout (set = 0, binding = 1) uniform UBOParams {
   vec3 lightDir;
 } uboParams;
 
-layout (set = 2, binding = 0, std430) readonly buffer SSBO {
+layout (set = 1, binding = 0, std430) readonly buffer SSBO {
   Material materials[];
 };
 
@@ -38,7 +38,7 @@ void main() {
   }
 
   vec3 normal = normalize(inNormal);
-  float diff = max(dot(normal, uboParams.lightDir), 0.0) * 0.5 + 0.5;
+  float diff = max(dot(normal, -uboParams.lightDir), 0.0);
 
   outColor = vec4(inColor0 * diff, 1.0) * baseColor;
 }

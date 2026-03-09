@@ -3,7 +3,7 @@
 #include "vulkan/descriptor_set_layout/dsl.hpp"
 
 namespace vkit::vulkan::dsl {
-struct Scene final : DescriptorSetLayout {
+struct SceneLayout final : DescriptorSetLayout {
   static constexpr auto kUBOBindingIdx = std::uint32_t{0};
   static constexpr auto kUBOParamsBindingIdx = std::uint32_t{1};
 
@@ -17,7 +17,7 @@ struct Scene final : DescriptorSetLayout {
                             vk::ShaderStageFlagBits::eFragment),
       };
 
-  explicit Scene(vk::Device device)
+  explicit SceneLayout(vk::Device device)
       : DescriptorSetLayout{
             device,
             vk::DescriptorSetLayoutCreateInfo{

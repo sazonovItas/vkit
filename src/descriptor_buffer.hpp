@@ -9,7 +9,7 @@ class DescriptorBuffer {
  public:
   explicit DescriptorBuffer(vma::Allocator allocator,
                             std::uint32_t queue_family,
-                            vk::BufferUsageFlags usage)
+                            vk::Flags<vk::BufferUsageFlagBits> usage)
       : allocator_{allocator}, queueFamily_{queue_family}, usage_{usage} {
     for (auto& buffer : buffers_) {
       writeTo(buffer, {});

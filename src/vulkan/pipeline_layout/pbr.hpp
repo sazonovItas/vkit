@@ -6,38 +6,39 @@
 #include "vulkan/pipeline_layout/pl.hpp"
 
 namespace vkit::vulkan::pl {
-struct Primitive final : PipelineLayout {
+struct PBRPipelineLayout final : PipelineLayout {
   struct PushConstants {
-    std::int32_t materialIdx;
+    std::uint32_t meshIdx;
+    std::uint32_t materialIdx;
     vk::DeviceAddress vertices;
   };
 
-  static constexpr auto kRange = vk::PushConstantRange{
+  static constexpr auto kPushConstantRange = vk::PushConstantRange{
       vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
       0,
       sizeof(PushConstants),
   };
 
-  explicit Primitive(
-      vk::Device device,
-      std::tuple<const dsl::Scene&, const dsl::Bindless&, const dsl::Material&>
-          setLayouts)
+  using DescriptorSetLayouts =
+      std::tuple<const dsl::SceneLayout&, const dsl::MaterialLayout&,
+                 const dsl::BindlessLayout&>;
+
+  explicit PBRPipelineLayout(vk::Device device, DescriptorSetLayouts setLayouts)
       : PipelineLayout{
             device,
             createPipelineCreateInfo(setLayouts),
         } {}
 
  private:
-  static auto createPipelineCreateInfo(
-      std::tuple<const dsl::Scene&, const dsl::Bindless&, const dsl::Material&>
-          setLayouts) -> vk::PipelineLayoutCreateInfo {
+  static auto createPipelineCreateInfo(DescriptorSetLayouts setLayouts)
+      -> vk::PipelineLayoutCreateInfo {
     const auto set_layouts = std::array<vk::DescriptorSetLayout, 3>{
         *get<0>(setLayouts),
         *get<1>(setLayouts),
         *get<2>(setLayouts),
     };
 
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kRange};
+    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
   }
 };
 };  // namespace vkit::vulkan::pl

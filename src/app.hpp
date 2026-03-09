@@ -7,18 +7,19 @@
 #include "dear_imgui.hpp"
 #include "descriptor_buffer.hpp"
 #include "fastgltf/types.hpp"
-#include "model.hpp"
+#include "gltf/asset.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "swapchain.hpp"
-#include "texture.hpp"
 #include "transform.hpp"
 #include "vk_mem_alloc.hpp"
 #include "vku/scoped/device_waiter.hpp"
+#include "vulkan/descriptor_set_layout/material.hpp"
+#include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/pipeline_layout/pbr.hpp"
+#include "vulkan/vulkan.hpp"
 #include "window.hpp"
-
-namespace fs = std::filesystem;
 
 namespace lvk {
 class App {
@@ -26,113 +27,152 @@ class App {
   void run();
 
  private:
+  struct Camera {
+    glm::vec3 position{1.0F, 1.0F, 1.0F};
+    glm::vec3 target{0.0F};
+    glm::vec3 up{0.0F, 1.0F, 0.0F};
+  };
+
+  struct UBO {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 projection;
+    glm::vec3 cameraPosition;
+  };
+
+  struct UBOParams {
+    glm::vec3 lightDir{0.0, 0.0, -1.0};
+  };
+
+  struct Material {
+    glm::vec4 baseColorFactor;
+    glm::vec4 emissiveFactor;
+    glm::vec4 diffuseFactor;
+    glm::vec4 specularFactor;
+
+    std::int32_t baseColorTextureIdx;
+    std::int32_t metallicRoughnessTextureIdx;
+    std::int32_t normalTextureIdx;
+    std::int32_t occlusionTextureIdx;
+
+    std::int32_t emissiveTextureIdx;
+    std::int32_t _padding0[3];
+
+    float metallicFactor;
+    float roughnessFactor;
+    float alphaMask;
+    float alphaMaskCutoff{1.0F};
+
+    float emissiveStrength;
+    float _padding1[3];
+  };
+
   struct RenderSync {
     vk::UniqueSemaphore draw;
     vk::UniqueFence drawn;
-    vk::CommandBuffer command_buffer;
+    vk::CommandBuffer cb;
   };
 
-  void create_window();
-  void create_instance();
-  void create_surface();
-  void create_device();
-  void create_swapchain();
-  void create_render_sync();
-  void create_imgui();
-  void create_bindless_set_manager();
-  void create_descriptor_pool();
-  void create_pipeline_layout();
-  void create_shader();
-  void create_shader_resources();
-  void create_cmd_block_pool();
-  void create_transfer_command_pool();
-  void create_descriptor_sets();
+  void mainLoop();
 
-  [[nodiscard]] auto asset_path(std::string_view uri) const -> fs::path;
-  [[nodiscard]] auto allocate_sets() const -> std::vector<vk::DescriptorSet>;
+  auto acquireRenderTarget() -> bool;
+  auto beginFrame() -> vk::CommandBuffer;
+  void transitionForRender(vk::CommandBuffer cb) const;
+  void render(vk::CommandBuffer cb);
+  void transitionForPresent(vk::CommandBuffer cb) const;
+  void submitAndPresent();
 
-  void main_loop();
+  [[nodiscard]] auto assetPath(std::string_view uri) const
+      -> std::filesystem::path;
+  [[nodiscard]] auto allocateSets() const -> std::vector<vk::DescriptorSet>;
 
-  auto acquire_render_target() -> bool;
-  auto begin_frame() -> vk::CommandBuffer;
-  void transition_for_render(vk::CommandBuffer command_buffer) const;
-  void render(vk::CommandBuffer command_buffer);
-  void transition_for_present(vk::CommandBuffer command_buffer) const;
-  void submit_and_present();
+  void update();
+  void updateMaterials();
+
+  void updateDescriptorSets() const;
+
+  void draw(vk::CommandBuffer cb) const;
+  void bindDescriptorSets(vk::CommandBuffer cb) const;
+
+  void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
+                fastgltf::AlphaMode alphaMode) const;
 
   void inspect();
-  void update_view();
-  void update_instances();
-  void draw(vk::CommandBuffer command_buffer) const;
-  void draw_mesh(vk::CommandBuffer command_buffer, std::size_t mesh_idx) const;
-  void bind_descriptor_sets(vk::CommandBuffer command_buffer) const;
 
-  void load_gltf();
-  auto load_asset(fs::path const& path) -> bool;
-  auto load_mesh(const fastgltf::Mesh& mesh) -> bool;
-  auto load_texture(size_t idx, const fastgltf::Texture& texture) -> bool;
-  auto load_material(const fastgltf::Material& material) -> bool;
+  void loadGLTF(const std::filesystem::path& path);
 
-  fs::path m_assets_dir_;
+  void createWindow();
+  void createInstance();
+  void createSurface();
+  void createDevice();
+  void createSwapchain();
 
-  glfw::Window m_window_;
-  vk::UniqueInstance m_instance_;
-  vk::UniqueDebugUtilsMessengerEXT m_debug_messenger_;
-  vk::UniqueSurfaceKHR m_surface_;
+  void createRenderCommandPool();
+  void createRenderSync();
 
-  std::optional<vkit::vulkan::Gpu> m_gpu_;
+  void createDescriptorLayouts();
+  void createPipelineLayouts();
+  void createShaders();
 
-  std::optional<Swapchain> m_swapchain_;
+  void createDescriptorResources();
+  void createDescriptorPool();
+  void createDescriptorSets();
+  void createBindlessSetManager();
 
-  vk::UniqueCommandPool m_render_cmd_pool_;
-  vk::UniqueCommandPool m_cmd_block_pool_;
-  vk::UniqueCommandPool transferCommnadPool_;
-  Buffered<RenderSync> m_render_sync_{};
-  std::size_t m_frame_index_{};
+  void createGraphicsCommandPool();
 
-  std::optional<DearImGui> m_imgui_;
+  void createImgui();
 
-  vk::UniqueDescriptorPool m_descriptor_pool_;
-  std::optional<BindlessSetManager> bindlessSetManager_;
-  std::vector<vk::UniqueDescriptorSetLayout> m_set_layouts_;
-  std::vector<vk::DescriptorSetLayout> m_set_layout_views_;
-  std::vector<vk::PushConstantRange> m_push_constant_ranges_;
-  vk::UniquePipelineLayout m_pipeline_layout_;
+  std::filesystem::path assetDir_;
 
-  std::optional<ShaderProgram> m_shader_;
+  Camera camera_;
+  Transform transform_;
 
-  std::optional<fastgltf::Asset> m_asset_;
-  std::vector<Mesh> meshes_;
+  glfw::Window window_;
+  glm::ivec2 frameBufferSize_;
+
+  vk::UniqueInstance instance_;
+  vk::UniqueDebugUtilsMessengerEXT debugMessanger_;
+  vk::UniqueSurfaceKHR surface_;
+
+  std::optional<vkit::vulkan::Gpu> gpu_;
+
+  std::optional<Swapchain> swapchain_;
+
+  vk::UniqueCommandPool renderCommandPool_;
+  vk::UniqueCommandPool graphicsCommandPool_;
+
+  std::size_t frameIndex_{};
+  Buffered<RenderSync> renderSync_{};
+
+  std::optional<DearImGui> imgui_;
+
+  vk::UniqueDescriptorPool descriptorPool_;
+
+  std::optional<vkit::vulkan::dsl::SceneLayout> sceneSetLayout_;
+  std::optional<vkit::vulkan::dsl::MaterialLayout> materialSetLayout_;
+  std::optional<vkit::vulkan::dsl::BindlessLayout> bindlessSetLayout_;
+
+  std::optional<vkit::vulkan::pl::PBRPipelineLayout> pbrPipelineLayout_;
+
+  std::optional<ShaderProgram> shader_;
+
+  UBO ubo_;
+  UBOParams uboParams_;
   std::vector<Material> materials_;
 
-  Transform m_transform_;
+  std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
+  std::optional<DescriptorBuffer<kResourceBufferingV>> uboParamsBuffers_;
+  std::optional<DescriptorBuffer<1>> materialsBuffer_;
 
-  std::optional<DescriptorBuffer<kResourceBufferingV>> m_view_ubo_;
-  std::uint32_t m_curr_tex_idx_{0};
-  Buffered<std::vector<vk::DescriptorSet>> m_descriptor_sets_{};
+  Buffered<vk::UniqueDescriptorSet> sceneSets_;
+  Buffered<vk::UniqueDescriptorSet> materialsSets_;
+  std::optional<BindlessSetManager> bindlessSetManager_;
 
-  vk::UniqueSampler m_default_sampler_;
-  std::vector<std::string> m_texture_names_;
-  std::vector<Texture2D> m_textures_;
+  std::optional<RenderTarget> renderTarget_;
 
-  glm::ivec2 m_framebuffer_size_{};
-  std::optional<RenderTarget> m_render_target_;
+  std::optional<gltf::Asset> gltfAsset_;
 
-  bool m_wireframe_{false};
-  float m_line_width_{1.0F};
-
-  struct Camera {
-    glm::vec3 position;
-    glm::vec3 target;
-    glm::vec3 up;
-  };
-
-  Camera m_camera_{
-      .position = glm::vec3(0.0F, 2.0F, 2.0F),
-      .target = glm::vec3(0.0F, 0.0F, 0.0F),
-      .up = glm::vec3(0.0F, 1.0F, 0.0F),
-  };
-
-  vku::DeviceWaiter m_waiter_;
+  vku::DeviceWaiter deviceWaiter_;
 };
 }  // namespace lvk

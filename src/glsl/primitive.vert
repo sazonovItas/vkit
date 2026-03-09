@@ -19,7 +19,7 @@ void main() {
   Vertex v = pcs.vertices.data[gl_VertexIndex];
 
   vec4 worldPos = ubo.model * vec4(v.position, 1.0);
-  vec3 normal = normalize(transpose(inverse(mat3(ubo.model))) * v.normal);
+  vec3 normal = normalize(mat3(ubo.model) * v.normal);
   vec2 uv = vec2(v.uvX, v.uvY);
 
   outWorldPos = worldPos.xyz;

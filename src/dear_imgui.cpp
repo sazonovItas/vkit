@@ -10,7 +10,7 @@
 #include "resource_buffering.hpp"
 
 namespace lvk {
-DearImGui::DearImGui(CreateInfo const& create_info) {
+DearImGui::DearImGui(const CreateInfo& createInfo) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
 
@@ -19,29 +19,28 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
         *static_cast<vk::Instance*>(user_data), name);
   };
 
-  auto instance = create_info.instance;
-  ImGui_ImplVulkan_LoadFunctions(create_info.api_vesrion, kLoadVkFunc,
-                                 &instance);
+  auto instance = createInfo.instance;
+  ImGui_ImplVulkan_LoadFunctions(createInfo.apiVersion, kLoadVkFunc, &instance);
 
-  if (!ImGui_ImplGlfw_InitForVulkan(create_info.window, true)) {
+  if (!ImGui_ImplGlfw_InitForVulkan(createInfo.window, true)) {
     throw std::runtime_error{"failed to init dear imgui"};
   }
 
   auto init_info = ImGui_ImplVulkan_InitInfo{};
-  init_info.ApiVersion = create_info.api_vesrion;
-  init_info.Instance = create_info.instance;
-  init_info.PhysicalDevice = create_info.physical_device;
-  init_info.Device = create_info.device;
-  init_info.QueueFamily = create_info.queue_family;
-  init_info.Queue = create_info.queue;
+  init_info.ApiVersion = createInfo.apiVersion;
+  init_info.Instance = createInfo.instance;
+  init_info.PhysicalDevice = createInfo.physicalDevice;
+  init_info.Device = createInfo.device;
+  init_info.QueueFamily = createInfo.queueFamily;
+  init_info.Queue = createInfo.queue;
   init_info.MinImageCount = kResourceBufferingV;
   init_info.ImageCount = static_cast<std::uint32_t>(kResourceBufferingV);
   init_info.DescriptorPoolSize = 8;
   init_info.PipelineInfoMain.MSAASamples =
-      static_cast<VkSampleCountFlagBits>(create_info.samples);
+      static_cast<VkSampleCountFlagBits>(createInfo.samples);
   auto pipeline_rendering_ci = vk::PipelineRenderingCreateInfo{};
   pipeline_rendering_ci.setColorAttachmentCount(1).setColorAttachmentFormats(
-      create_info.color_format);
+      createInfo.colorFormat);
   init_info.PipelineInfoMain.PipelineRenderingCreateInfo =
       pipeline_rendering_ci;
   init_info.UseDynamicRendering = true;
@@ -57,25 +56,25 @@ DearImGui::DearImGui(CreateInfo const& create_info) {
   }
   ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 0.99F;
 
-  m_device_ = vku::Scoped<vk::Device, Deleter>{create_info.device};
+  device_ = vku::Scoped<vk::Device, Deleter>{createInfo.device};
 }
 
-void DearImGui::new_frame() {
-  if (m_state_ == State::kBegun) {
-    end_frame();
+void DearImGui::newFrame() {
+  if (state_ == State::kBegun) {
+    endFrame();
   }
   ImGui_ImplGlfw_NewFrame();
   ImGui_ImplVulkan_NewFrame();
   ImGui::NewFrame();
-  m_state_ = State::kBegun;
+  state_ = State::kBegun;
 }
 
-void DearImGui::end_frame() {
-  if (m_state_ == State::kEnded) {
+void DearImGui::endFrame() {
+  if (state_ == State::kEnded) {
     return;
   }
   ImGui::Render();
-  m_state_ = State::kEnded;
+  state_ = State::kEnded;
 }
 
 void DearImGui::render(vk::CommandBuffer cb) const {
