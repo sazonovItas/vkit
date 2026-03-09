@@ -182,7 +182,7 @@ auto Swapchain::baseColorBarrier() const -> vk::ImageMemoryBarrier2 {
 auto Swapchain::baseDepthBarrier() const -> vk::ImageMemoryBarrier2 {
   auto ret = vk::ImageMemoryBarrier2{};
   ret.setImage(depthImage_.image)
-      .setSubresourceRange(colorImage_.subresourceRange())
+      .setSubresourceRange(depthImage_.subresourceRange())
       .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
       .setDstQueueFamilyIndex(vk::QueueFamilyIgnored);
   return ret;

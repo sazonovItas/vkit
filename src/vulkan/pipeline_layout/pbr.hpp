@@ -11,6 +11,7 @@ struct PBRPipelineLayout final : PipelineLayout {
     std::uint32_t meshIdx;
     std::uint32_t materialIdx;
     vk::DeviceAddress vertices;
+    glm::mat4 transform;
   };
 
   static constexpr auto kPushConstantRange = vk::PushConstantRange{

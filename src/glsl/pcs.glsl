@@ -8,8 +8,10 @@
 
 layout (push_constant, scalar) uniform PushConstants
 {
-  int materialIdx;
+  uint meshIdx;
+  uint materialIdx;
   VertexBuffer vertices;
+  mat4 transform;
 } pcs;
 
 #endif // PCS_GLSL

@@ -8,6 +8,7 @@
 #include <cassert>
 #include <chrono>
 #include <cstddef>
+#include <cstring>
 #include <optional>
 #include <print>
 #include <ranges>
@@ -20,6 +21,7 @@
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
+#include "glm/gtc/type_ptr.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "stb_image.h"
@@ -35,7 +37,11 @@ VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 #define MODEL_PATH "models/cannon/scene.gltf"
 
 namespace {
-constexpr auto kVkVersionV = VK_MAKE_VERSION(1, 3, 0);
+constexpr auto kVkMajor = 1;
+constexpr auto kVkMinor = 3;
+constexpr auto kVkPatch = 0;
+
+constexpr auto kVkVersionV = VK_MAKE_VERSION(kVkMajor, kVkMinor, kVkPatch);
 
 vk::Bool32 VKAPI_CALL
 debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
@@ -77,7 +83,7 @@ debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
     };
 
     if (std::ranges::find_if(available, pred) == available.end()) {
-      std::println("[lvk] [WARNING] Vulkan layer '{}' not found", layer);
+      std::println("[vkit] [WARNING] Vulkan layer '{}' not found", layer);
       continue;
     }
 
@@ -284,49 +290,42 @@ void App::loadGLTF(const std::filesystem::path& path) {
   gltfAsset_.emplace(path, gpu_->allocator, copy_info);
 
   for (const auto& [idx, texture] : gltfAsset_->textures) {
-    bindlessSetManager_->addTexture2D(*gpu_->device, idx, *texture.get());
+    bindlessSetManager_->addTexture2D(*gpu_->device, static_cast<uint32_t>(idx),
+                                      *texture);
   }
 
-  materials_.reserve(gltfAsset_->materials.size());
+  size_t max_idx = 0;
   for (const auto& [idx, m] : gltfAsset_->materials) {
-    auto material = Material{
-        .baseColorFactor = m.baseColorFactor,
-        .emissiveFactor = m.emissiveFactor,
-        .baseColorTextureIdx =
-            m.baseColorTexture
-                ? static_cast<int32_t>(m.baseColorTexture.value())
-                : -1,
-        .metallicRoughnessTextureIdx =
-            m.metallicRoughnessTexture
-                ? static_cast<int32_t>(m.baseColorTexture.value())
-                : -1,
-        .normalTextureIdx =
-            m.normalTexture ? static_cast<int32_t>(m.baseColorTexture.value())
-                            : -1,
-        .occlusionTextureIdx =
-            m.occlusionTexture
-                ? static_cast<int32_t>(m.baseColorTexture.value())
-                : -1,
-        .metallicFactor = m.metallicFactor,
-        .roughnessFactor = m.roughnessFactor,
+    max_idx = std::max(max_idx, idx);
+  }
+  materials_.clear();
+  materials_.resize(max_idx + 1);
+
+  for (const auto& [idx, m] : gltfAsset_->materials) {
+    Material mat{};
+
+    mat.baseColorFactor = m.baseColorFactor;
+    mat.emissiveFactor = glm::vec4(glm::make_vec3(&m.emissiveFactor.x), 1.0F);
+    mat.metallicFactor = m.metallicFactor;
+    mat.roughnessFactor = m.roughnessFactor;
+    mat.alphaMaskCutoff =
+        (m.alphaMode == fastgltf::AlphaMode::Mask) ? m.alphaCutoff : 0.0F;
+    mat.emissiveStrength = m.emissiveStrength;
+
+    auto get_tex_idx = [](const std::optional<std::uint32_t>& tex) -> int32_t {
+      return tex.has_value() ? static_cast<int32_t>(*tex) : -1;
     };
 
-    materials_.emplace_back(material);
+    mat.baseColorTextureIdx = get_tex_idx(m.baseColorTexture);
+    mat.metallicRoughnessTextureIdx = get_tex_idx(m.metallicRoughnessTexture);
+    mat.normalTextureIdx = get_tex_idx(m.normalTexture);
+    mat.occlusionTextureIdx = get_tex_idx(m.occlusionTexture);
+    mat.emissiveTextureIdx = get_tex_idx(m.emissiveTexture);
+
+    materials_[idx] = mat;
   }
 
   updateMaterials();
-}
-
-void App::draw(vk::CommandBuffer cb) const {
-  shader_->bind(cb, frameBufferSize_);
-  bindDescriptorSets(cb);
-
-  fastgltf::iterateSceneNodes(
-      gltfAsset_->asset, gltfAsset_->sceneIdx, fastgltf::math::fmat4x4(),
-      [&](const fastgltf::Node& node,
-          const fastgltf::math::fmat4x4& /*transform*/) {
-        drawNode(cb, node, fastgltf::AlphaMode::Opaque);
-      });
 }
 
 void App::bindDescriptorSets(vk::CommandBuffer cb) const {
@@ -340,34 +339,89 @@ void App::bindDescriptorSets(vk::CommandBuffer cb) const {
                         pbrPipelineLayout_->get(), 0, descriptor_sets, {});
 }
 
+void App::draw(vk::CommandBuffer cb) const {
+  if (!gltfAsset_.has_value()) {
+    return;
+  }
+
+  bindDescriptorSets(cb);
+  shader_->bind(cb, frameBufferSize_);
+
+  cb.setDepthWriteEnable(vk::True);
+  cb.setColorBlendEnableEXT(0, vk::False);
+  cb.setCullMode(vk::CullModeFlagBits::eBack);
+
+  fastgltf::iterateSceneNodes(gltfAsset_->asset, gltfAsset_->sceneIdx,
+                              fastgltf::math::fmat4x4(),
+                              [&](const fastgltf::Node& node,
+                                  const fastgltf::math::fmat4x4& transform) {
+                                drawNode(cb, node, transform, false);
+                              });
+
+  cb.setDepthWriteEnable(vk::False);
+
+  auto color_blend_equation =
+      vk::ColorBlendEquationEXT{}
+          .setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
+          .setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
+          .setColorBlendOp(vk::BlendOp::eAdd)
+          .setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+          .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+          .setAlphaBlendOp(vk::BlendOp::eAdd);
+
+  cb.setColorBlendEnableEXT(0, vk::True);
+  cb.setColorBlendEquationEXT(0, color_blend_equation);
+
+  fastgltf::iterateSceneNodes(gltfAsset_->asset, gltfAsset_->sceneIdx,
+                              fastgltf::math::fmat4x4(),
+                              [&](const fastgltf::Node& node,
+                                  const fastgltf::math::fmat4x4& transform) {
+                                drawNode(cb, node, transform, true);
+                              });
+}
+
 void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
-                   fastgltf::AlphaMode /*alphaMode*/) const {
+                   const fastgltf::math::fmat4x4& transform,
+                   bool isTransparentPass) const {
   using PbrPushConstants = vkit::vulkan::pl::PBRPipelineLayout::PushConstants;
 
-  if (node.meshIndex) {
-    auto it = gltfAsset_->meshes.find(node.meshIndex.value());
-    assert(it != gltfAsset_->meshes.end());
+  if (!node.meshIndex.has_value()) return;
 
-    const auto& mesh = it->second;
+  auto it = gltfAsset_->meshes.find(node.meshIndex.value());
+  assert(it != gltfAsset_->meshes.end());
+  const auto& mesh = it->second;
 
-    auto push_constants = PbrPushConstants{
-        .meshIdx = static_cast<uint32_t>(node.meshIndex.value()),
-    };
-    for (const auto& primitive : mesh->primitives) {
-      push_constants.materialIdx = primitive.materialIdx;
-      push_constants.vertices =
-          primitive.vertexBuffer.getAddress(*gpu_->device);
+  glm::mat4 node_transform;
+  std::memcpy(glm::value_ptr(node_transform), transform.data(),
+              sizeof(glm::mat4));
 
-      cb.pushConstants(
-          pbrPipelineLayout_->get(),
-          vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-          0, sizeof(PbrPushConstants), &push_constants);
+  auto push_constants = PbrPushConstants{
+      .meshIdx = static_cast<uint32_t>(node.meshIndex.value()),
+      .transform = glm::identity<glm::mat4>(),
+  };
 
-      cb.bindIndexBuffer(primitive.indexBuffer.buffer, 0,
-                         vk::IndexType::eUint32);
+  for (const auto& primitive : mesh->primitives) {
+    const auto& material = gltfAsset_->materials.at(primitive.materialIdx);
+    bool is_blend = (material.alphaMode == fastgltf::AlphaMode::Blend);
 
-      cb.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
-    }
+    if (isTransparentPass && !is_blend) continue;
+    if (!isTransparentPass && is_blend) continue;
+
+    vk::CullModeFlags cull_mode = material.doubleSided
+                                      ? vk::CullModeFlagBits::eNone
+                                      : vk::CullModeFlagBits::eBack;
+    cb.setCullMode(cull_mode);
+
+    push_constants.materialIdx = primitive.materialIdx;
+    push_constants.vertices = primitive.vertexBuffer.getAddress(*gpu_->device);
+
+    cb.pushConstants(
+        pbrPipelineLayout_->get(),
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        0, sizeof(PbrPushConstants), &push_constants);
+
+    cb.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
+    cb.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
   }
 }
 
@@ -399,7 +453,10 @@ void App::update() {
 }
 
 void App::updateMaterials() {
-  materialsBuffer_->writeAt(0, toByteSpan(materials_));
+  auto bytes = toByteSpan(materials_);
+  for (uint32_t i = 0; i < kResourceBufferingV; ++i) {
+    materialsBuffers_->writeAt(i, bytes);
+  }
 }
 
 void App::updateDescriptorSets() const {
@@ -425,7 +482,7 @@ void App::updateDescriptorSets() const {
   writes[1] = write;
 
   const auto materials_set = *materialsSets_.at(frameIndex_);
-  const auto materials_info = materialsBuffer_->descriptorInfoAt(0);
+  const auto materials_info = materialsBuffers_->descriptorInfoAt(frameIndex_);
   write.setBufferInfo(materials_info)
       .setDescriptorType(vk::DescriptorType::eStorageBuffer)
       .setDescriptorCount(1)
@@ -578,15 +635,15 @@ void App::render(vk::CommandBuffer cb) {
       .setPColorAttachments(&color_attachment)
       .setPDepthAttachment(&depth_attachment);
 
+  cb.beginRendering(rendering_info);
   update();
   updateDescriptorSets();
-
-  cb.beginRendering(rendering_info);
   draw(cb);
   cb.endRendering();
 
   auto imgui_attachment = vk::RenderingAttachmentInfo{};
   imgui_attachment.setImageView(renderTarget_->swapchainImageView)
+      .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eLoad)
       .setStoreOp(vk::AttachmentStoreOp::eStore);
 
@@ -596,10 +653,9 @@ void App::render(vk::CommandBuffer cb) {
       .setColorAttachmentCount(1)
       .setPColorAttachments(&imgui_attachment);
 
+  cb.beginRendering(imgui_rendering);
   inspect();
   imgui_->endFrame();
-
-  cb.beginRendering(imgui_rendering);
   imgui_->render(cb);
   cb.endRendering();
 }
@@ -694,8 +750,8 @@ void App::createDescriptorResources() {
                       vk::BufferUsageFlagBits::eUniformBuffer);
   uboParamsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
                             vk::BufferUsageFlagBits::eUniformBuffer);
-  materialsBuffer_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
-                           vk::BufferUsageFlagBits::eStorageBuffer);
+  materialsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
+                            vk::BufferUsageFlagBits::eStorageBuffer);
 }
 
 void App::createDescriptorPool() {
@@ -711,7 +767,10 @@ void App::createDescriptorPool() {
   };
 
   auto pool_ci = vk::DescriptorPoolCreateInfo{};
-  pool_ci.setPoolSizes(kPoolSizeV).setMaxSets(16);
+  pool_ci.setPoolSizes(kPoolSizeV)
+      .setMaxSets(16)
+      .setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind |
+                vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet);
   descriptorPool_ = gpu_->device->createDescriptorPoolUnique(pool_ci);
 }
 
@@ -808,39 +867,44 @@ void App::createInstance() {
 
   auto const loader_version = vk::enumerateInstanceVersion();
   if (loader_version < kVkVersionV) {
-    throw std::runtime_error{"loader does not support vulkan 1.3"};
+    throw std::runtime_error{
+        std::format("loader does not support vulkan {}.{}.{}", kVkMajor,
+                    kVkMinor, kVkPatch),
+    };
   }
 
-  auto app_info = vk::ApplicationInfo{};
-  app_info.setPApplicationName("learn vulkan").setApiVersion(kVkVersionV);
+  auto app_info =
+      vk::ApplicationInfo{}.setPApplicationName("vkit").setApiVersion(
+          kVkVersionV);
 
-  static constexpr auto kLayersV = std::array{
-      "VK_LAYER_KHRONOS_validation",
-  };
-  auto const layers = getLayers(kLayersV);
+  auto debug_create_info =
+      vk::DebugUtilsMessengerCreateInfoEXT{}
+          .setMessageSeverity(
+              vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
+              vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+              vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
+          .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                          vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
+                          vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
+          .setPfnUserCallback(&debugCallback);
 
   auto glfw_extensions = glfw::instanceExtensions();
   auto extensions =
       std::vector<const char*>(glfw_extensions.begin(), glfw_extensions.end());
-  extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-  auto debug_create_info = vk::DebugUtilsMessengerCreateInfoEXT{};
-  debug_create_info.setMessageSeverity(
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-      vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose);
-  debug_create_info.setMessageType(
-      vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-      vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-      vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance);
-  debug_create_info.setPfnUserCallback(&debugCallback);
+  extensions.push_back(vk::EXTDebugUtilsExtensionName);
 
-  auto instance_ci = vk::InstanceCreateInfo{};
-  instance_ci.setPApplicationInfo(&app_info)
-      .setPEnabledExtensionNames(extensions)
-      .setPNext(debug_create_info);
+  static constexpr auto kLayersV = std::array{"VK_LAYER_KHRONOS_validation"};
+  auto const layers = getLayers(kLayersV);
+
+  auto instance_ci = vk::InstanceCreateInfo{}
+                         .setPApplicationInfo(&app_info)
+                         .setPEnabledLayerNames(layers)
+                         .setPEnabledExtensionNames(extensions)
+                         .setPNext(&debug_create_info);
 
   instance_ = vk::createInstanceUnique(instance_ci);
+
   VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance_);
 
   debugMessanger_ = instance_->createDebugUtilsMessengerEXTUnique(

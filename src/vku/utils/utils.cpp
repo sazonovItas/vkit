@@ -69,7 +69,7 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
             vk::ImageSubresourceLayers{}
                 .setAspectMask(Image::inferAspectFlags(image.format))
                 .setMipLevel(i - 1)
-                .setBaseArrayLayer(0)
+                .setBaseArrayLayer(baseArrayLayer)
                 .setLayerCount(1))
         .setSrcOffsets({
             vk::Offset3D{0, 0, 0},
@@ -79,7 +79,7 @@ void generateMipmaps(vk::CommandBuffer cb, const Image& image,
             vk::ImageSubresourceLayers{}
                 .setAspectMask(Image::inferAspectFlags(image.format))
                 .setMipLevel(i)
-                .setBaseArrayLayer(0)
+                .setBaseArrayLayer(baseArrayLayer)
                 .setLayerCount(1))
         .setDstOffsets({
             vk::Offset3D{0, 0, 0},

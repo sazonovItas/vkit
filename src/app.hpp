@@ -37,34 +37,31 @@ class App {
     glm::mat4 model;
     glm::mat4 view;
     glm::mat4 projection;
-    glm::vec3 cameraPosition;
+    alignas(16) glm::vec3 cameraPosition;
   };
 
   struct UBOParams {
-    glm::vec3 lightDir{0.0, 0.0, -1.0};
+    glm::vec3 lightDir{0.0, -1.0, -1.0};
   };
 
-  struct Material {
+  struct alignas(16) Material {
     glm::vec4 baseColorFactor;
     glm::vec4 emissiveFactor;
-    glm::vec4 diffuseFactor;
-    glm::vec4 specularFactor;
-
-    std::int32_t baseColorTextureIdx;
-    std::int32_t metallicRoughnessTextureIdx;
-    std::int32_t normalTextureIdx;
-    std::int32_t occlusionTextureIdx;
-
-    std::int32_t emissiveTextureIdx;
-    std::int32_t _padding0[3];
 
     float metallicFactor;
     float roughnessFactor;
-    float alphaMask;
-    float alphaMaskCutoff{1.0F};
-
+    float alphaMaskCutoff;
     float emissiveStrength;
-    float _padding1[3];
+
+    int32_t baseColorTextureIdx;
+    int32_t metallicRoughnessTextureIdx;
+    int32_t normalTextureIdx;
+    int32_t occlusionTextureIdx;
+
+    int32_t emissiveTextureIdx;
+    int32_t pad0;
+    int32_t pad1;
+    int32_t pad2;
   };
 
   struct RenderSync {
@@ -95,7 +92,8 @@ class App {
   void bindDescriptorSets(vk::CommandBuffer cb) const;
 
   void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
-                fastgltf::AlphaMode alphaMode) const;
+                const fastgltf::math::fmat4x4& transform,
+                bool isTransparentPass) const;
 
   void inspect();
 
@@ -163,7 +161,7 @@ class App {
 
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboParamsBuffers_;
-  std::optional<DescriptorBuffer<1>> materialsBuffer_;
+  std::optional<DescriptorBuffer<kResourceBufferingV>> materialsBuffers_;
 
   Buffered<vk::UniqueDescriptorSet> sceneSets_;
   Buffered<vk::UniqueDescriptorSet> materialsSets_;

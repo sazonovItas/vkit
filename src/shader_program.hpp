@@ -28,11 +28,6 @@ struct ShaderProgramCreateInfo {
   std::span<const vk::PushConstantRange> pushConstantRanges;
 };
 
-struct PushConstants {
-  glm::mat4 transform;
-  vk::DeviceAddress vertexBuffer;
-};
-
 class ShaderProgram {
  public:
   using CreateInfo = ShaderProgramCreateInfo;
@@ -47,7 +42,7 @@ class ShaderProgram {
   float lineWidth{1.0F};
 
   vk::ColorBlendEquationEXT colorBlendEquation{kColorBlendEquationV};
-  vk::CompareOp depthCompareOp{vk::CompareOp::eLess};
+  vk::CompareOp depthCompareOp{vk::CompareOp::eLessOrEqual};
 
   std::uint8_t flags{kFlagsV};
 

@@ -52,6 +52,10 @@ void Asset::loadMaterial(const fastgltf::Material& material, std::size_t idx) {
   mat.emissiveFactor =
       glm::vec4(glm::make_vec3(material.emissiveFactor.data()), 1.0F);
 
+  if (auto emissive_strength = material.emissiveStrength) {
+    mat.emissiveStrength = emissive_strength;
+  }
+
   auto get_tex = [&](const auto& gltfTex,
                      vk::Format format) -> std::optional<uint32_t> {
     if constexpr (requires { gltfTex.has_value(); }) {
@@ -140,7 +144,12 @@ void Asset::loadTexture(const fastgltf::Texture& texture, std::size_t idx,
              image.data);
 
   auto allocated_texture = std::make_shared<vku::Texture2D>(
-      info, allocator_, copyInfo_, 1, vk::ImageUsageFlagBits::eSampled);
+      info, allocator_, copyInfo_,
+      vku::Image::maxMipLevels(vk::Extent2D{
+          static_cast<std::uint32_t>(info.width),
+          static_cast<std::uint32_t>(info.height),
+      }),
+      vk::ImageUsageFlagBits::eSampled);
 
   textures.emplace(idx, allocated_texture);
 }

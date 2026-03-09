@@ -1,27 +1,24 @@
 #ifndef MATERIAL_GLSL
 #define MATERIAL_GLSL
 
-struct Material {
-  vec4 baseColorFactor;
-  vec4 emissiveFactor;
-  vec4 diffuseFactor;
-  vec4 specularFactor;
+  struct Material {
+    vec4 baseColorFactor;
+    vec4 emissiveFactor;
 
-  int baseColorTextureIdx;
-  int metallicRoughnessTextureIdx;
-  int normalTextureIdx;
-  int occlusionTextureIdx;
+    float metallicFactor;
+    float roughnessFactor;
+    float alphaMaskCutoff;
+    float emissiveStrength;
 
-  int emissiveTextureIdx;
-  int _padding0[3];
+    int baseColorTextureIdx;
+    int metallicRoughnessTextureIdx;
+    int normalTextureIdx;
+    int occlusionTextureIdx;
 
-  float metallicFactor;
-  float roughnessFactor;
-  float alphaMask;
-  float alphaMaskCutoff;
-
-  float emissiveStrength;
-  float _padding1[3];
-};
+    int emissiveTextureIdx;
+    int pad0;
+    int pad1;
+    int pad2;
+  };
 
 #endif // MATERIAL_GLSL

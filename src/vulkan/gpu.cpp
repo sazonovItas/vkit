@@ -234,8 +234,10 @@ auto Gpu::createDevice() -> vk::UniqueDevice {
       vk::PhysicalDeviceShaderObjectFeaturesEXT{vk::True},
       vk::PhysicalDeviceVulkan12Features{}
           .setScalarBlockLayout(vk::True)
-          .setBufferDeviceAddress(vk::True),
-      vk::PhysicalDeviceDescriptorIndexingFeatures{}
+          .setBufferDeviceAddress(vk::True)
+          .setDescriptorIndexing(vk::True)
+          .setDescriptorBindingVariableDescriptorCount(vk::True)
+          .setDescriptorBindingPartiallyBound(vk::True)
           .setRuntimeDescriptorArray(vk::True)
           .setDescriptorBindingPartiallyBound(vk::True)
           .setShaderStorageBufferArrayNonUniformIndexing(vk::True)

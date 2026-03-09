@@ -25,36 +25,6 @@ class BindlessSetManager {
 
   auto getSet() const -> vk::DescriptorSet { return *set_; }
 
-  void addTexture2D(vk::Device device, const std::uint32_t id,
-                    const Texture& texture) {
-    auto image_info = texture.descriptorInfo();
-
-    auto write = vk::WriteDescriptorSet{};
-    write.setDstSet(*set_)
-        .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
-        .setDstArrayElement(id)
-        .setDescriptorCount(1)
-        .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setImageInfo(image_info);
-
-    device.updateDescriptorSets(write, nullptr);
-  }
-
-  void addTextureCube(vk::Device device, const std::uint32_t id,
-                      const Texture& texture) {
-    auto image_info = texture.descriptorInfo();
-
-    auto write = vk::WriteDescriptorSet{};
-    write.setDstSet(*set_)
-        .setDstBinding(BindlessLayout::kTextureCubeBindingIdx)
-        .setDstArrayElement(id)
-        .setDescriptorCount(1)
-        .setDescriptorType(vk::DescriptorType::eSampledImage)
-        .setImageInfo(image_info);
-
-    device.updateDescriptorSets(write, nullptr);
-  }
-
   void addSampler(vk::Device device, const std::uint32_t id,
                   vk::Sampler sampler) {
     auto image_info = vk::DescriptorImageInfo{};
@@ -71,6 +41,21 @@ class BindlessSetManager {
     device.updateDescriptorSets(write, nullptr);
   }
 
+  void addTexture2D(vk::Device device, const std::uint32_t id,
+                    const Texture& texture) {
+    auto image_info = texture.descriptorInfo();
+
+    auto write = vk::WriteDescriptorSet{};
+    write.setDstSet(*set_)
+        .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
+        .setDstArrayElement(id)
+        .setDescriptorCount(1)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setImageInfo(image_info);
+
+    device.updateDescriptorSets(write, nullptr);
+  }
+
  private:
   const BindlessLayout& bindless_;
 
@@ -82,13 +67,15 @@ class BindlessSetManager {
       -> vk::UniqueDescriptorPool {
     const auto pool_sizes_bindless = std::array<vk::DescriptorPoolSize, 2>{
         vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage,
-                               2 * BindlessLayout::kMaxTextures},
+                               BindlessLayout::kMaxTextures},
         vk::DescriptorPoolSize{vk::DescriptorType::eSampler,
                                BindlessLayout::kMaxSamplers},
     };
 
     auto pool_info = vk::DescriptorPoolCreateInfo{};
-    pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
+    pool_info
+        .setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind |
+                  vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
         .setMaxSets(1)
         .setPoolSizes(pool_sizes_bindless);
 
