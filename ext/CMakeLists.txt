@@ -58,6 +58,30 @@ target_sources(imgui PRIVATE
     imgui/backends/imgui_impl_vulkan.h
 )
 
+message(STATUS "[ImGuizmo ImGui]")
+
+add_library(imguizmo)
+add_library(imguizmo::imguizmo ALIAS imguizmo)
+
+target_include_directories(imguizmo SYSTEM PUBLIC ImGuizmo)
+
+target_link_libraries(imguizmo PUBLIC imgui)
+
+target_sources(imguizmo PRIVATE
+    ImGuizmo/GraphEditor.cpp
+    ImGuizmo/GraphEditor.h
+    ImGuizmo/ImCurveEdit.cpp
+    ImGuizmo/ImCurveEdit.h
+    ImGuizmo/ImGradient.cpp
+    ImGuizmo/ImGradient.h
+    ImGuizmo/ImGuizmo.cpp
+    ImGuizmo/ImGuizmo.h
+    ImGuizmo/ImLightRig.h
+    ImGuizmo/ImSequencer.cpp
+    ImGuizmo/ImSequencer.h
+    ImGuizmo/ImZoomSlider.h
+)
+
 message(STATUS "[vma]")
 
 add_library(vma)
@@ -109,6 +133,7 @@ add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} INTERFACE
     glm::glm
     imgui::imgui
+    imguizmo::imguizmo
     vma::vma
     fastgltf::fastgltf
     meshoptimizer

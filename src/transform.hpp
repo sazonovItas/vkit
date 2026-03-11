@@ -1,9 +1,11 @@
 #pragma once
 
+#include "glm/gtc/quaternion.hpp"
+
 namespace lvk {
 struct Transform {
   glm::vec3 position{};
-  glm::vec3 rotation{};
+  glm::quat rotation{1.0F, 0.0F, 0.0F, 0.0F};
   glm::vec3 scale{1.0F};
 
   [[nodiscard]] auto modelMatrix() const -> glm::mat4;

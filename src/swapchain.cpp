@@ -9,6 +9,7 @@
 #include "resource_buffering.hpp"
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace lvk {
 namespace {
