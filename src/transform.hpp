@@ -2,7 +2,7 @@
 
 #include "glm/gtc/quaternion.hpp"
 
-namespace lvk {
+namespace vkit {
 struct Transform {
   glm::vec3 position{};
   glm::quat rotation{1.0F, 0.0F, 0.0F, 0.0F};
@@ -11,4 +11,4 @@ struct Transform {
   [[nodiscard]] auto modelMatrix() const -> glm::mat4;
   [[nodiscard]] auto viewMatrix() const -> glm::mat4;
 };
-};  // namespace lvk
+};  // namespace vkit

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace lvk {
+namespace vkit {
 struct PipelineFlag {
   enum : std::uint8_t {
     kNone = 0,
@@ -49,4 +49,4 @@ class PipelineBuilder {
   CreateInfo ci_;
 };
 
-};  // namespace lvk
+};  // namespace vkit

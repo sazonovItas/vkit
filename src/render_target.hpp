@@ -1,6 +1,6 @@
 #pragma once
 
-namespace lvk {
+namespace vkit {
 static constexpr auto kSampleCount = vk::SampleCountFlagBits::e8;
 
 struct RenderTarget {
@@ -12,4 +12,4 @@ struct RenderTarget {
   vk::ImageView depthImageView;
   vk::Extent2D extent;
 };
-}  // namespace lvk
+};  // namespace vkit

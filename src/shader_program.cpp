@@ -4,15 +4,10 @@
 #include <stdexcept>
 
 #include "render_target.hpp"
+#include "vku/utils/utils.hpp"
 #include "vulkan/vulkan.hpp"
 
-namespace {
-constexpr auto toVkbool(bool const value) {
-  return value ? vk::True : vk::False;
-}
-};  // namespace
-
-namespace lvk {
+namespace vkit {
 ShaderProgram::ShaderProgram(const CreateInfo& createInfo) {
   auto const create_shader_ci =
       [&createInfo](std::span<std::uint32_t const> spirv) {
@@ -88,7 +83,7 @@ void ShaderProgram::setStaticStates(vk::CommandBuffer cb) {
 }
 
 void ShaderProgram::setCommonStates(vk::CommandBuffer cb) const {
-  const auto depth_test = toVkbool((flags & kDepthTest) == kDepthTest);
+  const auto depth_test = vku::toVkbool((flags & kDepthTest) == kDepthTest);
   cb.setDepthWriteEnable(depth_test);
   cb.setDepthTestEnable(depth_test);
   cb.setDepthCompareOp(depthCompareOp);
@@ -102,7 +97,7 @@ void ShaderProgram::setVertexStates(vk::CommandBuffer cb) const {
 }
 
 void ShaderProgram::setFragmentStates(vk::CommandBuffer cb) const {
-  const auto alpha_blend = toVkbool((flags & kAlphaBlend) == kAlphaBlend);
+  const auto alpha_blend = vku::toVkbool((flags & kAlphaBlend) == kAlphaBlend);
   cb.setColorBlendEnableEXT(0, alpha_blend);
   cb.setColorBlendEquationEXT(0, colorBlendEquation);
 }
@@ -119,4 +114,4 @@ void ShaderProgram::bindShaders(vk::CommandBuffer cb) const {
   cb.bindShadersEXT(kStagesV, shaders);
 }
 
-};  // namespace lvk
+};  // namespace vkit

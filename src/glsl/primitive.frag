@@ -83,6 +83,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 void main() {
     Material mat = materials[pcs.materialIdx];
+    
 
     vec4 albedoSample = vec4(1.0);
     if (mat.baseColorTextureIdx != -1) {
@@ -111,7 +112,7 @@ void main() {
         vec3 eSample = sampleTexture2DLinear(mat.emissiveTextureIdx, inUV0).rgb;
         emissive *= sRGBToLinear(eSample);
     }
-    emissive *= (mat.emissiveStrength * 15.0);
+    emissive *= mat.emissiveStrength;
 
     vec3 V = normalize(ubo.cameraPosition - inWorldPos);
     vec3 L = normalize(-uboParams.lightDir);

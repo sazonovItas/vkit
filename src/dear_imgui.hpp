@@ -3,7 +3,7 @@
 #include "GLFW/glfw3.h"
 #include "vku/scoped/scoped.hpp"
 
-namespace lvk {
+namespace vkit {
 struct DearImGuiCreateInfo {
   GLFWwindow* window;
   std::uint32_t apiVersion;
@@ -22,9 +22,9 @@ class DearImGui {
 
   explicit DearImGui(const CreateInfo& createInfo);
 
-  void newFrame();
-  void endFrame();
-  void render(vk::CommandBuffer cb) const;
+  virtual void newFrame();
+  virtual void endFrame();
+  virtual void render(vk::CommandBuffer cb) const;
 
  private:
   enum class State : std::int8_t { kEnded, kBegun };
@@ -37,4 +37,4 @@ class DearImGui {
 
   vku::Scoped<vk::Device, Deleter> device_;
 };
-};  // namespace lvk
+};  // namespace vkit

@@ -9,7 +9,7 @@
 #include "glm/gtc/color_space.hpp"
 #include "resource_buffering.hpp"
 
-namespace lvk {
+namespace vkit {
 DearImGui::DearImGui(const CreateInfo& createInfo) {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -92,4 +92,4 @@ void DearImGui::Deleter::operator()(vk::Device const device) const {
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 }
-};  // namespace lvk
+};  // namespace vkit

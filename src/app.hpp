@@ -3,8 +3,8 @@
 #include <filesystem>
 #include <optional>
 
+#include "app_types.hpp"
 #include "bindless_set_manager.hpp"
-#include "dear_imgui.hpp"
 #include "descriptor_buffer.hpp"
 #include "fastgltf/types.hpp"
 #include "gltf/asset.hpp"
@@ -12,6 +12,7 @@
 #include "shader_program.hpp"
 #include "swapchain.hpp"
 #include "transform.hpp"
+#include "ui.hpp"
 #include "vk_mem_alloc.hpp"
 #include "vku/scoped/device_waiter.hpp"
 #include "vulkan/descriptor_set_layout/material.hpp"
@@ -21,60 +22,12 @@
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
-namespace lvk {
+namespace vkit {
 class App {
  public:
   void run();
 
  private:
-  struct Camera {
-    glm::vec3 target{0.0F};
-    float distance{2.0F};
-    float yaw{45.0F};
-    float pitch{30.0F};
-    glm::vec3 up{0.0F, 1.0F, 0.0F};
-
-    glm::vec3 getPosition() const {
-      float x = distance * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
-      float y = distance * sin(glm::radians(pitch));
-      float z = distance * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
-      return target + glm::vec3(x, y, z);
-    }
-  };
-
-  struct UBO {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 projection;
-    alignas(16) glm::vec3 cameraPosition;
-  };
-
-  struct UBOParams {
-    glm::vec3 lightDir{0.0, -1.0, -1.0};
-    float exposure{1.0};
-    float gamma{2.2};
-  };
-
-  struct alignas(16) Material {
-    glm::vec4 baseColorFactor;
-    glm::vec4 emissiveFactor;
-
-    float metallicFactor;
-    float roughnessFactor;
-    float alphaMaskCutoff;
-    float emissiveStrength;
-
-    int32_t baseColorTextureIdx;
-    int32_t metallicRoughnessTextureIdx;
-    int32_t normalTextureIdx;
-    int32_t occlusionTextureIdx;
-
-    int32_t emissiveTextureIdx;
-    int32_t pad0;
-    int32_t pad1;
-    int32_t pad2;
-  };
-
   struct RenderSync {
     vk::UniqueSemaphore draw;
     vk::UniqueFence drawn;
@@ -92,21 +45,18 @@ class App {
 
   [[nodiscard]] auto assetPath(std::string_view uri) const
       -> std::filesystem::path;
-  [[nodiscard]] auto allocateSets() const -> std::vector<vk::DescriptorSet>;
 
   void update();
-  void updateMaterials();
 
   void updateDescriptorSets() const;
-
-  void draw(vk::CommandBuffer cb) const;
   void bindDescriptorSets(vk::CommandBuffer cb) const;
 
+  void draw(vk::CommandBuffer cb) const;
   void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
                 const fastgltf::math::fmat4x4& transform,
                 bool isTransparentPass) const;
 
-  void inspect();
+  void drawUI();
 
   void loadGLTF(const std::filesystem::path& path);
 
@@ -130,7 +80,7 @@ class App {
 
   void createGraphicsCommandPool();
 
-  void createImgui();
+  void createUI();
 
   std::filesystem::path assetDir_;
 
@@ -144,7 +94,7 @@ class App {
   vk::UniqueDebugUtilsMessengerEXT debugMessanger_;
   vk::UniqueSurfaceKHR surface_;
 
-  std::optional<vkit::vulkan::Gpu> gpu_;
+  std::optional<vulkan::Gpu> gpu_;
 
   std::optional<Swapchain> swapchain_;
 
@@ -154,15 +104,15 @@ class App {
   std::size_t frameIndex_{};
   Buffered<RenderSync> renderSync_{};
 
-  std::optional<DearImGui> imgui_;
+  std::optional<UI> ui_;
 
   vk::UniqueDescriptorPool descriptorPool_;
 
-  std::optional<vkit::vulkan::dsl::SceneLayout> sceneSetLayout_;
-  std::optional<vkit::vulkan::dsl::MaterialLayout> materialSetLayout_;
-  std::optional<vkit::vulkan::dsl::BindlessLayout> bindlessSetLayout_;
+  std::optional<vulkan::dsl::SceneLayout> sceneSetLayout_;
+  std::optional<vulkan::dsl::MaterialLayout> materialSetLayout_;
+  std::optional<vulkan::dsl::BindlessLayout> bindlessSetLayout_;
 
-  std::optional<vkit::vulkan::pl::PBRPipelineLayout> pbrPipelineLayout_;
+  std::optional<vulkan::pl::PBRPipelineLayout> pbrPipelineLayout_;
 
   std::optional<ShaderProgram> shader_;
 
@@ -184,4 +134,4 @@ class App {
 
   vku::DeviceWaiter deviceWaiter_;
 };
-}  // namespace lvk
+}  // namespace vkit

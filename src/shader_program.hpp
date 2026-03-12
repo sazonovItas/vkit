@@ -2,8 +2,7 @@
 
 #include "vku/scoped/device_waiter.hpp"
 
-namespace lvk {
-
+namespace vkit {
 static constexpr auto kColorBlendEquationV = [] {
   auto ret = vk::ColorBlendEquationEXT{};
   ret.setColorBlendOp(vk::BlendOp::eAdd)
@@ -60,4 +59,4 @@ class ShaderProgram {
   vku::DeviceWaiter waiter_;
 };
 
-};  // namespace lvk
+};  // namespace vkit

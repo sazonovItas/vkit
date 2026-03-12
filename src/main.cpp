@@ -17,7 +17,7 @@ auto main(int argc, char** argv) -> int {
   }
 
   try {
-    lvk::App{}.run();
+    vkit::App{}.run();
   } catch (std::exception const& e) {
     std::println(stderr, "PANIC: {}", e.what());
     return EXIT_FAILURE;

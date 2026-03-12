@@ -3,7 +3,7 @@
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 
-namespace lvk {
+namespace vkit {
 namespace {
 struct Matricies {
   glm::mat4 translation;
@@ -31,4 +31,4 @@ auto Transform::viewMatrix() const -> glm::mat4 {
   auto const [t, r, s] = toMatricies(-position, -rotation, scale);
   return r * t * s;
 }
-};  // namespace lvk
+};  // namespace vkit

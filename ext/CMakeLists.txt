@@ -32,6 +32,10 @@ message(STATUS "[Dear ImGui]")
 add_library(imgui)
 add_library(imgui::imgui ALIAS imgui)
 
+target_compile_definitions(imgui PUBLIC
+  IMGUI_DEFINE_MATH_OPERATORS
+)
+
 target_include_directories(imgui SYSTEM PUBLIC imgui)
 
 target_link_libraries(imgui PUBLIC
@@ -64,6 +68,8 @@ add_library(imguizmo)
 add_library(imguizmo::imguizmo ALIAS imguizmo)
 
 target_include_directories(imguizmo SYSTEM PUBLIC ImGuizmo)
+
+target_precompile_headers(imguizmo PRIVATE <imgui.h> <imgui_internal.h>)
 
 target_link_libraries(imguizmo PUBLIC imgui)
 

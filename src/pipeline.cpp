@@ -2,7 +2,9 @@
 
 #include <array>
 
-namespace lvk {
+#include "vku/utils/utils.hpp"
+
+namespace vkit {
 namespace {
 constexpr auto kViewportStatesV =
     vk::PipelineViewportStateCreateInfo({}, 1, {}, 1);
@@ -13,10 +15,6 @@ constexpr auto kDynamicStatesV = std::array{
     vk::DynamicState::ePolygonModeEXT,   vk::DynamicState::eDepthTestEnable,
     vk::DynamicState::eDepthWriteEnable,
 };
-
-constexpr auto toVkbool(bool const value) {
-  return value ? vk::True : vk::False;
-}
 
 [[nodiscard]] constexpr auto createShaderStages(
     vk::ShaderModule const vertex, vk::ShaderModule const fragment) {
@@ -37,18 +35,19 @@ constexpr auto toVkbool(bool const value) {
   const auto depth_test =
       (flags & PipelineFlag::kDepthTest) == PipelineFlag::kDepthTest;
   auto ret = vk::PipelineDepthStencilStateCreateInfo{};
-  ret.setDepthTestEnable(toVkbool(depth_test)).setDepthCompareOp(depthCompare);
+  ret.setDepthTestEnable(vku::toVkbool(depth_test))
+      .setDepthCompareOp(depthCompare);
 
   return ret;
 }
 
 [[nodiscard]] constexpr auto createColorBlendFactor(const std::uint8_t flags) {
   auto ret = vk::PipelineColorBlendAttachmentState{};
-  auto const alpha_blend = (flags & lvk::PipelineFlag::kAlphaBlend) ==
-                           lvk::PipelineFlag::kAlphaBlend;
+  auto const alpha_blend =
+      (flags & PipelineFlag::kAlphaBlend) == PipelineFlag::kAlphaBlend;
   using CCF = vk::ColorComponentFlagBits;
   ret.setColorWriteMask(CCF::eR | CCF::eG | CCF::eB | CCF::eA)
-      .setBlendEnable(toVkbool(alpha_blend))
+      .setBlendEnable(vku::toVkbool(alpha_blend))
       .setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
       .setDstColorBlendFactor(vk::BlendFactor::eOneMinusConstantAlpha)
       .setColorBlendOp(vk::BlendOp::eAdd)
@@ -58,7 +57,7 @@ constexpr auto toVkbool(bool const value) {
   return ret;
 }
 };  // namespace
-//
+
 auto PipelineBuilder::build(const vk::PipelineLayout layout,
                             const PipelineState& state) const
     -> vk::UniquePipeline {
@@ -114,4 +113,4 @@ auto PipelineBuilder::build(const vk::PipelineLayout layout,
 
   return vk::UniquePipeline{ret, ci_.device};
 }
-};  // namespace lvk
+};  // namespace vkit

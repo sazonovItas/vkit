@@ -3,7 +3,7 @@
 #include "vk_mem_alloc.hpp"
 #include "vku/buffers/allocated_buffer.hpp"
 
-namespace lvk {
+namespace vkit {
 template <std::uint32_t N = 1>
 class DescriptorBuffer {
  public:
@@ -51,4 +51,4 @@ class DescriptorBuffer {
   vk::BufferUsageFlags usage_;
   std::array<vku::AllocatedBuffer, N> buffers_;
 };
-};  // namespace lvk
+};  // namespace vkit

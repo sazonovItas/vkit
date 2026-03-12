@@ -4,7 +4,7 @@
 #include "vulkan/descriptor_set_layout/bindless.hpp"
 #include "vulkan/gpu.hpp"
 
-namespace lvk {
+namespace vkit {
 class BindlessSetManager {
   using Gpu = vkit::vulkan::Gpu;
   using Texture = vku::Texture;
@@ -124,4 +124,4 @@ class BindlessSetManager {
     }
   }
 };
-};  // namespace lvk
+};  // namespace vkit

@@ -11,7 +11,7 @@
 #include "vku/utils/utils.hpp"
 #include "vulkan/vulkan.hpp"
 
-namespace lvk {
+namespace vkit {
 namespace {
 constexpr auto kSrgbFormatsV = std::array{
     vk::Format::eR8G8B8A8Srgb,
@@ -276,4 +276,4 @@ void Swapchain::createPresentSemaphores() {
     semaphore = device_.createSemaphoreUnique({});
   }
 }
-};  // namespace lvk
+};  // namespace vkit

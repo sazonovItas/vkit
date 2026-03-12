@@ -17,12 +17,14 @@
 
 #include "GLFW/glfw3.h"
 #include "ImGuizmo.h"
+#include "app_types.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include "glm/fwd.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "render_target.hpp"
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "stb_image.h"
@@ -35,7 +37,7 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/acidcannon/scene.gltf"
+#define MODEL_PATH "models/sword/scene.gltf"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -228,7 +230,7 @@ auto generateStoneTiles(int width, int height, int tileSize,
 }
 };  // namespace
 
-namespace lvk {
+namespace vkit {
 void App::run() {
   assetDir_ = locateAssetsDir();
 
@@ -252,7 +254,7 @@ void App::run() {
 
   createGraphicsCommandPool();
 
-  createImgui();
+  createUI();
 
   loadGLTF(assetPath(MODEL_PATH));
 
@@ -294,6 +296,44 @@ void App::loadGLTF(const std::filesystem::path& path) {
     bindlessSetManager_->addTexture2D(*gpu_->device, static_cast<uint32_t>(idx),
                                       *texture);
   }
+}
+
+void App::drawUI() {
+  ui_->moveCamera(camera_);
+
+  ui_->drawInspect(camera_, transform_, uboParams_);
+
+  ui_->drawViewManipulation(camera_);
+
+  if (gltfAsset_.has_value()) {
+    ui_->drawGraphEditor(*gltfAsset_);
+  }
+}
+
+void App::update() {
+  auto model = transform_.modelMatrix();
+  auto cam_pos = camera_.getPosition();
+  auto view = glm::lookAt(cam_pos, camera_.target, camera_.up);
+
+  float aspect = static_cast<float>(frameBufferSize_.x) /
+                 static_cast<float>(frameBufferSize_.y);
+  auto projection =
+      glm::perspective(glm::radians(90.0F), aspect, 0.1F, 1000.0F);
+
+  ubo_ = UBO{
+      .model = model,
+      .view = view,
+      .projection = projection,
+      .cameraPosition = cam_pos,
+  };
+
+  const auto ubo_bytes =
+      std::bit_cast<std::array<std::byte, sizeof(ubo_)>>(ubo_);
+  uboBuffers_->writeAt(frameIndex_, ubo_bytes);
+
+  const auto ubo_params_bytes =
+      std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
+  uboParamsBuffers_->writeAt(frameIndex_, ubo_params_bytes);
 
   size_t max_idx = 0;
   for (const auto& [idx, m] : gltfAsset_->materials) {
@@ -326,156 +366,8 @@ void App::loadGLTF(const std::filesystem::path& path) {
     materials_[idx] = mat;
   }
 
-  updateMaterials();
-}
-
-void App::inspect() {
-  ImGuiIO& io = ImGui::GetIO();
-  ImGuizmo::BeginFrame();
-
-  ImGuizmo::SetRect(0, 0, io.DisplaySize.x, io.DisplaySize.y);
-  ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
-
-  glm::vec3 cam_pos = camera_.getPosition();
-  glm::mat4 view = glm::lookAt(cam_pos, camera_.target, camera_.up);
-
-  ImGuizmo::ViewManipulate(glm::value_ptr(view), camera_.distance,
-                           ImVec2(io.DisplaySize.x - 128, 0), ImVec2(128, 128),
-                           0x00000000);
-
-  if (ImGuizmo::IsUsing() && io.MouseDown[0]) {
-    glm::mat4 inv_view = glm::inverse(view);
-
-    glm::vec3 new_cam_pos = glm::vec3(inv_view * glm::vec4(0, 0, 0, 1));
-
-    glm::vec3 dir = new_cam_pos - camera_.target;
-    camera_.distance = glm::length(dir);
-    dir = glm::normalize(dir);
-
-    camera_.pitch = glm::degrees(asin(glm::clamp(dir.y, -0.99F, 0.99F)));
-    camera_.yaw = glm::degrees(atan2(dir.z, dir.x));
-  }
-
-  if (!io.WantCaptureMouse && ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-    camera_.yaw =
-        std::fmod(camera_.yaw + (io.MouseDelta.x * 0.5F) + 180.0F, 360.0F) -
-        180.0F;
-    camera_.pitch += io.MouseDelta.y * 0.5F;
-    camera_.pitch = glm::clamp(camera_.pitch, -89.0F, 89.0F);
-  }
-
-  if (!io.WantCaptureMouse) {
-    camera_.distance -= io.MouseWheel * 0.5F;
-    camera_.distance = glm::max(camera_.distance, 0.1F);
-  }
-
-  ImGui::SetNextWindowSize({325.0F, 370.0F}, ImGuiCond_Once);
-  if (ImGui::Begin("Inspect")) {
-    if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::DragFloat3("Target", glm::value_ptr(camera_.target), 0.1F);
-      ImGui::DragFloat("Distance", &camera_.distance, 0.1F, 0.1F, 100.0F);
-      ImGui::SliderFloat("Yaw", &camera_.yaw, -180.0F, 180.0F);
-      ImGui::SliderFloat("Pitch", &camera_.pitch, -89.0F, 89.0F);
-      ImGui::TreePop();
-    }
-    if (ImGui::TreeNodeEx("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::DragFloat3("Position", glm::value_ptr(transform_.position), 0.1F);
-
-      glm::vec3 euler_rotation =
-          glm::degrees(glm::eulerAngles(transform_.rotation));
-      if (ImGui::DragFloat3("Rotation", glm::value_ptr(euler_rotation), 0.1F)) {
-        transform_.rotation = glm::quat(glm::radians(euler_rotation));
-      }
-
-      ImGui::DragFloat3("Scale", glm::value_ptr(transform_.scale), 0.05F);
-
-      ImGui::Separator();
-
-      static bool show_gizmo = true;
-      ImGui::Checkbox("Show Gizmo", &show_gizmo);
-
-      if (show_gizmo) {
-        static ImGuizmo::OPERATION current_op(ImGuizmo::TRANSLATE);
-
-        if (ImGui::RadioButton("Translate", current_op == ImGuizmo::TRANSLATE))
-          current_op = ImGuizmo::TRANSLATE;
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Rotate", current_op == ImGuizmo::ROTATE))
-          current_op = ImGuizmo::ROTATE;
-        ImGui::SameLine();
-        if (ImGui::RadioButton("Scale", current_op == ImGuizmo::SCALE))
-          current_op = ImGuizmo::SCALE;
-
-        glm::mat4 model = transform_.modelMatrix();
-        glm::mat4 gizmo_view =
-            glm::lookAt(camera_.getPosition(), camera_.target, camera_.up);
-        glm::mat4 gizmo_proj = glm::perspective(
-            glm::radians(90.0F), io.DisplaySize.x / io.DisplaySize.y, 0.1F,
-            1000.0F);
-
-        ImGuizmo::Manipulate(glm::value_ptr(gizmo_view),
-                             glm::value_ptr(gizmo_proj), current_op,
-                             ImGuizmo::LOCAL, glm::value_ptr(model));
-
-        if (ImGuizmo::IsUsing()) {
-          glm::vec3 new_pos;
-          glm::vec3 new_scale;
-          glm::vec3 new_euler;
-          ImGuizmo::DecomposeMatrixToComponents(
-              glm::value_ptr(model), glm::value_ptr(new_pos),
-              glm::value_ptr(new_euler), glm::value_ptr(new_scale));
-
-          transform_.position = new_pos;
-          transform_.scale = new_scale;
-          transform_.rotation = glm::quat(glm::radians(new_euler));
-        }
-      }
-
-      ImGui::TreePop();
-    }
-
-    ImGui::Separator();
-    if (ImGui::TreeNodeEx("Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::DragFloat3("LightDir", glm::value_ptr(uboParams_.lightDir), 0.01F);
-      ImGui::DragFloat("Exposure", &uboParams_.exposure, 0.1F, 0.1F, 100.0F);
-      ImGui::DragFloat("Gamma", &uboParams_.gamma, 0.1F, 0.1F, 100.0F);
-      ImGui::TreePop();
-    }
-  }
-  ImGui::End();
-}
-
-void App::update() {
-  auto model = transform_.modelMatrix();
-  auto cam_pos = camera_.getPosition();
-  auto view = glm::lookAt(cam_pos, camera_.target, camera_.up);
-
-  float aspect = static_cast<float>(frameBufferSize_.x) /
-                 static_cast<float>(frameBufferSize_.y);
-  auto projection =
-      glm::perspective(glm::radians(90.0F), aspect, 0.1F, 1000.0F);
-
-  ubo_ = UBO{
-      .model = model,
-      .view = view,
-      .projection = projection,
-      .cameraPosition = cam_pos,
-  };
-
-  const auto ubo_bytes =
-      std::bit_cast<std::array<std::byte, sizeof(ubo_)>>(ubo_);
-  uboBuffers_->writeAt(frameIndex_, ubo_bytes);
-
-  const auto ubo_params_bytes =
-      std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
-  uboParamsBuffers_->writeAt(frameIndex_, ubo_params_bytes);
-}
-
-void App::updateMaterials() {
   auto bytes = toByteSpan(materials_);
-  for (uint32_t i = 0; i < kResourceBufferingV; ++i) {
-    materialsBuffers_->writeAt(i, bytes);
-  }
+  materialsBuffers_->writeAt(frameIndex_, bytes);
 }
 
 void App::bindDescriptorSets(vk::CommandBuffer cb) const {
@@ -533,7 +425,7 @@ void App::draw(vk::CommandBuffer cb) const {
 void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
                    const fastgltf::math::fmat4x4& transform,
                    bool isTransparentPass) const {
-  using PbrPushConstants = vkit::vulkan::pl::PBRPipelineLayout::PushConstants;
+  using PbrPushConstants = vulkan::pl::PBRPipelineLayout::PushConstants;
 
   if (!node.meshIndex.has_value()) return;
 
@@ -552,10 +444,10 @@ void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
 
   for (const auto& primitive : mesh->primitives) {
     const auto& material = gltfAsset_->materials.at(primitive.materialIdx);
-    bool is_blend = (material.alphaMode == fastgltf::AlphaMode::Blend);
+    bool is_transparent = (material.alphaMode == fastgltf::AlphaMode::Blend);
 
-    if (isTransparentPass && !is_blend) continue;
-    if (!isTransparentPass && is_blend) continue;
+    if (isTransparentPass && !is_transparent) continue;
+    if (!isTransparentPass && is_transparent) continue;
 
     vk::CullModeFlags cull_mode = material.doubleSided
                                       ? vk::CullModeFlagBits::eNone
@@ -633,8 +525,6 @@ auto App::acquireRenderTarget() -> bool {
 
   gpu_->device->resetFences(*render_sync.drawn);
 
-  imgui_->newFrame();
-
   return true;
 }
 
@@ -649,16 +539,14 @@ auto App::beginFrame() -> vk::CommandBuffer {
 }
 
 void App::transitionForRender(vk::CommandBuffer cb) const {
-  auto dependency_info = vk::DependencyInfo{};
-
   auto color_barrier = swapchain_->baseColorBarrier();
   color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
       .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
-                        vk::AccessFlagBits2::eColorAttachmentWrite)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(color_barrier.srcAccessMask)
-      .setDstStageMask(color_barrier.srcStageMask);
+      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
+      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+      .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
+      .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentWrite |
+                        vk::AccessFlagBits2::eColorAttachmentRead);
 
   auto depth_barrier = swapchain_->baseDepthBarrier();
   depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
@@ -681,11 +569,12 @@ void App::transitionForRender(vk::CommandBuffer cb) const {
 
   auto barriers =
       std::array{color_barrier, depth_barrier, swapchain_color_barrier};
-  dependency_info.setImageMemoryBarriers(barriers);
-  cb.pipelineBarrier2(dependency_info);
+  cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barriers));
 }
 
 void App::render(vk::CommandBuffer cb) {
+  const auto render_area = vk::Rect2D{vk::Offset2D{}, renderTarget_->extent};
+
   auto color_attachment = vk::RenderingAttachmentInfo{};
   color_attachment.setImageView(renderTarget_->colorImageView)
       .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
@@ -693,8 +582,8 @@ void App::render(vk::CommandBuffer cb) {
       .setResolveImageView(renderTarget_->swapchainImageView)
       .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eClear)
-      .setStoreOp(vk::AttachmentStoreOp::eDontCare)
-      .setClearValue(vk::ClearColorValue{0.2F, 0.2F, 0.2F, 1.0F});
+      .setStoreOp(vk::AttachmentStoreOp::eStore)
+      .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
 
   auto depth_attachment = vk::RenderingAttachmentInfo{};
   depth_attachment.setImageView(renderTarget_->depthImageView)
@@ -704,35 +593,38 @@ void App::render(vk::CommandBuffer cb) {
       .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
 
   auto rendering_info = vk::RenderingInfo{};
-  auto const render_area = vk::Rect2D{vk::Offset2D{}, renderTarget_->extent};
   rendering_info.setRenderArea(render_area)
       .setLayerCount(1)
-      .setColorAttachmentCount(1)
-      .setPColorAttachments(&color_attachment)
+      .setColorAttachments(color_attachment)
       .setPDepthAttachment(&depth_attachment);
 
-  cb.beginRendering(rendering_info);
   update();
   updateDescriptorSets();
+
+  cb.beginRendering(rendering_info);
   draw(cb);
   cb.endRendering();
 
   auto imgui_attachment = vk::RenderingAttachmentInfo{};
-  imgui_attachment.setImageView(renderTarget_->swapchainImageView)
+  imgui_attachment.setImageView(renderTarget_->colorImageView)
       .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+      .setResolveMode(vk::ResolveModeFlagBits::eAverage)
+      .setResolveImageView(renderTarget_->swapchainImageView)
+      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
       .setLoadOp(vk::AttachmentLoadOp::eLoad)
       .setStoreOp(vk::AttachmentStoreOp::eStore);
 
   auto imgui_rendering = vk::RenderingInfo{};
   imgui_rendering.setRenderArea(render_area)
       .setLayerCount(1)
-      .setColorAttachmentCount(1)
-      .setPColorAttachments(&imgui_attachment);
+      .setColorAttachments(imgui_attachment);
+
+  ui_->newFrame();
+  drawUI();
+  ui_->endFrame();
 
   cb.beginRendering(imgui_rendering);
-  inspect();
-  imgui_->endFrame();
-  imgui_->render(cb);
+  ui_->render(cb);
   cb.endRendering();
 }
 
@@ -920,7 +812,7 @@ void App::createRenderSync() {
   }
 }
 
-void App::createImgui() {
+void App::createUI() {
   auto const imgui_ci = DearImGui::CreateInfo{
       .window = window_.get(),
       .apiVersion = kVkVersionV,
@@ -930,10 +822,10 @@ void App::createImgui() {
       .device = *gpu_->device,
       .queue = gpu_->queues.graphicsPresent,
       .colorFormat = swapchain_->getFormat(),
-      .samples = vk::SampleCountFlagBits::e1,
+      .samples = kSampleCount,
   };
 
-  imgui_.emplace(imgui_ci);
+  ui_.emplace(imgui_ci);
 }
 
 void App::createWindow() { window_ = glfw::createWindow({1280, 720}, "vkit"); }
@@ -1002,4 +894,4 @@ void App::createSwapchain() {
                      gpu_->queueFamilies.graphicsPresent, gpu_->allocator,
                      *surface_, size);
 }
-};  // namespace lvk
+};  // namespace vkit

@@ -7,8 +7,7 @@
 #include "vk_mem_alloc.hpp"
 #include "vku/images/allocated_image.hpp"
 
-namespace lvk {
-
+namespace vkit {
 class Swapchain {
  public:
   explicit Swapchain(vk::Device device, vk::PhysicalDevice physical_device,
@@ -60,4 +59,4 @@ class Swapchain {
   vk::UniqueImageView depthImageView_;
 };
 
-}  // namespace lvk
+}  // namespace vkit
