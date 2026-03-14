@@ -8,13 +8,8 @@ struct MaterialLayout final : DescriptorSetLayout {
 
   static constexpr auto kBindings =
       std::array<vk::DescriptorSetLayoutBinding, 1>{
-          layoutBinding(0, vk::DescriptorType::eStorageBuffer, 1,
-                        vk::ShaderStageFlagBits::eAllGraphics),
-      };
-
-  static constexpr auto kBindingFlags =
-      std::array<vk::DescriptorBindingFlags, 1>{
-          vk::DescriptorBindingFlagBits::eUpdateAfterBind,
+          layoutBinding(kMaterialBindingIdx, vk::DescriptorType::eStorageBuffer,
+                        1, vk::ShaderStageFlagBits::eFragment),
       };
 
   explicit MaterialLayout(vk::Device device)
@@ -25,7 +20,6 @@ struct MaterialLayout final : DescriptorSetLayout {
                     vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool,
                     kBindings,
                 },
-                vk::DescriptorSetLayoutBindingFlagsCreateInfo{kBindingFlags},
             }
                 .get()} {}
 };

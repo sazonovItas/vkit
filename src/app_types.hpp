@@ -24,9 +24,38 @@ struct UBO {
 };
 
 struct UBOParams {
-  glm::vec3 lightDir{0.0, -1.0, -1.0};
-  float exposure{1.0};
-  float gamma{2.2};
+  float exposure{1.0F};
+  float gamma{2.2F};
+  std::int32_t diffuseEnvMapIdx{-1};
+  std::int32_t specularEnvMapIdx{-1};
+
+  std::int32_t brdfLUTIdx{-1};
+  float maxSpecularLod{9.0F};
+  std::int32_t lightCount{0};
+};
+
+#include <cstdint>
+#include <glm/glm.hpp>
+
+enum class LightType : std::uint32_t {
+  kDirectional = 0,
+  kPoint = 1,
+  kSpot = 2
+};
+
+struct Light {
+  glm::vec3 position{0.0F};
+  std::uint32_t type{0};
+
+  glm::vec3 direction{0.0F, 0.0F, -1.0F};
+  float range{0.0F};
+
+  glm::vec3 color{1.0F};
+  float intensity{1.0F};
+
+  glm::vec2 scaleOffset{1.0F, 0.0F};
+  std::uint32_t shadowMapID{0};
+  float unused{0.0F};
 };
 
 struct alignas(16) Material {

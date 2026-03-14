@@ -48,10 +48,11 @@ class UI : public DearImGui {
     }
   }
 
-  void drawInspect(Camera& camera, Transform& transform, UBOParams& uboParams) {
+  void drawInspect(Camera& camera, Transform& transform, UBOParams& uboParams,
+                   std::vector<Light>& lights) {
     assert(io_ && "ImGui io shouldn't nullopt");
 
-    ImGui::SetNextWindowSize({325.0F, 370.0F}, ImGuiCond_Once);
+    ImGui::SetNextWindowSize({350.0F, 400.0F}, ImGuiCond_Once);
     if (ImGui::Begin("Inspect")) {
       if (ImGui::TreeNodeEx("Camera", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat3("Target", glm::value_ptr(camera.target), 0.1F);
@@ -84,11 +85,9 @@ class UI : public DearImGui {
           if (ImGui::RadioButton("Translate",
                                  current_op == ImGuizmo::TRANSLATE))
             current_op = ImGuizmo::TRANSLATE;
-
           ImGui::SameLine();
           if (ImGui::RadioButton("Rotate", current_op == ImGuizmo::ROTATE))
             current_op = ImGuizmo::ROTATE;
-
           ImGui::SameLine();
           if (ImGui::RadioButton("Scale", current_op == ImGuizmo::SCALE))
             current_op = ImGuizmo::SCALE;
@@ -122,16 +121,101 @@ class UI : public DearImGui {
       }
 
       ImGui::Separator();
+
       if (ImGui::TreeNodeEx("Params", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::DragFloat3("LightDir", glm::value_ptr(uboParams.lightDir),
-                          0.01F);
         ImGui::DragFloat("Exposure", &uboParams.exposure, 0.1F, 0.1F, 100.0F);
         ImGui::DragFloat("Gamma", &uboParams.gamma, 0.1F, 0.1F, 100.0F);
         ImGui::TreePop();
       }
+
+      ImGui::Separator();
+
+      if (ImGui::TreeNodeEx("Lights", ImGuiTreeNodeFlags_DefaultOpen)) {
+        static int new_light_type = 1;
+        const char* light_type_names[] = {"Directional", "Point", "Spot"};
+
+        ImGui::PushItemWidth(120.0F);
+        ImGui::Combo("##NewLightType", &new_light_type, light_type_names,
+                     IM_ARRAYSIZE(light_type_names));
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+
+        if (ImGui::Button("Add Light")) {
+          Light l{};
+          l.type = static_cast<std::uint32_t>(new_light_type);
+          l.color = glm::vec3(1.0F);
+          l.intensity = 5.0F;
+
+          if (new_light_type == 0) {
+            l.direction = glm::vec3(0.0F, -1.0F, -0.5F);
+          } else if (new_light_type == 1) {
+            l.position = glm::vec3(0.0F, 2.0F, 0.0F);
+            l.range = 20.0F;
+          } else {
+            l.position = glm::vec3(0.0F, 2.0F, 0.0F);
+            l.direction = glm::vec3(0.0F, -1.0F, 0.0F);
+            l.range = 20.0F;
+            l.scaleOffset = glm::vec2(2.0F, -1.0F);
+          }
+
+          lights.push_back(l);
+        }
+
+        ImGui::Separator();
+
+        for (size_t i = 0; i < lights.size(); ++i) {
+          ImGui::PushID(static_cast<int>(i));
+
+          char label[32];
+          snprintf(label, sizeof(label), "%s Light %zu",
+                   light_type_names[lights[i].type], i);
+
+          if (ImGui::TreeNode(label)) {
+            if (ImGui::Button("Delete Light")) {
+              lights.erase(lights.begin() + i);
+              ImGui::TreePop();
+              ImGui::PopID();
+              --i;
+              continue;
+            }
+
+            int current_type = static_cast<int>(lights[i].type);
+            if (ImGui::Combo("Type", &current_type, light_type_names,
+                             IM_ARRAYSIZE(light_type_names))) {
+              lights[i].type = static_cast<std::uint32_t>(current_type);
+            }
+
+            ImGui::ColorEdit3("Color", glm::value_ptr(lights[i].color));
+            ImGui::DragFloat("Intensity", &lights[i].intensity, 0.1F, 0.0F,
+                             1000.0F);
+
+            if (0 == current_type) {
+              ImGui::DragFloat3("Direction",
+                                glm::value_ptr(lights[i].direction), 0.05F);
+            } else if (current_type == 1) {
+              ImGui::DragFloat3("Position", glm::value_ptr(lights[i].position),
+                                0.1F);
+              ImGui::DragFloat("Range", &lights[i].range, 0.5F, 0.0F, 1000.0F);
+            } else if (current_type == 2) {
+              ImGui::DragFloat3("Position", glm::value_ptr(lights[i].position),
+                                0.1F);
+              ImGui::DragFloat3("Direction",
+                                glm::value_ptr(lights[i].direction), 0.05F);
+              ImGui::DragFloat("Range", &lights[i].range, 0.5F, 0.0F, 1000.0F);
+              ImGui::DragFloat2("Scale / Offset",
+                                glm::value_ptr(lights[i].scaleOffset), 0.05F);
+            }
+
+            ImGui::TreePop();
+          }
+          ImGui::PopID();
+        }
+
+        ImGui::TreePop();
+      }
     }
     ImGui::End();
-  };
+  }
 
   void drawViewManipulation(Camera& camera) {
     glm::vec3 cam_pos = camera.getPosition();
@@ -163,37 +247,60 @@ class UI : public DearImGui {
           nodeToPrimitive;
 
       std::vector<const char*> texOut = {"Color"};
-      std::vector<const char*> matIn = {"Base Color", "Metallic/Roughness",
-                                        "Normal", "Occlusion", "Emissive"};
+      std::vector<const char*> matIn = {
+          "Base Color", "Metallic/Roughness", "Normal", "Occlusion", "Emissive",
+      };
       std::vector<const char*> matOut = {"Material"};
       std::vector<const char*> primIn = {"Material"};
 
       explicit AssetGraphDelegate(gltf::Asset& a) : asset(a) {
-        // --- Node Templates ---
-        templates.push_back({IM_COL32(204, 102, 51, 255),  // 0: Texture
-                             IM_COL32(80, 80, 80, 255),
-                             IM_COL32(110, 110, 110, 255), 0, nullptr, nullptr,
-                             1, texOut.data(), nullptr});
+        // Texture Template
+        templates.push_back({
+            IM_COL32(204, 102, 51, 255),
+            IM_COL32(80, 80, 80, 255),
+            IM_COL32(110, 110, 110, 255),
+            0,
+            nullptr,
+            nullptr,
+            1,
+            texOut.data(),
+            nullptr,
+        });
 
-        templates.push_back({IM_COL32(76, 153, 102, 255),  // 1: Material
-                             IM_COL32(80, 80, 80, 255),
-                             IM_COL32(110, 110, 110, 255), 5, matIn.data(),
-                             nullptr, 1, matOut.data(), nullptr});
+        // Material Template
+        templates.push_back({
+            IM_COL32(76, 153, 102, 255),
+            IM_COL32(80, 80, 80, 255),
+            IM_COL32(110, 110, 110, 255),
+            5,
+            matIn.data(),
+            nullptr,
+            1,
+            matOut.data(),
+            nullptr,
+        });
 
-        templates.push_back({IM_COL32(153, 51, 51, 255),  // 2: Primitive
-                             IM_COL32(80, 80, 80, 255),
-                             IM_COL32(110, 110, 110, 255), 1, primIn.data(),
-                             nullptr, 0, nullptr, nullptr});
+        // Primitive Template
+        templates.push_back({
+            IM_COL32(153, 51, 51, 255),
+            IM_COL32(80, 80, 80, 255),
+            IM_COL32(110, 110, 110, 255),
+            1,
+            primIn.data(),
+            nullptr,
+            0,
+            nullptr,
+            nullptr,
+        });
 
         int tex_row = 0;
         int mat_row = 0;
         int prim_row = 0;
 
-        // --- 1. Create Texture Nodes ---
         for (auto& [idx, tex] : asset.textures) {
           GraphEditor::NodeIndex node_index = nodes.size();
           GraphEditor::Node n{};
-          n.mName = strdup(std::format("Image Texture {}", idx).c_str());
+          n.mName = strdup(std::format("Texture {}", idx).c_str());
           n.mTemplateIndex = 0;
           n.mRect = ImRect(ImVec2(50.F, 50.F + (tex_row * 100.F)),
                            ImVec2(230.F, 110.F + (tex_row * 100.F)));
@@ -204,11 +311,10 @@ class UI : public DearImGui {
           tex_row++;
         }
 
-        // --- 2. Create Material Nodes & Restore Links ---
         for (auto& [idx, mat] : asset.materials) {
           GraphEditor::NodeIndex node_index = nodes.size();
           GraphEditor::Node n{};
-          n.mName = strdup(std::format("Material BSDF {}", idx).c_str());
+          n.mName = strdup(std::format("Material {}", idx).c_str());
           n.mTemplateIndex = 1;
           n.mRect = ImRect(ImVec2(350.F, 50.F + (mat_row * 220.F)),
                            ImVec2(530.F, 180.F + (mat_row * 220.F)));
@@ -238,7 +344,6 @@ class UI : public DearImGui {
           mat_row++;
         }
 
-        // --- 3. Create Primitive Nodes & Restore Links ---
         for (auto& [meshIdx, mesh] : asset.meshes) {
           for (size_t p = 0; p < mesh->primitives.size(); p++) {
             GraphEditor::NodeIndex node_index = nodes.size();
@@ -250,16 +355,14 @@ class UI : public DearImGui {
                              ImVec2(830.F, 110.F + (prim_row * 100.F)));
 
             nodes.push_back(n);
-            // NEW: Store the mesh and primitive index for this node
             nodeToPrimitive[node_index] = {meshIdx, p};
 
             auto& prim = mesh->primitives[p];
             if (materialNodes.contains(prim.materialIdx)) {
               GraphEditor::Link l{};
-              l.mInputNodeIndex =
-                  materialNodes[prim.materialIdx];  // Source (Material)
+              l.mInputNodeIndex = materialNodes[prim.materialIdx];
               l.mInputSlotIndex = 0;
-              l.mOutputNodeIndex = node_index;  // Dest (Primitive)
+              l.mOutputNodeIndex = node_index;
               l.mOutputSlotIndex = 0;
               links.push_back(l);
             }
@@ -325,6 +428,7 @@ class UI : public DearImGui {
               asset.materials[mat_idx].emissiveTexture = tex_idx;
               break;
             default:
+              std::unreachable();
           }
         } else if (nodeToMaterial.contains(sourceNode) &&
                    nodeToPrimitive.contains(destNode)) {
@@ -361,14 +465,13 @@ class UI : public DearImGui {
               asset.materials[mat_idx].emissiveTexture = std::nullopt;
               break;
             default:
+              std::unreachable();
           }
         }
 
         else if (nodeToMaterial.contains(link.mInputNodeIndex) &&
                  nodeToPrimitive.contains(link.mOutputNodeIndex)) {
           auto [meshIdx, primIdx] = nodeToPrimitive[link.mOutputNodeIndex];
-          // Set to 0 (default material) or your preferred fallback when a
-          // material is disconnected
           asset.meshes[meshIdx]->primitives[primIdx].materialIdx = 0;
         }
 
@@ -424,7 +527,6 @@ class UI : public DearImGui {
     ImGui::End();
     ImGui::PopStyleColor();
 
-    // --- Material Inspector ---
     ImGui::Begin("Material Inspector");
     for (auto& [idx, mat] : asset.materials) {
       ImGui::PushID(static_cast<int>(idx));

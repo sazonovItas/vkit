@@ -1,5 +1,7 @@
 #include "vku/utils/utils.hpp"
 
+#include <fstream>
+
 namespace vku {
 auto toSpirV(std::filesystem::path const& path) -> std::vector<std::uint32_t> {
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};

@@ -56,6 +56,57 @@ class BindlessSetManager {
     device.updateDescriptorSets(write, nullptr);
   }
 
+  void addEnvMapTexture2D(vk::Device device, const std::uint32_t id,
+                          const Texture& texture) {
+    constexpr static auto kEnvMapTextureIdOffset = 768;
+
+    auto image_info = texture.descriptorInfo();
+
+    auto write = vk::WriteDescriptorSet{};
+    write.setDstSet(*set_)
+        .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
+        .setDstArrayElement(3 * id)
+        .setDescriptorCount(1)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setImageInfo(image_info);
+
+    device.updateDescriptorSets(write, nullptr);
+  }
+
+  void addDiffuseEnvMapTexture2D(vk::Device device, const std::uint32_t id,
+                                 const Texture& texture) {
+    constexpr static auto kEnvMapTextureIdOffset = 768;
+
+    auto image_info = texture.descriptorInfo();
+
+    auto write = vk::WriteDescriptorSet{};
+    write.setDstSet(*set_)
+        .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
+        .setDstArrayElement((3 * id) + 1)
+        .setDescriptorCount(1)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setImageInfo(image_info);
+
+    device.updateDescriptorSets(write, nullptr);
+  }
+
+  void addSpecularEnvMapTexture2D(vk::Device device, const std::uint32_t id,
+                                  const Texture& texture) {
+    constexpr static auto kEnvMapTextureIdOffset = 768;
+
+    auto image_info = texture.descriptorInfo();
+
+    auto write = vk::WriteDescriptorSet{};
+    write.setDstSet(*set_)
+        .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
+        .setDstArrayElement((3 * id) + 2)
+        .setDescriptorCount(1)
+        .setDescriptorType(vk::DescriptorType::eSampledImage)
+        .setImageInfo(image_info);
+
+    device.updateDescriptorSets(write, nullptr);
+  }
+
  private:
   const BindlessLayout& bindless_;
 
@@ -86,14 +137,7 @@ class BindlessSetManager {
     auto alloc_info = vk::DescriptorSetAllocateInfo{};
     alloc_info.setDescriptorPool(*pool_).setSetLayouts(*bindless_);
 
-    auto descriptor_counts =
-        std::array<const std::uint32_t, 1>{BindlessLayout::kMaxTextures};
-
-    auto count_info = vk::DescriptorSetVariableDescriptorCountAllocateInfo{};
-    count_info.setDescriptorCounts(descriptor_counts);
-
-    return std::move(device.allocateDescriptorSetsUnique(
-        vk::StructureChain{alloc_info, count_info}.get())[0]);
+    return std::move(device.allocateDescriptorSetsUnique(alloc_info)[0]);
   }
 
   void initDefaultSamplers(vk::Device device, float maxAnisotropy) {

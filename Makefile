@@ -2,8 +2,13 @@ EXECUTABLE ?= ./build/vkit
 
 .PHONY: glslc
 glslc:
+	# primitive shader
 	glslc ./src/glsl/primitive.vert -o ./assets/shaders/primitive.vert
 	glslc ./src/glsl/primitive.frag -o ./assets/shaders/primitive.frag
+
+	# skybox shader
+	glslc ./src/glsl/skybox.vert -o ./assets/shaders/skybox.vert
+	glslc ./src/glsl/skybox.frag -o ./assets/shaders/skybox.frag
 
 .PHONY: cmake
 cmake:

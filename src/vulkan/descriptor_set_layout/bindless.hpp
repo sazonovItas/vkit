@@ -1,7 +1,6 @@
 #pragma once
 
 #include "vulkan/descriptor_set_layout/dsl.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::vulkan::dsl {
 struct BindlessLayout final : DescriptorSetLayout {
@@ -26,8 +25,7 @@ struct BindlessLayout final : DescriptorSetLayout {
               vk::DescriptorBindingFlagBits::eUpdateAfterBind,
 
           vk::DescriptorBindingFlagBits::ePartiallyBound |
-              vk::DescriptorBindingFlagBits::eUpdateAfterBind |
-              vk::DescriptorBindingFlagBits::eVariableDescriptorCount,
+              vk::DescriptorBindingFlagBits::eUpdateAfterBind,
       };
 
   explicit BindlessLayout(vk::Device device)

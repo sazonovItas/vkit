@@ -6,6 +6,7 @@
 
 #include "stb_image.h"
 #include "vk_mem_alloc.hpp"
+#include "vku/commands.hpp"
 #include "vku/images/allocated_image.hpp"
 #include "vku/utils/utils.hpp"
 
@@ -166,12 +167,69 @@ struct Texture {
 class Texture2D : public Texture {
  public:
   Texture2D(
+      vma::Allocator allocator, const vku::DeviceCopyInfo& copyInfo,
+      const int width, const int height,
+      const vk::Format format = vk::Format::eR8G8B8A8Srgb,
+      const std::uint32_t mipLevels = 1,
+      vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
+      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2 accessFlags = vk::AccessFlagBits2::eShaderRead,
+      vk::Flags<vk::PipelineStageFlagBits2> stageFlags =
+          vk::PipelineStageFlagBits2::eFragmentShader) {
+    auto image_ci = vk::ImageCreateInfo{};
+    image_ci.setImageType(vk::ImageType::e2D)
+        .setFormat(format)
+        .setMipLevels(mipLevels)
+        .setArrayLayers(1)
+        .setSamples(vk::SampleCountFlagBits::e1)
+        .setExtent(vk::Extent3D{
+            static_cast<std::uint32_t>(width),
+            static_cast<std::uint32_t>(height),
+            1,
+        })
+        .setUsage(imageUsageFlags | vk::ImageUsageFlagBits::eTransferSrc |
+                  vk::ImageUsageFlagBits::eTransferDst);
+
+    image = vku::AllocatedImage{allocator, image_ci};
+
+    auto transfer_image_to_target_layout_fn = [&](vk::CommandBuffer cb) {
+      auto subresource_range = vk::ImageSubresourceRange{};
+      subresource_range.setAspectMask(vk::ImageAspectFlagBits::eColor)
+          .setLevelCount(mipLevels)
+          .setLayerCount(1);
+
+      {
+        auto barrier = vk::ImageMemoryBarrier2{};
+        barrier.setOldLayout(vk::ImageLayout::eUndefined)
+            .setNewLayout(imageLayout)
+            .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+            .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+            .setDstAccessMask(accessFlags)
+            .setDstStageMask(stageFlags)
+            .setImage(image.image)
+            .setSubresourceRange(subresource_range);
+
+        cb.pipelineBarrier2(
+            vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
+      }
+    };
+
+    vku::executeCommandAndWait(copyInfo.device, copyInfo.commandPool,
+                               copyInfo.queue,
+                               transfer_image_to_target_layout_fn);
+
+    this->imageLayout = imageLayout;
+    imageView =
+        copyInfo.device.createImageViewUnique(image.getViewCreateInfo());
+  }
+
+  Texture2D(
       const TextureInfo& info, vma::Allocator allocator,
       const vku::DeviceCopyInfo& copyInfo, const std::uint32_t mipLevels = 1,
       vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
       vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
       vk::AccessFlagBits2 accessFlags = vk::AccessFlagBits2::eShaderRead,
-      vk::PipelineStageFlagBits2 stageFlags =
+      vk::Flags<vk::PipelineStageFlagBits2> stageFlags =
           vk::PipelineStageFlagBits2::eFragmentShader) {
     populate(info, allocator, copyInfo, mipLevels, imageUsageFlags, imageLayout,
              accessFlags, stageFlags);
@@ -182,28 +240,6 @@ class Texture2D : public Texture {
                 const vku::DeviceCopyInfo& copyInfo, std::uint32_t mipLevels,
                 vk::ImageUsageFlags imageUsageFlags,
                 vk::ImageLayout imageLayout, vk::AccessFlagBits2 accessFlags,
-                vk::PipelineStageFlagBits2 stageFlags);
-};
-
-class TextureCubeMap : public Texture {
- public:
-  TextureCubeMap(
-      const TextureInfo& info, vma::Allocator allocator,
-      const vku::DeviceCopyInfo& copyInfo, const std::uint32_t mipLevels = 1,
-      vk::ImageUsageFlags imageUsageFlags = vk::ImageUsageFlagBits::eSampled,
-      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::AccessFlagBits2 accessFlags = vk::AccessFlagBits2::eShaderRead,
-      vk::PipelineStageFlagBits2 stageFlags =
-          vk::PipelineStageFlagBits2::eFragmentShader) {
-    populate(info, allocator, copyInfo, mipLevels, imageUsageFlags, imageLayout,
-             accessFlags, stageFlags);
-  }
-
- private:
-  void populate(const TextureInfo& info, vma::Allocator allocator,
-                const vku::DeviceCopyInfo& copyInfo, std::uint32_t mipLevels,
-                vk::ImageUsageFlags imageUsageFlags,
-                vk::ImageLayout imageLayout, vk::AccessFlagBits2 accessFlags,
-                vk::PipelineStageFlagBits2 stageFlags);
+                vk::Flags<vk::PipelineStageFlagBits2> stageFlags);
 };
 };  // namespace vku

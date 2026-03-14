@@ -17,4 +17,8 @@ vec4 sampleTexture2DNearest(uint texID, vec2 uv) {
     return texture(sampler2D(nonuniformEXT(textures[texID]), samplers[NEAREST_SAMPLER_ID]), uv);
 }
 
+vec4 sampleTexture2DLod(uint texID, vec2 uv, float lod) {
+    return textureLod(sampler2D(nonuniformEXT(textures[texID]), samplers[LINEAR_SAMPLER_ID]), uv, lod);
+}
+
 #endif // BINDLESS_GLSL

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <filesystem>
-#include <fstream>
 
 #include "vku/images/image.hpp"
 
@@ -17,7 +16,7 @@ struct ImageBarrierInfo {
   vk::PipelineStageFlagBits2 srcStage;
   vk::ImageLayout dstLayout;
   vk::AccessFlags2 dstAccess;
-  vk::PipelineStageFlagBits2 dstStage;
+  vk::Flags<vk::PipelineStageFlagBits2> dstStage;
 };
 
 struct DeviceCopyInfo {

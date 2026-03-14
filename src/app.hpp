@@ -118,10 +118,12 @@ class App {
 
   UBO ubo_;
   UBOParams uboParams_;
+  std::vector<Light> lights_{{}};
   std::vector<Material> materials_;
 
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboParamsBuffers_;
+  std::optional<DescriptorBuffer<kResourceBufferingV>> lightsBuffers_;
   std::optional<DescriptorBuffer<kResourceBufferingV>> materialsBuffers_;
 
   Buffered<vk::UniqueDescriptorSet> sceneSets_;

@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "GLFW/glfw3.h"
-#include "ImGuizmo.h"
 #include "app_types.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
@@ -29,6 +28,7 @@
 #include "shader_program.hpp"
 #include "stb_image.h"
 #include "vku/utils/utils.hpp"
+#include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
 #include "vulkan/pipeline_layout/pbr.hpp"
@@ -37,7 +37,7 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/sword/scene.gltf"
+#define MODEL_PATH "models/samurai/scene.gltf"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -301,9 +301,9 @@ void App::loadGLTF(const std::filesystem::path& path) {
 void App::drawUI() {
   ui_->moveCamera(camera_);
 
-  ui_->drawInspect(camera_, transform_, uboParams_);
-
   ui_->drawViewManipulation(camera_);
+
+  ui_->drawInspect(camera_, transform_, uboParams_, lights_);
 
   if (gltfAsset_.has_value()) {
     ui_->drawGraphEditor(*gltfAsset_);
@@ -331,9 +331,14 @@ void App::update() {
       std::bit_cast<std::array<std::byte, sizeof(ubo_)>>(ubo_);
   uboBuffers_->writeAt(frameIndex_, ubo_bytes);
 
+  uboParams_.lightCount = lights_.size();
+
   const auto ubo_params_bytes =
       std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
   uboParamsBuffers_->writeAt(frameIndex_, ubo_params_bytes);
+
+  const auto lights_bytes = toByteSpan(lights_);
+  lightsBuffers_->writeAt(frameIndex_, lights_bytes);
 
   size_t max_idx = 0;
   for (const auto& [idx, m] : gltfAsset_->materials) {
@@ -366,8 +371,8 @@ void App::update() {
     materials_[idx] = mat;
   }
 
-  auto bytes = toByteSpan(materials_);
-  materialsBuffers_->writeAt(frameIndex_, bytes);
+  const auto materials_bytes = toByteSpan(materials_);
+  materialsBuffers_->writeAt(frameIndex_, materials_bytes);
 }
 
 void App::bindDescriptorSets(vk::CommandBuffer cb) const {
@@ -468,7 +473,7 @@ void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
 }
 
 void App::updateDescriptorSets() const {
-  auto writes = std::array<vk::WriteDescriptorSet, 3>{};
+  auto writes = std::array<vk::WriteDescriptorSet, 4>{};
 
   auto write = vk::WriteDescriptorSet{};
 
@@ -478,7 +483,7 @@ void App::updateDescriptorSets() const {
       .setDescriptorType(vk::DescriptorType::eUniformBuffer)
       .setDescriptorCount(1)
       .setDstSet(scene_set)
-      .setDstBinding(vkit::vulkan::dsl::SceneLayout::kUBOBindingIdx);
+      .setDstBinding(vulkan::dsl::SceneLayout::kUBOBindingIdx);
   writes[0] = write;
 
   const auto ubo_params_info = uboParamsBuffers_->descriptorInfoAt(frameIndex_);
@@ -486,8 +491,16 @@ void App::updateDescriptorSets() const {
       .setDescriptorType(vk::DescriptorType::eUniformBuffer)
       .setDescriptorCount(1)
       .setDstSet(scene_set)
-      .setDstBinding(vkit::vulkan::dsl::SceneLayout::kUBOParamsBindingIdx);
+      .setDstBinding(vulkan::dsl::SceneLayout::kUBOParamsBindingIdx);
   writes[1] = write;
+
+  const auto lights_info = lightsBuffers_->descriptorInfoAt(frameIndex_);
+  write.setBufferInfo(lights_info)
+      .setDescriptorType(vk::DescriptorType::eStorageBuffer)
+      .setDescriptorCount(1)
+      .setDstSet(scene_set)
+      .setDstBinding(vulkan::dsl::SceneLayout::kSSBOLightsBindingIdx);
+  writes[2] = write;
 
   const auto materials_set = *materialsSets_.at(frameIndex_);
   const auto materials_info = materialsBuffers_->descriptorInfoAt(frameIndex_);
@@ -495,8 +508,8 @@ void App::updateDescriptorSets() const {
       .setDescriptorType(vk::DescriptorType::eStorageBuffer)
       .setDescriptorCount(1)
       .setDstSet(materials_set)
-      .setDstBinding(0);
-  writes[2] = write;
+      .setDstBinding(vulkan::dsl::MaterialLayout::kMaterialBindingIdx);
+  writes[3] = write;
 
   gpu_->device->updateDescriptorSets(writes, {});
 }
@@ -718,6 +731,8 @@ void App::createDescriptorResources() {
                       vk::BufferUsageFlagBits::eUniformBuffer);
   uboParamsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
                             vk::BufferUsageFlagBits::eUniformBuffer);
+  lightsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
+                         vk::BufferUsageFlagBits::eStorageBuffer);
   materialsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
                             vk::BufferUsageFlagBits::eStorageBuffer);
 }
@@ -730,7 +745,7 @@ void App::createDescriptorPool() {
       },
       vk::DescriptorPoolSize{
           vk::DescriptorType::eStorageBuffer,
-          kResourceBufferingV,
+          2 * kResourceBufferingV,
       },
   };
 
