@@ -1,7 +1,9 @@
 #pragma once
 
 #include "GLFW/glfw3.h"
+#include "resource_buffering.hpp"
 #include "vku/scoped/scoped.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit {
 struct DearImGuiCreateInfo {
@@ -20,6 +22,8 @@ class DearImGui {
  public:
   using CreateInfo = DearImGuiCreateInfo;
 
+  vk::UniqueDescriptorPool descriptorPool;
+
   explicit DearImGui(const CreateInfo& createInfo);
 
   virtual void newFrame();
@@ -36,5 +40,23 @@ class DearImGui {
   State state_;
 
   vku::Scoped<vk::Device, Deleter> device_;
+
+  auto createDescriptorPool(vk::Device device) -> vk::UniqueDescriptorPool {
+    static constexpr auto kPoolSizeV = std::array{
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer,
+                               2 * kResourceBufferingV},
+        vk::DescriptorPoolSize{vk::DescriptorType::eStorageBuffer,
+                               2 * kResourceBufferingV},
+
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler, 256}};
+
+    auto pool_ci = vk::DescriptorPoolCreateInfo{};
+    pool_ci.setPoolSizes(kPoolSizeV)
+        .setMaxSets(256)
+        .setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind |
+                  vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet);
+
+    return device.createDescriptorPoolUnique(pool_ci);
+  }
 };
 };  // namespace vkit

@@ -46,6 +46,7 @@ class Asset {
     float metallicFactor{1.0F};
     float roughnessFactor{1.0F};
     float emissiveStrength{1.0F};
+    float dissolveStrength{0.0F};
 
     glm::vec4 baseColorFactor{1.0F};
     glm::vec4 emissiveFactor{0.0F};

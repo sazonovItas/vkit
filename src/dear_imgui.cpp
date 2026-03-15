@@ -10,7 +10,8 @@
 #include "resource_buffering.hpp"
 
 namespace vkit {
-DearImGui::DearImGui(const CreateInfo& createInfo) {
+DearImGui::DearImGui(const CreateInfo& createInfo)
+    : descriptorPool{createDescriptorPool(createInfo.device)} {
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
 
@@ -35,7 +36,8 @@ DearImGui::DearImGui(const CreateInfo& createInfo) {
   init_info.Queue = createInfo.queue;
   init_info.MinImageCount = kResourceBufferingV;
   init_info.ImageCount = static_cast<std::uint32_t>(kResourceBufferingV);
-  init_info.DescriptorPoolSize = 8;
+  init_info.DescriptorPool = *descriptorPool;
+  init_info.DescriptorPoolSize = 0;
   init_info.PipelineInfoMain.MSAASamples =
       static_cast<VkSampleCountFlagBits>(createInfo.samples);
   auto pipeline_rendering_ci = vk::PipelineRenderingCreateInfo{};

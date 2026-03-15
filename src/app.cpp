@@ -39,8 +39,8 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/pagani/scene.gltf"
-#define ENVIRONMENT_MAP_PATH "environment/monochrome_studio_02_4k.hdr"
+#define MODEL_PATH "models/sword/scene.gltf"
+#define ENVIRONMENT_MAP_PATH "environment/ferndale_studio_03_4k.hdr"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -159,7 +159,7 @@ auto generateBricks(int width, int height, float brickWidth, float brickHeight,
 
       bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
 
-      int index = (y * width + x) * 4;
+      int index = ((y * width) + x) * 4;
 
       if (is_mortar) {
         uint8_t mortar = 200;
@@ -202,7 +202,7 @@ auto generateStoneTiles(int width, int height, int tileSize,
 
       bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
 
-      int index = (y * width + x) * 4;
+      int index = ((y * width) + x) * 4;
 
       if (is_mortar) {
         uint8_t mortar = 180;
@@ -300,6 +300,8 @@ void App::loadGLTF(const std::filesystem::path& path) {
     bindlessSetManager_->addTexture2D(*gpu_->device, static_cast<uint32_t>(idx),
                                       *texture);
   }
+
+  ui_->uploadTextures(*gpu_->device, *gltfAsset_);
 }
 
 void App::loadEnvironmentMap(const std::filesystem::path& path) {
@@ -509,6 +511,7 @@ void App::update() {
     mat.alphaMaskCutoff =
         (m.alphaMode == fastgltf::AlphaMode::Mask) ? m.alphaCutoff : 0.0F;
     mat.emissiveStrength = m.emissiveStrength;
+    mat.dissolveStrength = m.dissolveStrength;
 
     auto get_tex_idx = [](const std::optional<std::uint32_t>& tex) -> int32_t {
       return tex.has_value() ? static_cast<int32_t>(*tex) : -1;

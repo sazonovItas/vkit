@@ -14,7 +14,9 @@ namespace vkit {
 class UI : public DearImGui {
  public:
   explicit UI(const DearImGuiCreateInfo& imguiCreateInfo)
-      : DearImGui(imguiCreateInfo) {}
+      : DearImGui(imguiCreateInfo) {
+    createTextureResources(imguiCreateInfo.device);
+  }
 
   void newFrame() override {
     DearImGui::newFrame();
@@ -240,11 +242,9 @@ class UI : public DearImGui {
       std::unordered_map<size_t, GraphEditor::NodeIndex> textureNodes;
       std::unordered_map<size_t, GraphEditor::NodeIndex> materialNodes;
 
-      // Reverse maps for linking logic
       std::unordered_map<GraphEditor::NodeIndex, size_t> nodeToTexture;
       std::unordered_map<GraphEditor::NodeIndex, size_t> nodeToMaterial;
-      // NEW: Map to store which Mesh Index and Primitive Index belongs to a
-      // node
+
       std::unordered_map<GraphEditor::NodeIndex, std::pair<size_t, size_t>>
           nodeToPrimitive;
 
@@ -255,7 +255,8 @@ class UI : public DearImGui {
       std::vector<const char*> matOut = {"Material"};
       std::vector<const char*> primIn = {"Material"};
 
-      explicit AssetGraphDelegate(gltf::Asset& a) : asset(a) {
+      explicit AssetGraphDelegate(gltf::Asset& a, const UI& uiInstance)
+          : asset(a), uiInstance_(uiInstance) {
         // Texture Template
         templates.push_back({
             IM_COL32(204, 102, 51, 255),
@@ -480,7 +481,27 @@ class UI : public DearImGui {
         links.erase(links.begin() + index);
       }
 
-      void CustomDraw(ImDrawList*, ImRect, GraphEditor::NodeIndex) override {}
+      void CustomDraw(ImDrawList* drawList, ImRect rect,
+                      GraphEditor::NodeIndex nodeIndex) override {
+        if (nodeToTexture.contains(nodeIndex)) {
+          auto tex_idx = static_cast<uint32_t>(nodeToTexture[nodeIndex]);
+
+          auto it = uiInstance_.textureDescriptorSets_.find(tex_idx);
+          if (it != uiInstance_.textureDescriptorSets_.end()) {
+            float padding = 10.0F;
+            ImVec2 img_pos = ImVec2(rect.Min.x + padding, rect.Min.y + 40.0F);
+            ImVec2 img_size = ImVec2(rect.GetWidth() - (padding * 2),
+                                     rect.GetWidth() - (padding * 2));
+
+            auto tex_id = reinterpret_cast<ImTextureID>(
+                static_cast<VkDescriptorSet>(*it->second));
+
+            drawList->AddImage(
+                tex_id, img_pos,
+                ImVec2(img_pos.x + img_size.x, img_pos.y + img_size.y));
+          }
+        }
+      }
 
       void RightClick(GraphEditor::NodeIndex nodeIndex, GraphEditor::SlotIndex,
                       GraphEditor::SlotIndex) override {
@@ -505,6 +526,9 @@ class UI : public DearImGui {
       const GraphEditor::Link GetLink(GraphEditor::LinkIndex i) override {
         return links[i];
       }
+
+     private:
+      const UI& uiInstance_;
     };
 
     static GraphEditor::ViewState view_state;
@@ -521,7 +545,8 @@ class UI : public DearImGui {
       style_init = true;
     }
 
-    if (!delegate) delegate = std::make_unique<AssetGraphDelegate>(asset);
+    if (!delegate)
+      delegate = std::make_unique<AssetGraphDelegate>(asset, *this);
 
     ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(30, 30, 30, 255));
     ImGui::Begin("Asset Graph");
@@ -538,6 +563,8 @@ class UI : public DearImGui {
         ImGui::DragFloat("Roughness", &mat.roughnessFactor, 0.01F, 0.F, 1.F);
         ImGui::DragFloat("EmissiveStrength", &mat.emissiveStrength, 0.01F, 0.F,
                          10.F);
+        ImGui::DragFloat("DissolveStrength", &mat.dissolveStrength, 0.01F, 0.F,
+                         1.F);
 
         static const char* alpha_modes[] = {"Opaque", "Mask", "Blend"};
         int alpha_mode_index = static_cast<int>(mat.alphaMode);
@@ -555,7 +582,54 @@ class UI : public DearImGui {
     ImGui::End();
   }
 
+  void uploadTextures(vk::Device device, gltf::Asset& asset) {
+    for (auto& [idx, texture] : asset.textures) {
+      if (textureDescriptorSets_.contains(idx)) continue;
+
+      auto alloc_info = vk::DescriptorSetAllocateInfo{}
+                            .setDescriptorPool(*descriptorPool)
+                            .setDescriptorSetCount(1)
+                            .setPSetLayouts(&*imguiTextureLayout_);
+
+      auto set = std::move(device.allocateDescriptorSetsUnique(alloc_info)[0]);
+
+      auto image_info = texture->descriptorInfo();
+      image_info.setSampler(*previewSampler_);
+
+      auto write =
+          vk::WriteDescriptorSet{}
+              .setDstSet(*set)
+              .setDstBinding(0)
+              .setDescriptorCount(1)
+              .setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+              .setImageInfo(image_info);
+
+      device.updateDescriptorSets(write, nullptr);
+      textureDescriptorSets_[idx] = std::move(set);
+    }
+  }
+
  private:
   std::optional<ImGuiIO> io_;
+
+  vk::UniqueDescriptorSetLayout imguiTextureLayout_;
+  std::unordered_map<std::uint32_t, vk::UniqueDescriptorSet>
+      textureDescriptorSets_;
+  vk::UniqueSampler previewSampler_;
+
+  void createTextureResources(vk::Device device) {
+    auto binding = vk::DescriptorSetLayoutBinding{
+        0,
+        vk::DescriptorType::eCombinedImageSampler,
+        1,
+        vk::ShaderStageFlagBits::eFragment,
+    };
+    auto layout_ci = vk::DescriptorSetLayoutCreateInfo{{}, binding};
+    imguiTextureLayout_ = device.createDescriptorSetLayoutUnique(layout_ci);
+
+    previewSampler_ = device.createSamplerUnique(vku::createSamplerCreateInfo(
+        vk::SamplerAddressMode::eClampToEdge, vk::Filter::eLinear,
+        vk::SamplerMipmapMode::eLinear));
+  }
 };
 };  // namespace vkit

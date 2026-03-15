@@ -6,7 +6,7 @@
 namespace vkit {
 struct Camera {
   glm::vec3 target{0.0F};
-  float distance{2.0F};
+  float distance{5.0F};
   float yaw{45.0F};
   float pitch{30.0F};
   glm::vec3 up{0.0F, 1.0F, 0.0F};
@@ -76,6 +76,6 @@ struct alignas(16) Material {
   int32_t emissiveTextureIdx;
   int32_t pad0;
   int32_t pad1;
-  int32_t pad2;
+  float dissolveStrength;
 };
 };  // namespace vkit

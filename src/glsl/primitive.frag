@@ -110,7 +110,7 @@ void main() {
         roughness *= mr.g; 
         metallic *= mr.b;
     }
-    roughness = clamp(roughness, 0.05, 1.0);
+    roughness = clamp(roughness, 0.0, 1.0);
     metallic = clamp(metallic, 0.0, 1.0);
 
     vec3 N = normalize(inNormal);
@@ -223,5 +223,6 @@ void main() {
     sceneColor = ACESFilm(sceneColor);
     sceneColor = pow(sceneColor, vec3(1.0 / uboParams.gamma));
 
-    outColor = vec4(sceneColor, albedo.a);
+    float alpha = clamp(albedo.a + mat.dissolveStrength, 0.0, 1.0);
+    outColor = vec4(sceneColor, alpha);
 }

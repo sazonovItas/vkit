@@ -18,7 +18,7 @@
     int emissiveTextureIdx;
     int pad0;
     int pad1;
-    int pad2;
+    float dissolveStrength;
   };
 
 #endif // MATERIAL_GLSL
