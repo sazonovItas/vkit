@@ -78,7 +78,7 @@ void executeCommandAndWait(vk::Device device, vk::CommandPool command_pool,
       *fence);
 
   static constexpr auto kTimeoutV =
-      static_cast<std::uint64_t>(std::chrono::nanoseconds{30s}.count());
+      static_cast<std::uint64_t>(std::chrono::nanoseconds{60s}.count());
   auto result = device.waitForFences(*fence, vk::True, kTimeoutV);
   if (result != vk::Result::eSuccess) {
     throw std::runtime_error{"failed to submit command buffer"};

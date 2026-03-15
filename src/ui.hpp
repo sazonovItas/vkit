@@ -125,6 +125,8 @@ class UI : public DearImGui {
       if (ImGui::TreeNodeEx("Params", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::DragFloat("Exposure", &uboParams.exposure, 0.1F, 0.1F, 100.0F);
         ImGui::DragFloat("Gamma", &uboParams.gamma, 0.1F, 0.1F, 100.0F);
+        ImGui::DragFloat("IBL Intensity", &uboParams.iblIntensity, 0.1F, 0.1F,
+                         100.0F);
         ImGui::TreePop();
       }
 

@@ -27,6 +27,18 @@ class BindlessSetManager {
 
   auto getSet() const -> vk::DescriptorSet { return *set_; }
 
+  static auto getEnvMapId(const std::int32_t id) -> std::int32_t {
+    return kEnvMapTextureIdOffset + (3 * id);
+  }
+
+  static auto getDiffuseEnvMapId(const std::int32_t id) -> std::int32_t {
+    return kEnvMapTextureIdOffset + (3 * id) + 1;
+  }
+
+  static auto getSpecularEnvMapId(const std::int32_t id) -> std::int32_t {
+    return kEnvMapTextureIdOffset + (3 * id) + 2;
+  }
+
   void addSampler(vk::Device device, const std::uint32_t id,
                   vk::Sampler sampler) {
     auto image_info = vk::DescriptorImageInfo{};
@@ -58,6 +70,21 @@ class BindlessSetManager {
     device.updateDescriptorSets(write, nullptr);
   }
 
+  void addStorageImage2D(vk::Device device, const std::uint32_t id,
+                         const Texture& texture) {
+    auto image_info = texture.descriptorInfo();
+
+    auto write = vk::WriteDescriptorSet{};
+    write.setDstSet(*set_)
+        .setDstBinding(BindlessLayout::kStorageImageBindingIdx)
+        .setDstArrayElement(id)
+        .setDescriptorCount(1)
+        .setDescriptorType(vk::DescriptorType::eStorageImage)
+        .setImageInfo(image_info);
+
+    device.updateDescriptorSets(write, nullptr);
+  }
+
   void addEnvMapTexture2D(vk::Device device, const std::uint32_t id,
                           const Texture& texture) {
     auto image_info = texture.descriptorInfo();
@@ -75,14 +102,12 @@ class BindlessSetManager {
 
   void addDiffuseEnvMapTexture2D(vk::Device device, const std::uint32_t id,
                                  const Texture& texture) {
-    constexpr static auto kEnvMapTextureIdOffset = 768;
-
     auto image_info = texture.descriptorInfo();
 
     auto write = vk::WriteDescriptorSet{};
     write.setDstSet(*set_)
         .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
-        .setDstArrayElement((3 * id) + 1)
+        .setDstArrayElement(kEnvMapTextureIdOffset + (3 * id) + 1)
         .setDescriptorCount(1)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
         .setImageInfo(image_info);
@@ -92,14 +117,12 @@ class BindlessSetManager {
 
   void addSpecularEnvMapTexture2D(vk::Device device, const std::uint32_t id,
                                   const Texture& texture) {
-    constexpr static auto kEnvMapTextureIdOffset = 768;
-
     auto image_info = texture.descriptorInfo();
 
     auto write = vk::WriteDescriptorSet{};
     write.setDstSet(*set_)
         .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
-        .setDstArrayElement((3 * id) + 2)
+        .setDstArrayElement(kEnvMapTextureIdOffset + (3 * id) + 2)
         .setDescriptorCount(1)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
         .setImageInfo(image_info);
@@ -116,11 +139,13 @@ class BindlessSetManager {
 
   static auto createDescriptorPool(vk::Device device)
       -> vk::UniqueDescriptorPool {
-    const auto pool_sizes_bindless = std::array<vk::DescriptorPoolSize, 2>{
+    const auto pool_sizes_bindless = std::array<vk::DescriptorPoolSize, 3>{
         vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage,
                                BindlessLayout::kMaxTextures},
         vk::DescriptorPoolSize{vk::DescriptorType::eSampler,
                                BindlessLayout::kMaxSamplers},
+        vk::DescriptorPoolSize{vk::DescriptorType::eStorageImage,
+                               BindlessLayout::kMaxStorageImages},
     };
 
     auto pool_info = vk::DescriptorPoolCreateInfo{};

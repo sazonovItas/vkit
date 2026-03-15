@@ -115,5 +115,4 @@ void ShaderProgram::bindShaders(vk::CommandBuffer cb) const {
   };
   cb.bindShadersEXT(kStagesV, shaders);
 }
-
 };  // namespace vkit

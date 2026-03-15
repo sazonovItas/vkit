@@ -151,7 +151,7 @@ struct TextureInfo {
 };
 
 struct Texture {
-  vk::ImageLayout imageLayout;
+  vk::ImageLayout imageLayout{vk::ImageLayout::eUndefined};
   vku::AllocatedImage image;
   vk::UniqueImageView imageView;
   std::optional<vk::Sampler> sampler;
@@ -168,6 +168,41 @@ struct Texture {
   }
 
   void setSampler(vk::Sampler sampler) { this->sampler = sampler; }
+
+  void transferToImageLayout(
+      const vku::DeviceCopyInfo& copyInfo,
+      vk::ImageLayout imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2 srcAccessFlags = vk::AccessFlagBits2::eNone,
+      vk::Flags<vk::PipelineStageFlagBits2> srcStageFlags =
+          vk::PipelineStageFlagBits2::eAllCommands,
+      vk::AccessFlagBits2 dstAccessFlags = vk::AccessFlagBits2::eShaderRead,
+      vk::Flags<vk::PipelineStageFlagBits2> dstStageFlags =
+          vk::PipelineStageFlagBits2::eFragmentShader) {
+    auto transfer_image_to_target_layout_fn = [&](vk::CommandBuffer cb) {
+      auto subresource_range = image.subresourceRange();
+
+      {
+        auto barrier = vk::ImageMemoryBarrier2{};
+        barrier.setOldLayout(this->imageLayout)
+            .setNewLayout(imageLayout)
+            .setSrcAccessMask(srcAccessFlags)
+            .setSrcStageMask(srcStageFlags)
+            .setDstAccessMask(dstAccessFlags)
+            .setDstStageMask(dstStageFlags)
+            .setImage(image.image)
+            .setSubresourceRange(subresource_range);
+
+        cb.pipelineBarrier2(
+            vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
+      }
+    };
+
+    vku::executeCommandAndWait(copyInfo.device, copyInfo.commandPool,
+                               copyInfo.queue,
+                               transfer_image_to_target_layout_fn);
+
+    this->imageLayout = imageLayout;
+  }
 };
 
 class Texture2D : public Texture {
@@ -199,10 +234,7 @@ class Texture2D : public Texture {
     image = vku::AllocatedImage{allocator, image_ci};
 
     auto transfer_image_to_target_layout_fn = [&](vk::CommandBuffer cb) {
-      auto subresource_range = vk::ImageSubresourceRange{};
-      subresource_range.setAspectMask(vk::ImageAspectFlagBits::eColor)
-          .setLevelCount(mipLevels)
-          .setLayerCount(1);
+      auto subresource_range = image.subresourceRange();
 
       {
         auto barrier = vk::ImageMemoryBarrier2{};
@@ -225,6 +257,7 @@ class Texture2D : public Texture {
                                transfer_image_to_target_layout_fn);
 
     this->imageLayout = imageLayout;
+
     imageView =
         copyInfo.device.createImageViewUnique(image.getViewCreateInfo());
   }

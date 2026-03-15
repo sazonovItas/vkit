@@ -39,8 +39,8 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/samurai/scene.gltf"
-#define ENVIRONMENT_MAP_PATH "environment/blaubeuren_night_4k.hdr"
+#define MODEL_PATH "models/pagani/scene.gltf"
+#define ENVIRONMENT_MAP_PATH "environment/monochrome_studio_02_4k.hdr"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -303,20 +303,144 @@ void App::loadGLTF(const std::filesystem::path& path) {
 }
 
 void App::loadEnvironmentMap(const std::filesystem::path& path) {
-  const auto info =
+  auto const copy_info = vku::DeviceCopyInfo{
+      .device = *gpu_->device,
+      .commandPool = *graphicsCommandPool_,
+      .queue = gpu_->queues.graphicsPresent,
+  };
+
+  const auto env_info =
       vku::TextureInfo::fromPath(path, vk::Format::eR32G32B32A32Sfloat, 4, 4);
 
-  environmentMaps_.emplace_back(info, gpu_->allocator,
-                                vku::DeviceCopyInfo{
-                                    .device = *gpu_->device,
-                                    .commandPool = *graphicsCommandPool_,
-                                    .queue = gpu_->queues.graphicsPresent,
-                                });
+  environmentMaps_.emplace_back(env_info, gpu_->allocator, copy_info);
 
   bindlessSetManager_->addEnvMapTexture2D(*gpu_->device, 0,
                                           environmentMaps_.back());
 
-  currEnvMapIdx_ = BindlessSetManager::kEnvMapTextureIdOffset + (3 * 0);
+  const uint32_t diffuse_width = 32;
+  const uint32_t diffuse_height = 16;
+
+  environmentDiffuseMaps_.emplace_back(
+      gpu_->allocator, copy_info, diffuse_width, diffuse_height,
+      vk::Format::eR32G32B32A32Sfloat, 1,
+      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
+      vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eComputeShader);
+
+  auto& diffuse_tex = environmentDiffuseMaps_.back();
+
+  bindlessSetManager_->addStorageImage2D(*gpu_->device, 1, diffuse_tex);
+
+  const uint32_t spec_base_width = env_info.width;
+  const uint32_t spec_base_height = env_info.height;
+  const uint32_t mip_levels = 6;
+
+  environmentSpecularMaps_.emplace_back(
+      gpu_->allocator, copy_info, spec_base_width, spec_base_height,
+      vk::Format::eR32G32B32A32Sfloat, mip_levels,
+      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
+      vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eComputeShader);
+
+  auto& specular_tex = environmentSpecularMaps_.back();
+
+  std::vector<vk::UniqueImageView> temp_mip_views;
+  for (uint32_t mip = 0; mip < mip_levels; ++mip) {
+    auto view_ci = specular_tex.image.getViewCreateInfo();
+    view_ci.subresourceRange.baseMipLevel = mip;
+    view_ci.subresourceRange.levelCount = 1;
+    temp_mip_views.push_back(gpu_->device->createImageViewUnique(view_ci));
+
+    auto image_info = vk::DescriptorImageInfo{}
+                          .setImageLayout(vk::ImageLayout::eGeneral)
+                          .setImageView(*temp_mip_views.back());
+
+    auto write =
+        vk::WriteDescriptorSet{}
+            .setDstSet(bindlessSetManager_->getSet())
+            .setDstBinding(vulkan::dsl::BindlessLayout::kStorageImageBindingIdx)
+            .setDstArrayElement(10 + mip)
+            .setDescriptorCount(1)
+            .setDescriptorType(vk::DescriptorType::eStorageImage)
+            .setImageInfo(image_info);
+
+    gpu_->device->updateDescriptorSets(write, nullptr);
+  }
+
+  auto generate_ibl_fn = [&](vk::CommandBuffer cb) {
+    prefilterDiffuseShader_->bind(cb);
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                          prefilterDiffuseLayout_->get(), 0,
+                          bindlessSetManager_->getSet(), {});
+
+    auto diffuse_pcs = vulkan::pl::PrefilterDiffuseIBLLayout::PushConstants{
+        .sourceEnvMapIdx =
+            static_cast<uint32_t>(BindlessSetManager::getEnvMapId(0)),
+        .outIrradianceMapIdx = 1,
+    };
+
+    cb.pushConstants(prefilterDiffuseLayout_->get(),
+                     vk::ShaderStageFlagBits::eCompute, 0, sizeof(diffuse_pcs),
+                     &diffuse_pcs);
+
+    uint32_t diff_groups_x = (diffuse_width + 15) / 16;
+    uint32_t diff_groups_y = (diffuse_height + 15) / 16;
+    prefilterDiffuseShader_->dispatch(cb, diff_groups_x, diff_groups_y, 1);
+
+    prefilterSpecularShader_->bind(cb);
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                          prefilterSpecularLayout_->get(), 0,
+                          bindlessSetManager_->getSet(), {});
+
+    for (uint32_t mip = 0; mip < mip_levels; ++mip) {
+      uint32_t mip_width = std::max(1U, spec_base_width >> mip);
+      uint32_t mip_height = std::max(1U, spec_base_height >> mip);
+
+      float roughness =
+          static_cast<float>(mip) / static_cast<float>(mip_levels - 1);
+
+      auto spec_pcs = vulkan::pl::PrefilterSpecularIBLLayout::PushConstants{
+          .sourceEnvMapIdx =
+              static_cast<uint32_t>(BindlessSetManager::getEnvMapId(0)),
+          .outPrefilterMapIdx = 10 + mip,
+          .roughness = roughness,
+      };
+
+      cb.pushConstants(prefilterSpecularLayout_->get(),
+                       vk::ShaderStageFlagBits::eCompute, 0, sizeof(spec_pcs),
+                       &spec_pcs);
+
+      uint32_t spec_groups_x = (mip_width + 15) / 16;
+      uint32_t spec_groups_y = (mip_height + 15) / 16;
+      prefilterSpecularShader_->dispatch(cb, spec_groups_x, spec_groups_y, 1);
+    }
+  };
+
+  vku::executeCommandAndWait(*gpu_->device, *computeCommandPool_,
+                             gpu_->queues.compute, generate_ibl_fn);
+
+  // Diffuse
+  diffuse_tex.transferToImageLayout(
+      copy_info, vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eComputeShader,
+      vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2::eFragmentShader);
+
+  // Specular
+  specular_tex.transferToImageLayout(
+      copy_info, vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eComputeShader,
+      vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2::eFragmentShader);
+
+  // Bind to the Sampled Image array so your Graphics Pipeline can read them!
+  bindlessSetManager_->addDiffuseEnvMapTexture2D(*gpu_->device, 0, diffuse_tex);
+  bindlessSetManager_->addSpecularEnvMapTexture2D(*gpu_->device, 0,
+                                                  specular_tex);
+
+  currEnvMapIdx_ = 0;
 }
 
 void App::drawUI() {
@@ -353,6 +477,13 @@ void App::update() {
   uboBuffers_->writeAt(frameIndex_, ubo_bytes);
 
   uboParams_.lightCount = lights_.size();
+  uboParams_.diffuseEnvMapIdx =
+      !currEnvMapIdx_ ? -1
+                      : BindlessSetManager::getDiffuseEnvMapId(*currEnvMapIdx_);
+  uboParams_.specularEnvMapIdx =
+      !currEnvMapIdx_
+          ? -1
+          : BindlessSetManager::getSpecularEnvMapId(*currEnvMapIdx_);
 
   const auto ubo_params_bytes =
       std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
@@ -473,7 +604,8 @@ void App::drawSkybox(vk::CommandBuffer cb) const {
 
   auto push_constants = PushConstants{
       .envBaseColor = envBaseColor_,
-      .envMapIdx = env_map_idx,
+      .envMapIdx =
+          env_map_idx < 0 ? -1 : BindlessSetManager::getEnvMapId(env_map_idx),
   };
 
   cb.pushConstants(skyboxLayout_->get(), vk::ShaderStageFlagBits::eFragment, 0,
@@ -753,6 +885,11 @@ void App::createPipelineLayouts() {
   primitiveLayout_.emplace(
       *gpu_->device,
       std::tie(*sceneSetLayout_, *materialSetLayout_, *bindlessSetLayout_));
+
+  prefilterDiffuseLayout_.emplace(*gpu_->device, std::tie(*bindlessSetLayout_));
+
+  prefilterSpecularLayout_.emplace(*gpu_->device,
+                                   std::tie(*bindlessSetLayout_));
 }
 
 void App::createShaders() {
@@ -807,6 +944,48 @@ void App::createShaders() {
         .pushConstantRanges = push_constant_ranges,
     };
     primitiveShader_.emplace(ci);
+  }
+
+  {
+    const auto compute_shader_spirv =
+        vku::toSpirV(assetPath("shaders/prefilter_diffuse_ibl.comp"));
+
+    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
+        bindlessSetLayout_->get(),
+    };
+
+    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
+        vkit::vulkan::pl::PrefilterDiffuseIBLLayout::kPushConstantRange,
+    };
+
+    const auto ci = ComputeShaderProgramCreateInfo{
+        .device = *gpu_->device,
+        .computeSpirv = compute_shader_spirv,
+        .setLayouts = set_layouts,
+        .pushConstantRanges = push_constant_ranges,
+    };
+    prefilterDiffuseShader_.emplace(ci);
+  }
+
+  {
+    const auto compute_shader_spirv =
+        vku::toSpirV(assetPath("shaders/prefilter_specular_ibl.comp"));
+
+    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
+        bindlessSetLayout_->get(),
+    };
+
+    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
+        vkit::vulkan::pl::PrefilterSpecularIBLLayout::kPushConstantRange,
+    };
+
+    const auto ci = ComputeShaderProgramCreateInfo{
+        .device = *gpu_->device,
+        .computeSpirv = compute_shader_spirv,
+        .setLayouts = set_layouts,
+        .pushConstantRanges = push_constant_ranges,
+    };
+    prefilterSpecularShader_.emplace(ci);
   }
 }
 

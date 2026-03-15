@@ -1,5 +1,8 @@
 #pragma once
 
+#include <cstdint>
+#include <glm/glm.hpp>
+
 namespace vkit {
 struct Camera {
   glm::vec3 target{0.0F};
@@ -26,16 +29,14 @@ struct UBO {
 struct UBOParams {
   float exposure{1.0F};
   float gamma{2.2F};
+  float iblIntensity{2.0F};
+
   std::int32_t diffuseEnvMapIdx{-1};
   std::int32_t specularEnvMapIdx{-1};
-
-  std::int32_t brdfLUTIdx{-1};
   float maxSpecularLod{9.0F};
+
   std::int32_t lightCount{0};
 };
-
-#include <cstdint>
-#include <glm/glm.hpp>
 
 enum class LightType : std::uint32_t {
   kDirectional = 0,

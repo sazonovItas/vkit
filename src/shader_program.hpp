@@ -58,5 +58,4 @@ class ShaderProgram {
 
   vku::DeviceWaiter waiter_;
 };
-
 };  // namespace vkit

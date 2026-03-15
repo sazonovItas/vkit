@@ -10,10 +10,10 @@ layout(location = 0) in vec3 inViewDir;
 layout (set = 0, binding = 1) uniform UBOParams {
     float exposure;
     float gamma;
+    float iblIntensity;
 
     int diffuseEnvMapIdx;
     int specularEnvMapIdx;
-    int brdfLUTIdx;
     float maxSpecularLod;
 
     int lightCount;
@@ -31,7 +31,6 @@ vec2 directionToSphericalEnvmap(vec3 dir) {
     return uv;
 }
 
-// ACES Filmic Tone Mapping Curve
 vec3 ACESFilm(vec3 x) {
     float a = 2.51;
     float b = 0.03;

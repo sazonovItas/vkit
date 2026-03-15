@@ -19,10 +19,10 @@ layout (set = 0, binding = 0) uniform UBO {
 layout (set = 0, binding = 1) uniform UBOParams {
     float exposure;
     float gamma;
+    float iblIntensity;
 
     int diffuseEnvMapIdx;
     int specularEnvMapIdx;
-    int brdfLUTIdx;
     float maxSpecularLod;
 
     int lightCount;
@@ -39,15 +39,25 @@ layout (set = 1, binding = 0, std430) readonly buffer SSBOMaterials {
 layout (location = 0) out vec4 outColor;
 
 const float PI = 3.14159265358979323846;
+const vec2 INV_ATAN = vec2(0.15915494309, 0.31830988618);
 
 vec3 sRGBToLinear(vec3 srgb) { return pow(srgb, vec3(2.2)); }
 
-vec3 linearToSRGB(vec3 linear) { return pow(linear, vec3(1.0 / uboParams.gamma)); }
-
 vec2 directionToSphericalEnvmap(vec3 dir) {
-    float s = 1.0 - mod(1.0 / (2.0 * PI) * atan(dir.y, dir.x), 1.0);
-    float t = 1.0 / PI * acos(-dir.z);
-    return vec2(s, t);
+    vec2 uv = vec2(atan(dir.z, dir.x), asin(dir.y));
+    uv *= INV_ATAN;
+    uv += 0.5;
+    uv.y = 1.0 - uv.y;
+    return uv;
+}
+
+vec3 ACESFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
 vec3 getNormalFromMap(int texIdx, vec2 uv, vec3 worldPos, vec3 vertexNormal) {
@@ -178,38 +188,40 @@ void main() {
     vec3 specularIBL = vec3(0.0);
     
     vec2 envBRDF = vec2(1.0);
-    if (uboParams.brdfLUTIdx != -1) {
-        envBRDF = sampleTexture2DLinear(uboParams.brdfLUTIdx, vec2(NdotV, roughness)).rg;
-    } else {
-        vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
-        vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
-        vec4 r = roughness * c0 + c1;
-        float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
-        envBRDF = vec2(-1.04, 1.04) * a004 + r.zw;
-    }
+    vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+    envBRDF = vec2(-1.04, 1.04) * a004 + r.zw;
     
-    vec3 F_IBL = F0 * envBRDF.x + envBRDF.y;
+    vec3 F = fresnelSchlick(max(dot(N, V), 0.0), F0);
+    vec3 kD_IBL = 1.0 - F;
+    kD_IBL *= 1.0 - metallic;
 
     if (uboParams.diffuseEnvMapIdx != -1) {
         vec2 diffuseUV = directionToSphericalEnvmap(N);
         diffuseIBL = sampleTexture2DLinear(uboParams.diffuseEnvMapIdx, diffuseUV).rgb;
+        
+        diffuseIBL = diffuseIBL * albedo.rgb;
     }
 
     if (uboParams.specularEnvMapIdx != -1) {
         vec2 specularUV = directionToSphericalEnvmap(R);
         float lod = roughness * uboParams.maxSpecularLod;
         vec3 prefilteredColor = sampleTexture2DLod(uboParams.specularEnvMapIdx, specularUV, lod).rgb;
-        specularIBL = prefilteredColor * F_IBL;
+        
+        vec3 F_Spec = F0 * envBRDF.x + envBRDF.y;
+        specularIBL = prefilteredColor * F_Spec;
     }
     
-    vec3 kD_IBL = 1.0 - F_IBL;
-    kD_IBL *= 1.0 - metallic;
-    
-    ambient = (kD_IBL * diffuseIBL * albedo.rgb) + specularIBL;
-    ambient *= ao;
+    ambient = (kD_IBL * diffuseIBL) + specularIBL;
+    ambient *= ao * uboParams.iblIntensity;
 
     vec3 sceneColor = ambient + Lo + emissive;
+    
     sceneColor *= uboParams.exposure;
+    sceneColor = ACESFilm(sceneColor);
+    sceneColor = pow(sceneColor, vec3(1.0 / uboParams.gamma));
 
-    outColor = vec4(linearToSRGB(sceneColor), albedo.a + 0.3);
+    outColor = vec4(sceneColor, albedo.a);
 }

@@ -1,11 +1,13 @@
 #version 450 core
 
+#define BINDLESS_SET_IDX 0
+#include "bindless.glsl"
+
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(set = 0, binding = 0) uniform sampler2D sourceEnvMap;
-layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outPrefilterMap;
-
 layout(push_constant) uniform PushConstants {
+    uint sourceEnvMapIdx;
+    uint outPrefilterMapIdx;
     float roughness;
 } pcs;
 
@@ -62,7 +64,8 @@ vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
 
 void main() {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 size = imageSize(outPrefilterMap);
+    ivec2 size = imageSize(storageImages[nonuniformEXT(pcs.outPrefilterMapIdx)]);
+    
     if (texelCoord.x >= size.x || texelCoord.y >= size.y) return;
 
     vec2 uv = (vec2(texelCoord) + 0.5) / vec2(size);
@@ -70,7 +73,8 @@ void main() {
     vec3 R = N;
     vec3 V = R;
 
-    uint SAMPLE_COUNT = 1024u;
+    const uint SAMPLE_COUNT = 128u;
+    
     vec3 prefilteredColor = vec3(0.0);
     float totalWeight = 0.0;
 
@@ -82,11 +86,13 @@ void main() {
         float NdotL = max(dot(N, L), 0.0);
         if(NdotL > 0.0) {
             vec2 sampleUV = directionToSphericalEnvmap(L);
-            prefilteredColor += texture(sourceEnvMap, sampleUV).rgb * NdotL;
+            
+            prefilteredColor += sampleTexture2DLinear(pcs.sourceEnvMapIdx, sampleUV).rgb * NdotL;
             totalWeight += NdotL;
         }
     }
+    
     prefilteredColor = prefilteredColor / totalWeight;
 
-    imageStore(outPrefilterMap, texelCoord, vec4(prefilteredColor, 1.0));
+    writeStorageImage(pcs.outPrefilterMapIdx, texelCoord, vec4(prefilteredColor, 1.0));
 }

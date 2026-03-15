@@ -10,9 +10,9 @@ glslc:
 	glslc ./src/glsl/skybox.vert -o ./assets/shaders/skybox.vert
 	glslc ./src/glsl/skybox.frag -o ./assets/shaders/skybox.frag
 
-	# prefilter compute shaders
-	glslc ./src/glsl/prifilter_diffuse_ibl.comp -o ./assets/shaders/prefilter_diffuse_ibl.comp
-	glslc ./src/glsl/prifilter_specular_ibl.comp -o ./assets/shaders/prifilter_specular_ibl.comp
+	# prefilter ibl compute shaders
+	glslc ./src/glsl/prefilter_diffuse_ibl.comp -o ./assets/shaders/prefilter_diffuse_ibl.comp
+	glslc ./src/glsl/prefilter_specular_ibl.comp -o ./assets/shaders/prefilter_specular_ibl.comp
 
 .PHONY: cmake
 cmake:

@@ -5,6 +5,7 @@
 
 #include "app_types.hpp"
 #include "bindless_set_manager.hpp"
+#include "compute_shader_program.hpp"
 #include "descriptor_buffer.hpp"
 #include "fastgltf/types.hpp"
 #include "gltf/asset.hpp"
@@ -18,6 +19,8 @@
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/pipeline_layout/prefilter_diffuse_ibl.hpp"
+#include "vulkan/pipeline_layout/prefilter_specular_ibl.hpp"
 #include "vulkan/pipeline_layout/primitive.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
@@ -120,18 +123,18 @@ class App {
 
   std::optional<vulkan::pl::SkyboxLayout> skyboxLayout_;
   std::optional<vulkan::pl::PrimitiveLayout> primitiveLayout_;
+  std::optional<vulkan::pl::PrefilterDiffuseIBLLayout> prefilterDiffuseLayout_;
+  std::optional<vulkan::pl::PrefilterSpecularIBLLayout>
+      prefilterSpecularLayout_;
 
   std::optional<ShaderProgram> skyboxShader_;
   std::optional<ShaderProgram> primitiveShader_;
+  std::optional<ComputeShaderProgram> prefilterDiffuseShader_;
+  std::optional<ComputeShaderProgram> prefilterSpecularShader_;
 
   UBO ubo_;
   UBOParams uboParams_;
-  std::vector<Light> lights_{
-      Light{
-          .position = glm::vec3{2.0F},
-          .type = static_cast<std::int32_t>(LightType::kPoint),
-      },
-  };
+  std::vector<Light> lights_;
   std::vector<Material> materials_;
 
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
@@ -150,6 +153,8 @@ class App {
   glm::vec4 envBaseColor_{0.2F, 0.2F, 0.2F, 1.0F};
   std::optional<std::uint32_t> currEnvMapIdx_;
   std::vector<vku::Texture2D> environmentMaps_;
+  std::vector<vku::Texture2D> environmentDiffuseMaps_;
+  std::vector<vku::Texture2D> environmentSpecularMaps_;
 
   vku::DeviceWaiter deviceWaiter_;
 };

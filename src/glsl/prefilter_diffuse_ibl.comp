@@ -1,10 +1,14 @@
 #version 450 core
 
+#define BINDLESS_SET_IDX 0
+#include "bindless.glsl"
+
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout(set = 0, binding = 0) uniform sampler2D sourceEnvMap;
-
-layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outIrradianceMap;
+layout(push_constant) uniform PushConstants {
+    uint sourceEnvMapIdx;
+    uint outIrradianceMapIdx;
+} pcs;
 
 const float PI = 3.14159265358979323846;
 const vec2 INV_ATAN = vec2(0.15915494309, 0.31830988618);
@@ -32,7 +36,8 @@ vec3 sphericalEnvmapToDirection(vec2 uv) {
 
 void main() {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 size = imageSize(outIrradianceMap);
+    
+    ivec2 size = imageSize(storageImages[nonuniformEXT(pcs.outIrradianceMapIdx)]);
     
     if (texelCoord.x >= size.x || texelCoord.y >= size.y) return;
 
@@ -45,23 +50,24 @@ void main() {
 
     vec3 irradiance = vec3(0.0);
     
-    float sampleDelta = 0.025;
+    float sampleDelta = 0.05; 
     float nrSamples = 0.0;
 
     for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
         for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
             vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
-            
             vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
 
             vec2 sampleUV = directionToSphericalEnvmap(sampleVec);
             
-            irradiance += texture(sourceEnvMap, sampleUV).rgb * cos(theta) * sin(theta);
+            vec3 envColor = sampleTexture2DLinear(pcs.sourceEnvMapIdx, sampleUV).rgb;
+            
+            irradiance += envColor * cos(theta) * sin(theta);
             nrSamples++;
         }
     }
     
     irradiance = PI * irradiance * (1.0 / float(nrSamples));
 
-    imageStore(outIrradianceMap, texelCoord, vec4(irradiance, 1.0));
+    writeStorageImage(pcs.outIrradianceMapIdx, texelCoord, vec4(irradiance, 1.0));
 }
