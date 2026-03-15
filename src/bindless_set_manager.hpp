@@ -3,6 +3,7 @@
 #include "vku/texture/texture.hpp"
 #include "vulkan/descriptor_set_layout/bindless.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit {
 class BindlessSetManager {
@@ -172,7 +173,9 @@ class BindlessSetManager {
           .setMinFilter(vk::Filter::eLinear)
           .setMipmapMode(vk::SamplerMipmapMode::eLinear)
           .setAnisotropyEnable(vk::True)
-          .setMaxAnisotropy(maxAnisotropy);
+          .setMaxAnisotropy(maxAnisotropy)
+          .setMinLod(0.0F)
+          .setMaxLod(vk::LodClampNone);
 
       auto sampler = device.createSamplerUnique(sampler_ci);
       addSampler(device, kLinearSamplerId, *sampler);
@@ -185,7 +188,9 @@ class BindlessSetManager {
           .setMinFilter(vk::Filter::eNearest)
           .setMipmapMode(vk::SamplerMipmapMode::eNearest)
           .setAnisotropyEnable(vk::True)
-          .setMaxAnisotropy(maxAnisotropy);
+          .setMaxAnisotropy(maxAnisotropy)
+          .setMinLod(0.0F)
+          .setMaxLod(vk::LodClampNone);
 
       auto sampler = device.createSamplerUnique(sampler_ci);
       addSampler(device, kNearestSamplerId, *sampler);

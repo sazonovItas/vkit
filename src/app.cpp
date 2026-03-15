@@ -39,8 +39,8 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/sword/scene.gltf"
-#define ENVIRONMENT_MAP_PATH "environment/ferndale_studio_03_4k.hdr"
+#define MODEL_PATH "models/demo-knight/scene.gltf"
+#define ENVIRONMENT_MAP_PATH "environment/blaubeuren_night_4k.hdr"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -335,7 +335,7 @@ void App::loadEnvironmentMap(const std::filesystem::path& path) {
 
   const uint32_t spec_base_width = env_info.width;
   const uint32_t spec_base_height = env_info.height;
-  const uint32_t mip_levels = 6;
+  const uint32_t mip_levels = 10;
 
   environmentSpecularMaps_.emplace_back(
       gpu_->allocator, copy_info, spec_base_width, spec_base_height,
@@ -486,6 +486,7 @@ void App::update() {
       !currEnvMapIdx_
           ? -1
           : BindlessSetManager::getSpecularEnvMapId(*currEnvMapIdx_);
+  uboParams_.maxSpecularLod = 9.0F;
 
   const auto ubo_params_bytes =
       std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
