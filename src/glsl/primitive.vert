@@ -3,10 +3,10 @@
 #include "pcs.glsl"
 
 layout (set = 0, binding = 0) uniform UBO {
-  mat4 model;
-  mat4 view;
-  mat4 projection;
-  vec3 cameraPosition;
+    mat4 model;
+    mat4 view;
+    mat4 projection;
+    vec3 cameraPosition;
 } ubo;
 
 layout (location = 0) out vec3 outWorldPos;

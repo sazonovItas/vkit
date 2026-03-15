@@ -17,6 +17,7 @@
 
 #include "GLFW/glfw3.h"
 #include "app_types.hpp"
+#include "bindless_set_manager.hpp"
 #include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
 #include "glm/ext/matrix_clip_space.hpp"
@@ -31,13 +32,15 @@
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
-#include "vulkan/pipeline_layout/pbr.hpp"
+#include "vulkan/pipeline_layout/primitive.hpp"
+#include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 #define MODEL_PATH "models/samurai/scene.gltf"
+#define ENVIRONMENT_MAP_PATH "environment/blaubeuren_night_4k.hdr"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -252,11 +255,12 @@ void App::run() {
   createDescriptorSets();
   createBindlessSetManager();
 
-  createGraphicsCommandPool();
+  createCommandPools();
 
   createUI();
 
   loadGLTF(assetPath(MODEL_PATH));
+  loadEnvironmentMap(assetPath(ENVIRONMENT_MAP_PATH));
 
   mainLoop();
 }
@@ -298,6 +302,23 @@ void App::loadGLTF(const std::filesystem::path& path) {
   }
 }
 
+void App::loadEnvironmentMap(const std::filesystem::path& path) {
+  const auto info =
+      vku::TextureInfo::fromPath(path, vk::Format::eR32G32B32A32Sfloat, 4, 4);
+
+  environmentMaps_.emplace_back(info, gpu_->allocator,
+                                vku::DeviceCopyInfo{
+                                    .device = *gpu_->device,
+                                    .commandPool = *graphicsCommandPool_,
+                                    .queue = gpu_->queues.graphicsPresent,
+                                });
+
+  bindlessSetManager_->addEnvMapTexture2D(*gpu_->device, 0,
+                                          environmentMaps_.back());
+
+  currEnvMapIdx_ = BindlessSetManager::kEnvMapTextureIdOffset + (3 * 0);
+}
+
 void App::drawUI() {
   ui_->moveCamera(camera_);
 
@@ -318,7 +339,7 @@ void App::update() {
   float aspect = static_cast<float>(frameBufferSize_.x) /
                  static_cast<float>(frameBufferSize_.y);
   auto projection =
-      glm::perspective(glm::radians(90.0F), aspect, 0.1F, 1000.0F);
+      glm::perspective(glm::radians(60.0F), aspect, 0.1F, 1000.0F);
 
   ubo_ = UBO{
       .model = model,
@@ -375,7 +396,17 @@ void App::update() {
   materialsBuffers_->writeAt(frameIndex_, materials_bytes);
 }
 
-void App::bindDescriptorSets(vk::CommandBuffer cb) const {
+void App::bindSkyboxDescriptorSets(vk::CommandBuffer cb) const {
+  const auto descriptor_sets = std::array<vk::DescriptorSet, 2>{
+      *sceneSets_.at(frameIndex_),
+      bindlessSetManager_->getSet(),
+  };
+
+  cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, skyboxLayout_->get(),
+                        0, descriptor_sets, {});
+}
+
+void App::bindPrimitiveDescriptorSets(vk::CommandBuffer cb) const {
   const auto descriptor_sets = std::array<vk::DescriptorSet, 3>{
       *sceneSets_.at(frameIndex_),
       *materialsSets_.at(frameIndex_),
@@ -383,7 +414,7 @@ void App::bindDescriptorSets(vk::CommandBuffer cb) const {
   };
 
   cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                        pbrPipelineLayout_->get(), 0, descriptor_sets, {});
+                        primitiveLayout_->get(), 0, descriptor_sets, {});
 }
 
 void App::draw(vk::CommandBuffer cb) const {
@@ -391,8 +422,13 @@ void App::draw(vk::CommandBuffer cb) const {
     return;
   }
 
-  bindDescriptorSets(cb);
-  shader_->bind(cb, frameBufferSize_);
+  bindSkyboxDescriptorSets(cb);
+  skyboxShader_->bind(cb, frameBufferSize_);
+
+  drawSkybox(cb);
+
+  bindPrimitiveDescriptorSets(cb);
+  primitiveShader_->bind(cb, frameBufferSize_);
 
   cb.setDepthWriteEnable(vk::True);
   cb.setColorBlendEnableEXT(0, vk::False);
@@ -427,10 +463,28 @@ void App::draw(vk::CommandBuffer cb) const {
                               });
 }
 
+void App::drawSkybox(vk::CommandBuffer cb) const {
+  using PushConstants = vulkan::pl::SkyboxLayout::PushConstants;
+
+  auto env_map_idx = std::int32_t{-1};
+  if (currEnvMapIdx_) {
+    env_map_idx = static_cast<std::int32_t>(*currEnvMapIdx_);
+  }
+
+  auto push_constants = PushConstants{
+      .envBaseColor = envBaseColor_,
+      .envMapIdx = env_map_idx,
+  };
+
+  cb.pushConstants(skyboxLayout_->get(), vk::ShaderStageFlagBits::eFragment, 0,
+                   sizeof(PushConstants), &push_constants);
+  cb.draw(6, 1, 0, 0);
+}
+
 void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
                    const fastgltf::math::fmat4x4& transform,
                    bool isTransparentPass) const {
-  using PbrPushConstants = vulkan::pl::PBRPipelineLayout::PushConstants;
+  using PushConstants = vulkan::pl::PrimitiveLayout::PushConstants;
 
   if (!node.meshIndex.has_value()) return;
 
@@ -442,7 +496,7 @@ void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
   std::memcpy(glm::value_ptr(node_transform), transform.data(),
               sizeof(glm::mat4));
 
-  auto push_constants = PbrPushConstants{
+  auto push_constants = PushConstants{
       .meshIdx = static_cast<uint32_t>(node.meshIndex.value()),
       .transform = node_transform,
   };
@@ -463,9 +517,9 @@ void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
     push_constants.vertices = primitive.vertexBuffer.getAddress(*gpu_->device);
 
     cb.pushConstants(
-        pbrPipelineLayout_->get(),
+        primitiveLayout_->get(),
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-        0, sizeof(PbrPushConstants), &push_constants);
+        0, sizeof(PushConstants), &push_constants);
 
     cb.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
     cb.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
@@ -693,12 +747,42 @@ void App::createDescriptorLayouts() {
 }
 
 void App::createPipelineLayouts() {
-  pbrPipelineLayout_.emplace(
+  skyboxLayout_.emplace(*gpu_->device,
+                        std::tie(*sceneSetLayout_, *bindlessSetLayout_));
+
+  primitiveLayout_.emplace(
       *gpu_->device,
       std::tie(*sceneSetLayout_, *materialSetLayout_, *bindlessSetLayout_));
 }
 
 void App::createShaders() {
+  {
+    const auto vertex_shader_spirv =
+        vku::toSpirV(assetPath("shaders/skybox.vert"));
+    const auto fragment_shader_spirv =
+        vku::toSpirV(assetPath("shaders/skybox.frag"));
+
+    auto set_layouts = std::array<vk::DescriptorSetLayout, 2>{
+        sceneSetLayout_->get(),
+        bindlessSetLayout_->get(),
+    };
+
+    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
+        vkit::vulkan::pl::SkyboxLayout::kPushConstantRange,
+    };
+
+    const auto ci = ShaderProgramCreateInfo{
+        .device = *gpu_->device,
+        .vertexSpirv = vertex_shader_spirv,
+        .fragmentSpirv = fragment_shader_spirv,
+        .setLayouts = set_layouts,
+        .pushConstantRanges = push_constant_ranges,
+    };
+    skyboxShader_.emplace(ci);
+
+    skyboxShader_->flags = kNone;
+  }
+
   {
     const auto vertex_shader_spirv =
         vku::toSpirV(assetPath("shaders/primitive.vert"));
@@ -712,7 +796,7 @@ void App::createShaders() {
     };
 
     auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::PBRPipelineLayout::kPushConstantRange,
+        vkit::vulkan::pl::PrimitiveLayout::kPushConstantRange,
     };
 
     const auto ci = ShaderProgramCreateInfo{
@@ -722,7 +806,7 @@ void App::createShaders() {
         .setLayouts = set_layouts,
         .pushConstantRanges = push_constant_ranges,
     };
-    shader_.emplace(ci);
+    primitiveShader_.emplace(ci);
   }
 }
 
@@ -795,7 +879,10 @@ void App::createBindlessSetManager() {
   bindlessSetManager_.emplace(*gpu_, *bindlessSetLayout_);
 }
 
-void App::createGraphicsCommandPool() {
+void App::createCommandPools() {
+  computeCommandPool_ = gpu_->createCommandPool(
+      gpu_->queueFamilies.compute, vk::CommandPoolCreateFlagBits::eTransient);
+
   graphicsCommandPool_ =
       gpu_->createCommandPool(gpu_->queueFamilies.graphicsPresent,
                               vk::CommandPoolCreateFlagBits::eTransient);

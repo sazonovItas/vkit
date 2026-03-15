@@ -1,6 +1,9 @@
 #version 450 core
 
+#define BINDLESS_SET_IDX 1
 #include "bindless.glsl"
+
+#include "skybox_pcs.glsl"
 
 layout(location = 0) in vec3 inViewDir;
 
@@ -8,35 +11,50 @@ layout (set = 0, binding = 1) uniform UBOParams {
     float exposure;
     float gamma;
 
-    int envMapIdx;
-    int pad_;
+    int diffuseEnvMapIdx;
+    int specularEnvMapIdx;
+    int brdfLUTIdx;
+    float maxSpecularLod;
 
-    vec4 envColor;
+    int lightCount;
 } uboParams;
 
 layout(location = 0) out vec4 outColor;
 
-const float PI = 3.14159265358979323846;
+const vec2 INV_ATAN = vec2(0.15915494309, 0.31830988618);
 
 vec2 directionToSphericalEnvmap(vec3 dir) {
-    float s = 1.0 - mod(1.0 / (2.0 * PI) * atan(dir.y, dir.x), 1.0);
-    float t = 1.0 / PI * acos(-dir.z);
-    return vec2(s, t);
+    vec2 uv = vec2(atan(dir.z, dir.x), asin(dir.y));
+    uv *= INV_ATAN;
+    uv += 0.5;
+    uv.y = 1.0 - uv.y;
+    return uv;
+}
+
+// ACES Filmic Tone Mapping Curve
+vec3 ACESFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
 void main() {
-    if (uboParams.envMapIdx == -1) {
-        outColor = uboParams.envColor;
+    if (pcs.envMapIdx == -1) {
+        outColor = pcs.envBaseColor;
         return;
     }
 
     vec3 viewDir = normalize(inViewDir);
     vec2 uv = directionToSphericalEnvmap(viewDir);
     
-    vec3 envColor = sampleTexture2DLinear(uboParams.envMapIdx, uv).rgb;
+    vec3 envColor = sampleTexture2DLinear(pcs.envMapIdx, uv).rgb;
 
     envColor *= uboParams.exposure;
-    envColor = pow(envColor, vec3(1.0 / uboParams.gamma));
+
+    envColor = ACESFilm(envColor);
 
     outColor = vec4(envColor, 1.0);
 }

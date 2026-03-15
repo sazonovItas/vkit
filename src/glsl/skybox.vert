@@ -1,15 +1,26 @@
 #version 450 core
 
-layout(set = 0, binding = 0) uniform UBO {
+layout (set = 0, binding = 0) uniform UBO {
+    mat4 model;
     mat4 view;
     mat4 projection;
+    vec3 cameraPosition;
 } ubo;
 
 layout(location = 0) out vec3 outViewDir;
 
 void main() {
-    vec2 uv = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-    vec2 clipPos = uv * 2.0 - 1.0;
+    vec2 positions[6] = vec2[](
+        vec2(-1.0, -1.0), // Bottom-Left
+        vec2( 1.0, -1.0), // Bottom-Right
+        vec2(-1.0,  1.0), // Top-Left
+        
+        vec2(-1.0,  1.0), // Top-Left
+        vec2( 1.0, -1.0), // Bottom-Right
+        vec2( 1.0,  1.0)  // Top-Right
+    );
+
+    vec2 clipPos = positions[gl_VertexIndex];
 
     mat4 viewNoTranslation = mat4(mat3(ubo.view));
     

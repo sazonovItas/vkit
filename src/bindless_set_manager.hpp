@@ -14,6 +14,8 @@ class BindlessSetManager {
   constexpr static auto kLinearSamplerId = 0;
   constexpr static auto kNearestSamplerId = 1;
 
+  constexpr static auto kEnvMapTextureIdOffset = 768;
+
   explicit BindlessSetManager(const Gpu& gpu, const BindlessLayout& bindless
                               [[clang::lifetimebound]])
       : bindless_{bindless},
@@ -58,14 +60,12 @@ class BindlessSetManager {
 
   void addEnvMapTexture2D(vk::Device device, const std::uint32_t id,
                           const Texture& texture) {
-    constexpr static auto kEnvMapTextureIdOffset = 768;
-
     auto image_info = texture.descriptorInfo();
 
     auto write = vk::WriteDescriptorSet{};
     write.setDstSet(*set_)
         .setDstBinding(BindlessLayout::kTexture2DBindingIdx)
-        .setDstArrayElement(3 * id)
+        .setDstArrayElement(kEnvMapTextureIdOffset + (3 * id))
         .setDescriptorCount(1)
         .setDescriptorType(vk::DescriptorType::eSampledImage)
         .setImageInfo(image_info);

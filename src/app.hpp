@@ -18,7 +18,8 @@
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
-#include "vulkan/pipeline_layout/pbr.hpp"
+#include "vulkan/pipeline_layout/primitive.hpp"
+#include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
@@ -49,7 +50,10 @@ class App {
   void update();
 
   void updateDescriptorSets() const;
-  void bindDescriptorSets(vk::CommandBuffer cb) const;
+  void bindSkyboxDescriptorSets(vk::CommandBuffer cb) const;
+  void bindPrimitiveDescriptorSets(vk::CommandBuffer cb) const;
+
+  void drawSkybox(vk::CommandBuffer cb) const;
 
   void draw(vk::CommandBuffer cb) const;
   void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
@@ -59,6 +63,7 @@ class App {
   void drawUI();
 
   void loadGLTF(const std::filesystem::path& path);
+  void loadEnvironmentMap(const std::filesystem::path& path);
 
   void createWindow();
   void createInstance();
@@ -78,7 +83,7 @@ class App {
   void createDescriptorSets();
   void createBindlessSetManager();
 
-  void createGraphicsCommandPool();
+  void createCommandPools();
 
   void createUI();
 
@@ -99,6 +104,7 @@ class App {
   std::optional<Swapchain> swapchain_;
 
   vk::UniqueCommandPool renderCommandPool_;
+  vk::UniqueCommandPool computeCommandPool_;
   vk::UniqueCommandPool graphicsCommandPool_;
 
   std::size_t frameIndex_{};
@@ -112,13 +118,20 @@ class App {
   std::optional<vulkan::dsl::MaterialLayout> materialSetLayout_;
   std::optional<vulkan::dsl::BindlessLayout> bindlessSetLayout_;
 
-  std::optional<vulkan::pl::PBRPipelineLayout> pbrPipelineLayout_;
+  std::optional<vulkan::pl::SkyboxLayout> skyboxLayout_;
+  std::optional<vulkan::pl::PrimitiveLayout> primitiveLayout_;
 
-  std::optional<ShaderProgram> shader_;
+  std::optional<ShaderProgram> skyboxShader_;
+  std::optional<ShaderProgram> primitiveShader_;
 
   UBO ubo_;
   UBOParams uboParams_;
-  std::vector<Light> lights_{{}};
+  std::vector<Light> lights_{
+      Light{
+          .position = glm::vec3{2.0F},
+          .type = static_cast<std::int32_t>(LightType::kPoint),
+      },
+  };
   std::vector<Material> materials_;
 
   std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
@@ -133,6 +146,10 @@ class App {
   std::optional<RenderTarget> renderTarget_;
 
   std::optional<gltf::Asset> gltfAsset_;
+
+  glm::vec4 envBaseColor_{0.2F, 0.2F, 0.2F, 1.0F};
+  std::optional<std::uint32_t> currEnvMapIdx_;
+  std::vector<vku::Texture2D> environmentMaps_;
 
   vku::DeviceWaiter deviceWaiter_;
 };

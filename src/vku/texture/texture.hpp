@@ -73,6 +73,12 @@ struct TextureInfo {
             &original_channels, channels);
         break;
 
+      case 4:
+        pixels = stbi_loadf_from_memory(
+            reinterpret_cast<const stbi_uc*>(buffer), size, &width, &height,
+            &original_channels, channels);
+        break;
+
       default:
         throw std::runtime_error{std::format(
             "wrong amount of byte per channle: {}", bytePerChannel)};

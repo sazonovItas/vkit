@@ -56,8 +56,10 @@ void ShaderProgram::setViewportScissor(vk::CommandBuffer cb, glm::ivec2 size,
   auto viewport = vk::Viewport{};
   viewport.setX(offset.x)
       .setY(fsize.y + offset.y)
+      // .setY(offset.y)
       .setWidth(fsize.x)
       .setHeight(-fsize.y)
+      // .setHeight(fsize.y)
       .setMinDepth(0.0F)
       .setMaxDepth(1.0F);
   cb.setViewportWithCount(viewport);
