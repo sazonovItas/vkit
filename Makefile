@@ -14,6 +14,9 @@ glslc:
 	glslc ./src/glsl/prefilter_diffuse_ibl.comp -o ./assets/shaders/prefilter_diffuse_ibl.comp
 	glslc ./src/glsl/prefilter_specular_ibl.comp -o ./assets/shaders/prefilter_specular_ibl.comp
 
+	# procedural generation texture
+	glslc ./src/glsl/procedural_texture.comp -o ./assets/shaders/procedural_texture.comp
+
 .PHONY: cmake
 cmake:
 	cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++

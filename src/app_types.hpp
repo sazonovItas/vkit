@@ -78,4 +78,19 @@ struct alignas(16) Material {
   int32_t pad1;
   float dissolveStrength;
 };
+
+struct ProceduralTextureParams {
+  int patternType = 0;     // 0: Grid, 1: Bricks
+  int generationMode = 0;  // 0: Color Only, 1: Normal Only, 2: Both
+
+  int width = 512;
+  int height = 512;
+  glm::vec2 tileSize = {64.0F, 64.0F};
+  float mortarThickness = 4.0F;
+
+  glm::vec4 brickColor = {0.6F, 0.2F, 0.15F, 1.0F};
+  glm::vec4 mortarColor = {0.2F, 0.2F, 0.2F, 1.0F};
+
+  bool triggerGeneration = false;
+};
 };  // namespace vkit

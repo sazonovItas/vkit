@@ -9,8 +9,7 @@ struct AllocatedImage : Image {
   vma::Allocator allocator;
   vma::Allocation allocation;
 
-  AllocatedImage(vma::Allocator allocator,
-                 const vk::ImageCreateInfo& creaeInfo,
+  AllocatedImage(vma::Allocator allocator, const vk::ImageCreateInfo& creaeInfo,
                  const vma::AllocationCreateInfo& allocationCreateInfo =
                      vku::allocation::kDeviceLocal)
       : Image{
@@ -20,7 +19,8 @@ struct AllocatedImage : Image {
             .samples = creaeInfo.samples,
             .mipLevels = creaeInfo.mipLevels,
             .arrayLayers = creaeInfo.arrayLayers,
-        }, allocator {allocator} {
+        },
+        allocator{allocator} {
     std::tie(allocation, image) =
         allocator.createImage(creaeInfo, allocationCreateInfo);
   }

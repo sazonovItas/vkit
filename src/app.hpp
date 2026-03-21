@@ -22,6 +22,7 @@
 #include "vulkan/pipeline_layout/prefilter_diffuse_ibl.hpp"
 #include "vulkan/pipeline_layout/prefilter_specular_ibl.hpp"
 #include "vulkan/pipeline_layout/primitive.hpp"
+#include "vulkan/pipeline_layout/procedural_texture.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
@@ -67,6 +68,7 @@ class App {
 
   void loadGLTF(const std::filesystem::path& path);
   void loadEnvironmentMap(const std::filesystem::path& path);
+  void generateProceduralTexture();
 
   void createWindow();
   void createInstance();
@@ -126,14 +128,17 @@ class App {
   std::optional<vulkan::pl::PrefilterDiffuseIBLLayout> prefilterDiffuseLayout_;
   std::optional<vulkan::pl::PrefilterSpecularIBLLayout>
       prefilterSpecularLayout_;
+  std::optional<vulkan::pl::ProceduralTextureLayout> proceduralTextureLayout_;
 
   std::optional<ShaderProgram> skyboxShader_;
   std::optional<ShaderProgram> primitiveShader_;
   std::optional<ComputeShaderProgram> prefilterDiffuseShader_;
   std::optional<ComputeShaderProgram> prefilterSpecularShader_;
+  std::optional<ComputeShaderProgram> proceduralTextureShader_;
 
   UBO ubo_;
   UBOParams uboParams_;
+  ProceduralTextureParams procTexParams_;
   std::vector<Light> lights_;
   std::vector<Material> materials_;
 

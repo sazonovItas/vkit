@@ -62,14 +62,18 @@ vec3 ACESFilm(vec3 x) {
 
 vec3 getNormalFromMap(int texIdx, vec2 uv, vec3 worldPos, vec3 vertexNormal) {
     vec3 tangentNormal = sampleTexture2DLinear(texIdx, uv).xyz * 2.0 - 1.0;
-    vec3 dp1 = dFdx(worldPos); vec3 dp2 = dFdy(worldPos);
-    vec2 duv1 = dFdx(uv); vec2 duv2 = dFdy(uv);
-    vec3 dp2perp = cross(dp2, vertexNormal); vec3 dp1perp = cross(vertexNormal, dp1);
-    vec3 T = dp2perp * duv1.x + dp1perp * duv2.x;
-    vec3 B = dp2perp * duv1.y + dp1perp * duv2.y;
-    float maxVal = max(dot(T, T), dot(B, B));
-    if (maxVal <= 0.00001) return normalize(vertexNormal);
-    return normalize(mat3(T * inversesqrt(maxVal), B * inversesqrt(maxVal), vertexNormal) * tangentNormal);
+
+    vec3 q1 = dFdx(worldPos);
+    vec3 q2 = dFdy(worldPos);
+    vec2 st1 = dFdx(uv);
+    vec2 st2 = dFdy(uv);
+
+    vec3 N = normalize(vertexNormal);
+    vec3 T = normalize(q1 * st2.t - q2 * st1.t);
+    vec3 B = -normalize(cross(N, T));
+    mat3 TBN = mat3(T, B, N);
+
+    return normalize(TBN * tangentNormal);
 }
 
 float DistributionGGX(vec3 N, vec3 H, float roughness) {

@@ -32,14 +32,16 @@
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
 #include "vulkan/gpu.hpp"
+#include "vulkan/pipeline_layout/prefilter_specular_ibl.hpp"
 #include "vulkan/pipeline_layout/primitive.hpp"
+#include "vulkan/pipeline_layout/procedural_texture.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
 #include "window.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
-#define MODEL_PATH "models/demo-knight/scene.gltf"
+#define MODEL_PATH "models/sphere/scene.gltf"
 #define ENVIRONMENT_MAP_PATH "environment/blaubeuren_night_4k.hdr"
 
 namespace {
@@ -269,6 +271,11 @@ void App::mainLoop() {
   while (glfwWindowShouldClose(window_.get()) == GLFW_FALSE) {
     glfwPollEvents();
 
+    if (procTexParams_.triggerGeneration) {
+      generateProceduralTexture();
+      procTexParams_.triggerGeneration = false;
+    }
+
     if (!acquireRenderTarget()) {
       continue;
     }
@@ -445,12 +452,106 @@ void App::loadEnvironmentMap(const std::filesystem::path& path) {
   currEnvMapIdx_ = 0;
 }
 
+void App::generateProceduralTexture() {
+  if (!gltfAsset_.has_value()) return;
+
+  auto const copy_info = vku::DeviceCopyInfo{
+      .device = *gpu_->device,
+      .commandPool = *graphicsCommandPool_,
+      .queue = gpu_->queues.graphicsPresent,
+  };
+
+  bool want_color = (procTexParams_.generationMode == 0 ||
+                     procTexParams_.generationMode == 2);
+  bool want_normal = (procTexParams_.generationMode == 1 ||
+                      procTexParams_.generationMode == 2);
+
+  uint32_t color_idx = 512;
+  if (want_color) {
+    while (gltfAsset_->textures.contains(color_idx)) color_idx++;
+    gltfAsset_->textures[color_idx] = std::make_unique<vku::Texture2D>(
+        gpu_->allocator, copy_info, procTexParams_.width, procTexParams_.height,
+        vk::Format::eR8G8B8A8Unorm, 1,
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
+        vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
+        vk::PipelineStageFlagBits2::eComputeShader);
+    bindlessSetManager_->addStorageImage2D(*gpu_->device, 2,
+                                           *gltfAsset_->textures[color_idx]);
+  }
+
+  uint32_t normal_idx = 512;
+  if (want_normal) {
+    while (gltfAsset_->textures.contains(normal_idx)) normal_idx++;
+    gltfAsset_->textures[normal_idx] = std::make_unique<vku::Texture2D>(
+        gpu_->allocator, copy_info, procTexParams_.width, procTexParams_.height,
+        vk::Format::eR8G8B8A8Unorm, 1,
+        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
+        vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
+        vk::PipelineStageFlagBits2::eComputeShader);
+    bindlessSetManager_->addStorageImage2D(*gpu_->device, 3,
+                                           *gltfAsset_->textures[normal_idx]);
+  }
+
+  auto generate_fn = [&](vk::CommandBuffer cb) {
+    proceduralTextureShader_->bind(cb);
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
+                          proceduralTextureLayout_->get(), 0,
+                          bindlessSetManager_->getSet(), {});
+
+    auto pcs = vulkan::pl::ProceduralTextureLayout::PushConstants{
+        .outImageIdx = 2,
+        .outNormalImageIdx = 3,
+        .generateColorMap = want_color ? 1U : 0U,
+        .generateNormalMap = want_normal ? 1U : 0U,
+        .tileSize = procTexParams_.tileSize,
+        .patternType = static_cast<uint32_t>(procTexParams_.patternType),
+        .mortarThickness = procTexParams_.mortarThickness,
+        .brickColor = procTexParams_.brickColor,
+        .mortarColor = procTexParams_.mortarColor,
+    };
+
+    cb.pushConstants(proceduralTextureLayout_->get(),
+                     vk::ShaderStageFlagBits::eCompute, 0, sizeof(pcs), &pcs);
+    proceduralTextureShader_->dispatch(cb, (procTexParams_.width + 15) / 16,
+                                       (procTexParams_.height + 15) / 16, 1);
+  };
+
+  vku::executeCommandAndWait(*gpu_->device, *computeCommandPool_,
+                             gpu_->queues.compute, generate_fn);
+
+  // --- 3. Finalize ---
+  if (want_color) {
+    auto& tex = *gltfAsset_->textures[color_idx];
+    tex.transferToImageLayout(copy_info,
+                              vk::ImageLayout::eShaderReadOnlyOptimal,
+                              vk::AccessFlagBits2::eShaderWrite,
+                              vk::PipelineStageFlagBits2::eComputeShader,
+                              vk::AccessFlagBits2::eShaderRead,
+                              vk::PipelineStageFlagBits2::eFragmentShader);
+    bindlessSetManager_->addTexture2D(*gpu_->device, color_idx, tex);
+  }
+  if (want_normal) {
+    auto& tex = *gltfAsset_->textures[normal_idx];
+    tex.transferToImageLayout(copy_info,
+                              vk::ImageLayout::eShaderReadOnlyOptimal,
+                              vk::AccessFlagBits2::eShaderWrite,
+                              vk::PipelineStageFlagBits2::eComputeShader,
+                              vk::AccessFlagBits2::eShaderRead,
+                              vk::PipelineStageFlagBits2::eFragmentShader);
+    bindlessSetManager_->addTexture2D(*gpu_->device, normal_idx, tex);
+  }
+
+  ui_->uploadTextures(*gpu_->device, *gltfAsset_);
+}
+
 void App::drawUI() {
   ui_->moveCamera(camera_);
 
   ui_->drawViewManipulation(camera_);
 
   ui_->drawInspect(camera_, transform_, uboParams_, lights_);
+
+  ui_->drawProceduralGenerator(procTexParams_);
 
   if (gltfAsset_.has_value()) {
     ui_->drawGraphEditor(*gltfAsset_);
@@ -638,6 +739,10 @@ void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
   };
 
   for (const auto& primitive : mesh->primitives) {
+    if (!gltfAsset_->materials.contains(primitive.materialIdx)) {
+      continue;
+    }
+
     const auto& material = gltfAsset_->materials.at(primitive.materialIdx);
     bool is_transparent = (material.alphaMode == fastgltf::AlphaMode::Blend);
 
@@ -894,6 +999,9 @@ void App::createPipelineLayouts() {
 
   prefilterSpecularLayout_.emplace(*gpu_->device,
                                    std::tie(*bindlessSetLayout_));
+
+  proceduralTextureLayout_.emplace(*gpu_->device,
+                                   std::tie(*bindlessSetLayout_));
 }
 
 void App::createShaders() {
@@ -990,6 +1098,27 @@ void App::createShaders() {
         .pushConstantRanges = push_constant_ranges,
     };
     prefilterSpecularShader_.emplace(ci);
+  }
+
+  {
+    const auto compute_shader_spirv =
+        vku::toSpirV(assetPath("shaders/procedural_texture.comp"));
+
+    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
+        bindlessSetLayout_->get(),
+    };
+
+    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
+        vkit::vulkan::pl::ProceduralTextureLayout::kPushConstantRange,
+    };
+
+    const auto ci = ComputeShaderProgramCreateInfo{
+        .device = *gpu_->device,
+        .computeSpirv = compute_shader_spirv,
+        .setLayouts = set_layouts,
+        .pushConstantRanges = push_constant_ranges,
+    };
+    proceduralTextureShader_.emplace(ci);
   }
 }
 

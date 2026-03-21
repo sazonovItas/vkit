@@ -221,6 +221,38 @@ class UI : public DearImGui {
     ImGui::End();
   }
 
+  void drawProceduralGenerator(ProceduralTextureParams& params) {
+    ImGui::SetNextWindowSize({350.0F, 350.0F}, ImGuiCond_Once);
+    if (ImGui::Begin("Procedural Generator")) {
+      const char* patterns[] = {"Grid / Tiles", "Bricks"};
+      ImGui::Combo("Pattern", &params.patternType, patterns,
+                   IM_ARRAYSIZE(patterns));
+
+      const char* modes[] = {"Color Map Only", "Normal Map Only", "Both"};
+      ImGui::Combo("Output Mode", &params.generationMode, modes,
+                   IM_ARRAYSIZE(modes));
+
+      ImGui::SeparatorText("Dimensions");
+      ImGui::DragInt("Width", &params.width, 1.0F, 64, 2048);
+      ImGui::DragInt("Height", &params.height, 1.0F, 64, 2048);
+      ImGui::DragFloat2("Tile Size", glm::value_ptr(params.tileSize), 1.0F,
+                        4.0F, 512.0F);
+      ImGui::DragFloat("Mortar", &params.mortarThickness, 0.1F, 0.0F, 32.0F);
+
+      if (params.generationMode != 1) {  // Hide colors if Normal Only
+        ImGui::SeparatorText("Colors");
+        ImGui::ColorEdit4("Tile Color", glm::value_ptr(params.brickColor));
+        ImGui::ColorEdit4("Mortar Color", glm::value_ptr(params.mortarColor));
+      }
+
+      ImGui::Separator();
+      if (ImGui::Button("Generate Texture", ImVec2(-1, 40))) {
+        params.triggerGeneration = true;
+      }
+    }
+    ImGui::End();
+  }
+
   void drawViewManipulation(Camera& camera) {
     glm::vec3 cam_pos = camera.getPosition();
     glm::mat4 view = glm::lookAt(cam_pos, camera.target, camera.up);
@@ -254,6 +286,10 @@ class UI : public DearImGui {
       };
       std::vector<const char*> matOut = {"Material"};
       std::vector<const char*> primIn = {"Material"};
+
+      GraphEditor::NodeIndex contextNode = -1;
+      bool openContextMenu = false;
+      bool openBackgroundContextMenu = false;
 
       explicit AssetGraphDelegate(gltf::Asset& a, const UI& uiInstance)
           : asset(a), uiInstance_(uiInstance) {
@@ -296,17 +332,68 @@ class UI : public DearImGui {
             nullptr,
         });
 
+        Rebuild();
+      }
+
+      ~AssetGraphDelegate() override {
+        for (auto& n : nodes) {
+          std::free(const_cast<char*>(n.mName));
+        }
+      }
+
+      void Sync() {
+        if (asset.textures.size() != textureNodes.size() ||
+            asset.materials.size() != materialNodes.size()) {
+          Rebuild();
+        }
+      }
+
+      void Rebuild() {
+        // 1. Cache existing node positions
+        std::unordered_map<size_t, ImRect> old_tex;
+        std::unordered_map<size_t, ImRect> old_mat;
+
+        // Custom Hash for std::pair so unordered_map compiles!
+        struct PairHash {
+          std::size_t operator()(const std::pair<size_t, size_t>& p) const {
+            return std::hash<size_t>{}(p.first) ^
+                   (std::hash<size_t>{}(p.second) << 1);
+          }
+        };
+        std::unordered_map<std::pair<size_t, size_t>, ImRect, PairHash>
+            old_prim;
+
+        for (auto& [n, idx] : nodeToTexture) old_tex[idx] = nodes[n].mRect;
+        for (auto& [n, idx] : nodeToMaterial) old_mat[idx] = nodes[n].mRect;
+        for (auto& [n, pair] : nodeToPrimitive) old_prim[pair] = nodes[n].mRect;
+
+        // 2. Clear old state completely
+        for (auto& n : nodes) std::free(const_cast<char*>(n.mName));
+        nodes.clear();
+        links.clear();
+        textureNodes.clear();
+        materialNodes.clear();
+        nodeToTexture.clear();
+        nodeToMaterial.clear();
+        nodeToPrimitive.clear();
+
         int tex_row = 0;
         int mat_row = 0;
         int prim_row = 0;
 
+        // 3. Rebuild Textures
         for (auto& [idx, tex] : asset.textures) {
           GraphEditor::NodeIndex node_index = nodes.size();
           GraphEditor::Node n{};
           n.mName = strdup(std::format("Texture {}", idx).c_str());
           n.mTemplateIndex = 0;
-          n.mRect = ImRect(ImVec2(50.F, 50.F + (tex_row * 100.F)),
-                           ImVec2(230.F, 110.F + (tex_row * 100.F)));
+
+          if (old_tex.contains(idx)) {
+            n.mRect = old_tex[idx];
+          } else {
+            float y = 50.F + (tex_row * 120.F);
+            n.mRect = ImRect(ImVec2(50.F, y), ImVec2(230.F, y + 110.F));
+          }
 
           nodes.push_back(n);
           textureNodes[idx] = node_index;
@@ -314,13 +401,19 @@ class UI : public DearImGui {
           tex_row++;
         }
 
+        // 4. Rebuild Materials & Links
         for (auto& [idx, mat] : asset.materials) {
           GraphEditor::NodeIndex node_index = nodes.size();
           GraphEditor::Node n{};
           n.mName = strdup(std::format("Material {}", idx).c_str());
           n.mTemplateIndex = 1;
-          n.mRect = ImRect(ImVec2(350.F, 50.F + (mat_row * 220.F)),
-                           ImVec2(530.F, 180.F + (mat_row * 220.F)));
+
+          if (old_mat.contains(idx)) {
+            n.mRect = old_mat[idx];
+          } else {
+            float y = 50.F + (mat_row * 240.F);
+            n.mRect = ImRect(ImVec2(350.F, y), ImVec2(530.F, y + 180.F));
+          }
 
           nodes.push_back(n);
           materialNodes[idx] = node_index;
@@ -347,6 +440,7 @@ class UI : public DearImGui {
           mat_row++;
         }
 
+        // 5. Rebuild Primitives & Links
         for (auto& [meshIdx, mesh] : asset.meshes) {
           for (size_t p = 0; p < mesh->primitives.size(); p++) {
             GraphEditor::NodeIndex node_index = nodes.size();
@@ -354,11 +448,17 @@ class UI : public DearImGui {
             n.mName =
                 strdup(std::format("Primitive {}:{}", meshIdx, p).c_str());
             n.mTemplateIndex = 2;
-            n.mRect = ImRect(ImVec2(650.F, 50.F + (prim_row * 100.F)),
-                             ImVec2(830.F, 110.F + (prim_row * 100.F)));
+
+            std::pair<size_t, size_t> key = {meshIdx, p};
+            if (old_prim.contains(key)) {
+              n.mRect = old_prim[key];
+            } else {
+              float y = 50.F + (prim_row * 120.F);
+              n.mRect = ImRect(ImVec2(650.F, y), ImVec2(830.F, y + 110.F));
+            }
 
             nodes.push_back(n);
-            nodeToPrimitive[node_index] = {meshIdx, p};
+            nodeToPrimitive[node_index] = key;
 
             auto& prim = mesh->primitives[p];
             if (materialNodes.contains(prim.materialIdx)) {
@@ -372,6 +472,95 @@ class UI : public DearImGui {
             prim_row++;
           }
         }
+      }
+
+      void AddMaterial() {
+        size_t new_idx = 0;
+
+        for (const auto& [idx, mat] : asset.materials) {
+          if (idx >= new_idx) {
+            new_idx = idx + 1;
+          }
+        }
+
+        auto& new_mat = asset.materials[new_idx];
+        new_mat.baseColorFactor = {1.0F, 1.0F, 1.0F, 1.0F};
+        new_mat.metallicFactor = 0.0F;
+        new_mat.roughnessFactor = 0.5F;
+        new_mat.emissiveStrength = 0.0F;
+        new_mat.dissolveStrength = 0.0F;
+        new_mat.alphaMode = fastgltf::AlphaMode::Opaque;
+        new_mat.alphaCutoff = 0.5F;
+
+        Rebuild();
+      }
+
+      void DeleteNode(GraphEditor::NodeIndex index) {
+        if (nodeToTexture.contains(index)) {
+          size_t tex_idx = nodeToTexture[index];
+          asset.textures.erase(tex_idx);
+
+          for (auto& [m_idx, mat] : asset.materials) {
+            if (mat.baseColorTexture == tex_idx)
+              mat.baseColorTexture = std::nullopt;
+            if (mat.metallicRoughnessTexture == tex_idx)
+              mat.metallicRoughnessTexture = std::nullopt;
+            if (mat.normalTexture == tex_idx) mat.normalTexture = std::nullopt;
+            if (mat.occlusionTexture == tex_idx)
+              mat.occlusionTexture = std::nullopt;
+            if (mat.emissiveTexture == tex_idx)
+              mat.emissiveTexture = std::nullopt;
+          }
+        } else if (nodeToMaterial.contains(index)) {
+          size_t mat_idx = nodeToMaterial[index];
+          asset.materials.erase(mat_idx);
+
+          for (auto& [meshIdx, mesh] : asset.meshes) {
+            for (auto& prim : mesh->primitives) {
+              if (prim.materialIdx == mat_idx) {
+                prim.materialIdx = 0;
+              }
+            }
+          }
+        }
+        Rebuild();
+      }
+
+      void DeleteSelectedNodes() {
+        bool changed = false;
+        for (GraphEditor::NodeIndex i = 0; i < nodes.size(); ++i) {
+          if (nodes[i].mSelected) {
+            if (nodeToTexture.contains(i)) {
+              size_t tex_idx = nodeToTexture[i];
+              asset.textures.erase(tex_idx);
+              for (auto& [m_idx, mat] : asset.materials) {
+                if (mat.baseColorTexture == tex_idx)
+                  mat.baseColorTexture = std::nullopt;
+                if (mat.metallicRoughnessTexture == tex_idx)
+                  mat.metallicRoughnessTexture = std::nullopt;
+                if (mat.normalTexture == tex_idx)
+                  mat.normalTexture = std::nullopt;
+                if (mat.occlusionTexture == tex_idx)
+                  mat.occlusionTexture = std::nullopt;
+                if (mat.emissiveTexture == tex_idx)
+                  mat.emissiveTexture = std::nullopt;
+              }
+              changed = true;
+            } else if (nodeToMaterial.contains(i)) {
+              size_t mat_idx = nodeToMaterial[i];
+              asset.materials.erase(mat_idx);
+              for (auto& [meshIdx, mesh] : asset.meshes) {
+                for (auto& prim : mesh->primitives) {
+                  if (prim.materialIdx == mat_idx) {
+                    prim.materialIdx = 0;
+                  }
+                }
+              }
+              changed = true;
+            }
+          }
+        }
+        if (changed) Rebuild();
       }
 
       bool AllowedLink(GraphEditor::NodeIndex node1,
@@ -470,10 +659,8 @@ class UI : public DearImGui {
             default:
               std::unreachable();
           }
-        }
-
-        else if (nodeToMaterial.contains(link.mInputNodeIndex) &&
-                 nodeToPrimitive.contains(link.mOutputNodeIndex)) {
+        } else if (nodeToMaterial.contains(link.mInputNodeIndex) &&
+                   nodeToPrimitive.contains(link.mOutputNodeIndex)) {
           auto [meshIdx, primIdx] = nodeToPrimitive[link.mOutputNodeIndex];
           asset.meshes[meshIdx]->primitives[primIdx].materialIdx = 0;
         }
@@ -505,11 +692,11 @@ class UI : public DearImGui {
 
       void RightClick(GraphEditor::NodeIndex nodeIndex, GraphEditor::SlotIndex,
                       GraphEditor::SlotIndex) override {
-        if (nodeIndex != static_cast<GraphEditor::NodeIndex>(-1))
-          ImGui::OpenPopup("NodeContext");
-        if (ImGui::BeginPopup("NodeContext")) {
-          ImGui::Text("Node %zu", nodeIndex);
-          ImGui::EndPopup();
+        if (nodeIndex != static_cast<GraphEditor::NodeIndex>(-1)) {
+          contextNode = nodeIndex;
+          openContextMenu = true;
+        } else {
+          openBackgroundContextMenu = true;
         }
       }
 
@@ -548,9 +735,54 @@ class UI : public DearImGui {
     if (!delegate)
       delegate = std::make_unique<AssetGraphDelegate>(asset, *this);
 
+    // Sync graph with the asset data if anything has changed externally
+    delegate->Sync();
+
     ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(30, 30, 30, 255));
     ImGui::Begin("Asset Graph");
     GraphEditor::Show(*delegate, options, view_state, true);
+
+    // Keyboard Delete Hook
+    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) &&
+        ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+      delegate->DeleteSelectedNodes();
+    }
+
+    // Node Context Menu Trigger
+    if (delegate->openContextMenu) {
+      ImGui::OpenPopup("NodeContext");
+      delegate->openContextMenu = false;
+    }
+
+    // Background Context Menu Trigger
+    if (delegate->openBackgroundContextMenu) {
+      ImGui::OpenPopup("BackgroundContext");
+      delegate->openBackgroundContextMenu = false;
+    }
+
+    // Render Node Right-Click Menu
+    if (ImGui::BeginPopup("NodeContext")) {
+      if (ImGui::MenuItem("Delete Node")) {
+        delegate->DeleteNode(delegate->contextNode);
+      }
+      ImGui::EndPopup();
+    }
+
+    // Render Background Right-Click Menu
+    if (ImGui::BeginPopup("BackgroundContext")) {
+      if (ImGui::MenuItem("Add New Material")) {
+        delegate->AddMaterial();
+      }
+
+      ImGui::Separator();
+
+      if (ImGui::MenuItem("Delete Selected Nodes")) {
+        delegate->DeleteSelectedNodes();
+      }
+
+      ImGui::EndPopup();
+    }
+
     ImGui::End();
     ImGui::PopStyleColor();
 
