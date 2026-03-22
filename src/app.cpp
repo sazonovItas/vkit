@@ -42,7 +42,7 @@
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
 #define MODEL_PATH "models/sphere/scene.gltf"
-#define ENVIRONMENT_MAP_PATH "environment/blaubeuren_night_4k.hdr"
+#define ENVIRONMENT_MAP_PATH "environment/ferndale_studio_03_4k.hdr"
 
 namespace {
 constexpr auto kVkMajor = 1;
@@ -119,119 +119,6 @@ constexpr auto layoutBinding(std::uint32_t binding,
       1,
       vk::ShaderStageFlagBits::eAllGraphics,
   };
-}
-
-struct BitmapData {
-  std::vector<std::byte> storage;
-  vku::Bitmap bitmap;
-};
-
-float hash(int x, int y) {
-  std::hash<int> h;
-  return static_cast<float>((h((x * 73856093) ^ (y * 19349663))) & 0xffff) /
-         65535.0F;
-}
-
-auto generateBricks(int width, int height, float brickWidth, float brickHeight,
-                    float mortarThickness) -> std::vector<std::byte> {
-  std::vector<std::byte> result;
-  result.resize(width * height * 4);
-
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
-      float fx = static_cast<float>(x) / width;
-      float fy = static_cast<float>(y) / height;
-
-      float bx = fx * (width / brickWidth);
-      float by = fy * (height / brickHeight);
-
-      int row = static_cast<int>(std::floor(by));
-
-      if (row % 2 == 1) bx += 0.5F;
-
-      float brick_local_x = bx - std::floor(bx);
-      float brick_local_y = by - std::floor(by);
-
-      float local_x = std::fmod(static_cast<float>(x), brickWidth);
-      float local_y = std::fmod(static_cast<float>(y), brickHeight);
-
-      if (row % 2 == 1)
-        local_x =
-            std::fmod(static_cast<float>(x) + (brickWidth * 0.5F), brickWidth);
-
-      bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
-
-      int index = ((y * width) + x) * 4;
-
-      if (is_mortar) {
-        uint8_t mortar = 200;
-        result[index + 0] = std::byte(mortar);
-        result[index + 1] = std::byte(mortar);
-        result[index + 2] = std::byte(mortar);
-        result[index + 3] = std::byte(255);
-      } else {
-        float noise = hash(static_cast<int>(std::floor(bx)),
-                           static_cast<int>(std::floor(by)));
-        float variation = 0.8F + (noise * 0.4F);
-
-        auto r = static_cast<uint8_t>(150 * variation);
-        auto g = static_cast<uint8_t>(50 * variation);
-        auto b = static_cast<uint8_t>(40 * variation);
-
-        result[index + 0] = std::byte(r);
-        result[index + 1] = std::byte(g);
-        result[index + 2] = std::byte(b);
-        result[index + 3] = std::byte(255);
-      }
-    }
-  }
-
-  return result;
-}
-
-auto generateStoneTiles(int width, int height, int tileSize,
-                        float mortarThickness) -> std::vector<std::byte> {
-  std::vector<std::byte> result;
-  result.resize(width * height * 4);
-
-  for (int y = 0; y < height; ++y) {
-    for (int x = 0; x < width; ++x) {
-      int tile_x = x / tileSize;
-      int tile_y = y / tileSize;
-
-      auto local_x = static_cast<float>(x % tileSize);
-      auto local_y = static_cast<float>(y % tileSize);
-
-      bool is_mortar = local_x < mortarThickness || local_y < mortarThickness;
-
-      int index = ((y * width) + x) * 4;
-
-      if (is_mortar) {
-        uint8_t mortar = 180;
-        result[index + 0] = std::byte(mortar);
-        result[index + 1] = std::byte(mortar);
-        result[index + 2] = std::byte(mortar);
-        result[index + 3] = std::byte(255);
-      } else {
-        float base_noise = hash(tile_x, tile_y);
-        float variation = 0.7F + (base_noise * 0.6F);
-
-        float fine_noise = hash(x, y);
-        float grain = 0.9F + (fine_noise * 0.2F);
-
-        auto r = static_cast<uint8_t>(120 * variation * grain);
-        auto g = static_cast<uint8_t>(110 * variation * grain);
-        auto b = static_cast<uint8_t>(100 * variation * grain);
-
-        result[index + 0] = std::byte(r);
-        result[index + 1] = std::byte(g);
-        result[index + 2] = std::byte(b);
-        result[index + 3] = std::byte(255);
-      }
-    }
-  }
-
-  return result;
 }
 };  // namespace
 
@@ -326,8 +213,8 @@ void App::loadEnvironmentMap(const std::filesystem::path& path) {
   bindlessSetManager_->addEnvMapTexture2D(*gpu_->device, 0,
                                           environmentMaps_.back());
 
-  const uint32_t diffuse_width = 32;
-  const uint32_t diffuse_height = 16;
+  const uint32_t diffuse_width = env_info.width;
+  const uint32_t diffuse_height = env_info.height;
 
   environmentDiffuseMaps_.emplace_back(
       gpu_->allocator, copy_info, diffuse_width, diffuse_height,

@@ -36,27 +36,6 @@ vec3 sphericalEnvmapToDirection(vec2 uv) {
     return normalize(vec3(x, y, z));
 }
 
-float RadicalInverse_VdC(uint bits) {
-    bits = (bits << 16u) | (bits >> 16u);
-    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
-    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
-    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
-    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
-    return float(bits) * 2.3283064365386963e-10; 
-}
-
-vec2 Hammersley(uint i, uint N) {
-    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
-}
-
-vec3 ImportanceSampleCosine(vec2 Xi) {
-    float phi = 2.0 * PI * Xi.x;
-    float cosTheta = sqrt(1.0 - Xi.y);
-    float sinTheta = sqrt(Xi.y);
-
-    return vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-}
-
 void main() {
     ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(storageImages[nonuniformEXT(pcs.outIrradianceMapIdx)]);
@@ -72,24 +51,28 @@ void main() {
 
     vec3 irradiance = vec3(0.0);
     
-    const uint SAMPLE_COUNT = 4096u;
+    float sampleDelta = 0.025; 
+    float nrSamples = 0.0;
 
-    for(uint i = 0u; i < SAMPLE_COUNT; ++i) {
-        vec2 Xi = Hammersley(i, SAMPLE_COUNT);
-        
-        vec3 tangentSample = ImportanceSampleCosine(Xi);
-        
-        vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
+    for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
+        for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
+            
+            vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+            
+            vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
 
-        vec2 sampleUV = directionToSphericalEnvmap(sampleVec);
-        vec3 envColor = sampleTexture2DLod(pcs.sourceEnvMapIdx, sampleUV, 0.0).rgb;
-        
-        envColor = min(envColor, vec3(25.0));
+            vec2 sampleUV = directionToSphericalEnvmap(sampleVec);
+            vec3 envColor = sampleTexture2DLod(pcs.sourceEnvMapIdx, sampleUV, 0.0).rgb;
+            
+            envColor = min(envColor, vec3(25.0));
 
-        irradiance += envColor;
+            irradiance += envColor * cos(theta) * sin(theta);
+            nrSamples++;
+        }
     }
     
-    irradiance = irradiance * (1.0 / float(SAMPLE_COUNT));
+    // Average the integration
+    irradiance = PI * irradiance * (1.0 / float(nrSamples));
 
     writeStorageImage(pcs.outIrradianceMapIdx, texelCoord, vec4(irradiance, 1.0));
 }
