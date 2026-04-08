@@ -88,6 +88,22 @@ target_sources(imguizmo PRIVATE
     ImGuizmo/ImZoomSlider.h
 )
 
+message(STATUS "[imgui-node-editor]")
+
+add_library(imgui_node_editor)
+add_library(imgui_node_editor::imgui_node_editor ALIAS imgui_node_editor)
+
+target_include_directories(imgui_node_editor SYSTEM PUBLIC imgui-node-editor)
+
+target_link_libraries(imgui_node_editor PUBLIC imgui::imgui)
+
+target_sources(imgui_node_editor PRIVATE
+    imgui-node-editor/imgui_node_editor.cpp
+    imgui-node-editor/imgui_node_editor_api.cpp
+    imgui-node-editor/imgui_canvas.cpp
+    imgui-node-editor/crude_json.cpp
+)
+
 message(STATUS "[vma]")
 
 add_library(vma)
@@ -131,7 +147,6 @@ target_sources(stb PRIVATE
     stb_image.cpp
 )
 
-
 message(STATUS "[ext]")
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -140,6 +155,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
     glm::glm
     imgui::imgui
     imguizmo::imguizmo
+    imgui_node_editor::imgui_node_editor
     vma::vma
     fastgltf::fastgltf
     meshoptimizer
