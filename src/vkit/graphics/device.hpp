@@ -1,0 +1,64 @@
+#pragma once
+
+#include <vk_mem_alloc.hpp>
+
+namespace vkit::graphics {
+
+struct QueueFamilies {
+  std::uint32_t compute, graphicsPresent, transfer;
+  std::vector<std::uint32_t> uniqueIndices;
+
+  QueueFamilies(vk::PhysicalDevice physicalDevice, vk::SurfaceKHR surface);
+};
+
+struct Queues {
+  vk::Queue compute, graphicsPresent, transfer;
+
+  Queues(vk::Device device, const QueueFamilies& queueFamilies) noexcept;
+};
+
+class GFXDevice {
+ public:
+  vk::PhysicalDevice physicalDevice;
+  vk::PhysicalDeviceProperties properties;
+  QueueFamilies queueFamilies;
+
+  vk::UniqueDevice device;
+  Queues queues;
+
+  vma::Allocator allocator;
+
+  vk::UniqueCommandPool transferCommandPool;
+  vk::UniqueCommandPool graphicsCommandPool;
+
+  GFXDevice(const vk::Instance& instance, vk::SurfaceKHR surface);
+
+  auto getDevice() const -> vk::Device { return *device; }
+  auto getAllocator() const -> vma::Allocator { return allocator; }
+
+  auto getTransferCommandPool() const -> vk::CommandPool {
+    return *transferCommandPool;
+  }
+
+  auto getGraphicsCommandPool() const -> vk::CommandPool {
+    return *graphicsCommandPool;
+  }
+
+  auto createCommandPool(std::uint32_t queueFamilyIndex,
+                         vk::CommandPoolCreateFlagBits flags =
+                             vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
+      -> vk::UniqueCommandPool;
+
+  ~GFXDevice() { allocator.destroy(); };
+
+ private:
+  [[nodiscard]] static auto selectGpu(const vk::Instance& instance,
+                                      vk::SurfaceKHR surface)
+      -> vk::PhysicalDevice;
+
+  [[nodiscard]] auto createDevice() -> vk::UniqueDevice;
+  [[nodiscard]] auto createAllocator(const vk::Instance& instance) const
+      -> vma::Allocator;
+};
+
+};  // namespace vkit::graphics

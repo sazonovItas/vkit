@@ -29,19 +29,17 @@ class Gpu {
 
   Gpu(const vk::Instance& instance, vk::SurfaceKHR surface);
 
-  auto createCommandPool(std::uint32_t queueFamilyIndex,
-                         vk::CommandPoolCreateFlagBits flags =
-                             vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
+  auto createCommandPool(
+      std::uint32_t queueFamilyIndex,
+      vk::CommandPoolCreateFlagBits flags = vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
       -> vk::UniqueCommandPool;
 
   ~Gpu() { allocator.destroy(); };
 
  private:
-  [[nodiscard]] auto selectGpu(const vk::Instance& instance,
-                               vk::SurfaceKHR surface) const
+  [[nodiscard]] auto selectGpu(const vk::Instance& instance, vk::SurfaceKHR surface) const
       -> vk::PhysicalDevice;
   [[nodiscard]] auto createDevice() -> vk::UniqueDevice;
-  [[nodiscard]] auto createAllocator(const vk::Instance& instance) const
-      -> vma::Allocator;
+  [[nodiscard]] auto createAllocator(const vk::Instance& instance) const -> vma::Allocator;
 };
 };  // namespace vkit::vulkan
