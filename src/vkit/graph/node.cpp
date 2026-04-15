@@ -1,3 +1,3 @@
-#include "editor/graph/node.hpp"
+#include "vkit/graph/node.hpp"
 
 namespace editor::graph {};

@@ -53,6 +53,7 @@ class Texture {
 
  private:
   const GfxDevice& device_;
+
   TextureType type_{TextureType::k2D};
   SampleCount sampleCount_{SampleCount::k1};
 

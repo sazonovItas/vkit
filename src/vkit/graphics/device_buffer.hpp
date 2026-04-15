@@ -21,7 +21,7 @@ class DeviceBuffer : public AllocatedBuffer {
                vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice,
+      : AllocatedBuffer(gfxDevice.getAllocator(),
                         vk::BufferCreateInfo{
                             {},
                             size,
@@ -86,8 +86,7 @@ class DeviceBuffer : public AllocatedBuffer {
     update(gfxDevice, fromRange, r);
   }
 
-  DeviceBuffer() = default;
-
+  DeviceBuffer() = delete;
   DeviceBuffer(const DeviceBuffer&) = delete;
   DeviceBuffer& operator=(const DeviceBuffer&) = delete;
 

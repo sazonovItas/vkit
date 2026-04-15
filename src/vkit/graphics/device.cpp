@@ -119,7 +119,7 @@ GfxDevice::GfxDevice(const vk::Instance &instance,
           createCommandPool(queueFamilies.transfer,
                             vk::CommandPoolCreateFlagBits::eTransient),
       },
-      graphicsCommandPool{
+      graphicsPresentCommandPool{
           createCommandPool(queueFamilies.graphicsPresent,
                             vk::CommandPoolCreateFlagBits::eTransient),
       } {

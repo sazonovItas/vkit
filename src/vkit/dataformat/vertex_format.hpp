@@ -1,7 +1,5 @@
 #pragma once
 
-#include "vkit/dataformat/dataformat.hpp"
-
 namespace vkit::dataformat {
 
 enum class AttributeUsage : uint32_t {
@@ -18,13 +16,5 @@ enum class AttributeUsage : uint32_t {
 };
 
 [[nodiscard]] auto c_str(AttributeUsage usage) -> const char*;
-
-class VertexAttributeInfo {
- public:
-  Format format{Format::eUndefined};
-  AttributeUsage usage{AttributeUsage::kNone};
-  std::size_t stride{0};
-  std::size_t offset{0};
-};
 
 };  // namespace vkit::dataformat
