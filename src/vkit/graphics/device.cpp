@@ -32,7 +32,7 @@ constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
   std::unreachable();
 }
 
-constexpr std::array kRequiredExtensions{
+constexpr auto kRequiredExtensions = std::array{
     vk::KHRSwapchainExtensionName,
     vk::EXTShaderObjectExtensionName,
 };
@@ -107,7 +107,8 @@ Queues::Queues(vk::Device device, const QueueFamilies &queueFamilies) noexcept
       graphicsPresent{device.getQueue(queueFamilies.graphicsPresent, 0)},
       transfer{device.getQueue(queueFamilies.transfer, 0)} {}
 
-GFXDevice::GFXDevice(const vk::Instance &instance, vk::SurfaceKHR surface)
+GfxDevice::GfxDevice(const vk::Instance &instance,
+                     const vk::SurfaceKHR &surface)
     : physicalDevice{selectGpu(instance, surface)},
       properties{physicalDevice.getProperties()},
       queueFamilies(physicalDevice, surface),
@@ -129,7 +130,7 @@ GFXDevice::GFXDevice(const vk::Instance &instance, vk::SurfaceKHR surface)
                deviceTypeToString(properties.deviceType));
 }
 
-auto GFXDevice::createCommandPool(const std::uint32_t queueFamilyIndex,
+auto GfxDevice::createCommandPool(const std::uint32_t queueFamilyIndex,
                                   vk::CommandPoolCreateFlagBits flags)
     -> vk::UniqueCommandPool {
   auto it = std::ranges::find(queueFamilies.uniqueIndices, queueFamilyIndex);
@@ -145,8 +146,8 @@ auto GFXDevice::createCommandPool(const std::uint32_t queueFamilyIndex,
   return device->createCommandPoolUnique(ci);
 }
 
-auto GFXDevice::selectGpu(const vk::Instance &instance, vk::SurfaceKHR surface)
-    -> vk::PhysicalDevice {
+auto GfxDevice::selectGpu(const vk::Instance &instance,
+                          const vk::SurfaceKHR &surface) -> vk::PhysicalDevice {
   const auto gpu_rater = [&](vk::PhysicalDevice gpu) -> std::uint32_t {
     try {
       std::ignore = QueueFamilies{gpu, surface};
@@ -210,7 +211,7 @@ auto GFXDevice::selectGpu(const vk::Instance &instance, vk::SurfaceKHR surface)
   return best_gpu;
 }
 
-auto GFXDevice::createDevice() -> vk::UniqueDevice {
+auto GfxDevice::createDevice() -> vk::UniqueDevice {
   const std::vector available_extensions =
       physicalDevice.enumerateDeviceExtensionProperties();
   const std::unordered_set available_extensions_names =
@@ -262,7 +263,7 @@ auto GFXDevice::createDevice() -> vk::UniqueDevice {
   return device;
 }
 
-auto GFXDevice::createAllocator(const vk::Instance &instance) const
+auto GfxDevice::createAllocator(const vk::Instance &instance) const
     -> vma::Allocator {
   auto const &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
 

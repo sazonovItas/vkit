@@ -8,4 +8,6 @@ using Format = vk::Format;
 
 [[nodiscard]] auto getComponentByteSize(Format format) -> std::size_t;
 
+[[nodiscard]] auto getPixelByteSize(Format format) -> std::size_t;
+
 }  // namespace vkit::dataformat

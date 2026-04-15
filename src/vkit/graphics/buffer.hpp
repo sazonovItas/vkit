@@ -26,15 +26,14 @@ struct AllocatedBuffer : Buffer {
   AllocatedBuffer(vma::Allocator allocator,
                   const vk::BufferCreateInfo& createInfo,
                   const vma::AllocationCreateInfo& allocationCreateInfo =
-                      allocation::kDeviceLocal)
+                      vkit::graphics::allocation::kDeviceLocal)
       : allocator{allocator} {
     size = createInfo.size;
     std::tie(allocation, buffer) =
         allocator.createBuffer(createInfo, allocationCreateInfo);
   }
 
-  AllocatedBuffer() = default;
-
+  AllocatedBuffer() = delete;
   AllocatedBuffer(const AllocatedBuffer&) = delete;
   AllocatedBuffer& operator=(const AllocatedBuffer&) = delete;
 

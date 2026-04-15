@@ -91,8 +91,7 @@ class MappedBuffer : public AllocatedBuffer {
                       static_cast<std::ranges::range_value_t<R>*>(data));
   }
 
-  MappedBuffer() = default;
-
+  MappedBuffer() = delete;
   MappedBuffer(const MappedBuffer&) = delete;
   MappedBuffer& operator=(const MappedBuffer&) = delete;
 

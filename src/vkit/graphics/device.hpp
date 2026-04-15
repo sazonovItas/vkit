@@ -17,7 +17,7 @@ struct Queues {
   Queues(vk::Device device, const QueueFamilies& queueFamilies) noexcept;
 };
 
-class GFXDevice {
+class GfxDevice {
  public:
   vk::PhysicalDevice physicalDevice;
   vk::PhysicalDeviceProperties properties;
@@ -29,9 +29,9 @@ class GFXDevice {
   vma::Allocator allocator;
 
   vk::UniqueCommandPool transferCommandPool;
-  vk::UniqueCommandPool graphicsCommandPool;
+  vk::UniqueCommandPool graphicsPresentCommandPool;
 
-  GFXDevice(const vk::Instance& instance, vk::SurfaceKHR surface);
+  GfxDevice(const vk::Instance& instance, const vk::SurfaceKHR& surface);
 
   auto getDevice() const -> vk::Device { return *device; }
   auto getAllocator() const -> vma::Allocator { return allocator; }
@@ -40,8 +40,8 @@ class GFXDevice {
     return *transferCommandPool;
   }
 
-  auto getGraphicsCommandPool() const -> vk::CommandPool {
-    return *graphicsCommandPool;
+  auto getGraphicsPresentCommandPool() const -> vk::CommandPool {
+    return *graphicsPresentCommandPool;
   }
 
   auto createCommandPool(std::uint32_t queueFamilyIndex,
@@ -49,11 +49,13 @@ class GFXDevice {
                              vk::CommandPoolCreateFlagBits::eResetCommandBuffer)
       -> vk::UniqueCommandPool;
 
-  ~GFXDevice() { allocator.destroy(); };
+  void waitIdle() { device->waitIdle(); }
+
+  ~GfxDevice() { allocator.destroy(); };
 
  private:
   [[nodiscard]] static auto selectGpu(const vk::Instance& instance,
-                                      vk::SurfaceKHR surface)
+                                      const vk::SurfaceKHR& surface)
       -> vk::PhysicalDevice;
 
   [[nodiscard]] auto createDevice() -> vk::UniqueDevice;

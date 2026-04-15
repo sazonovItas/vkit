@@ -16,12 +16,12 @@ class DeviceBuffer : public AllocatedBuffer {
                    allocation::kDeviceLocal)
       : AllocatedBuffer(allocator, createInfo, allocationCreateInfo) {}
 
-  DeviceBuffer(const GFXDevice& gfxDevice, vk::Buffer srcBuffer,
+  DeviceBuffer(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
                std::size_t offset, vk::DeviceSize size,
                vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice.getAllocator(),
+      : AllocatedBuffer(gfxDevice,
                         vk::BufferCreateInfo{
                             {},
                             size,
@@ -31,7 +31,7 @@ class DeviceBuffer : public AllocatedBuffer {
     copy(gfxDevice, srcBuffer, offset, {}, size);
   }
 
-  DeviceBuffer(const GFXDevice& gfxDevice, vk::Buffer srcBuffer,
+  DeviceBuffer(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
                std::size_t offset, vk::DeviceSize size,
                vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
@@ -52,7 +52,7 @@ class DeviceBuffer : public AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  DeviceBuffer(const GFXDevice& gfxDevice, std::from_range_t fromRange, R&& r,
+  DeviceBuffer(const GfxDevice& gfxDevice, std::from_range_t fromRange, R&& r,
                vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
@@ -69,7 +69,7 @@ class DeviceBuffer : public AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  DeviceBuffer(const GFXDevice& gfxDevice, std::from_range_t fromRange, R&& r,
+  DeviceBuffer(const GfxDevice& gfxDevice, std::from_range_t fromRange, R&& r,
                vk::Flags<vk::BufferUsageFlagBits> usage,
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
@@ -107,7 +107,7 @@ class DeviceBuffer : public AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  void update(const GFXDevice& gfxDevice, std::from_range_t fromRange, R&& r,
+  void update(const GfxDevice& gfxDevice, std::from_range_t fromRange, R&& r,
               std::size_t deviceBufferOffset = {}) {
     auto total_size = r.size() * sizeof(std::ranges::range_value_t<R>);
     assert(deviceBufferOffset + total_size <= this->size &&
@@ -126,7 +126,7 @@ class DeviceBuffer : public AllocatedBuffer {
   template <std::ranges::input_range R>
     requires(std::ranges::sized_range<R> &&
              std::is_trivially_copyable_v<std::ranges::range_value_t<R>>)
-  void update(const GFXDevice& gfxDevice, std::from_range_t fromRange, R&& r,
+  void update(const GfxDevice& gfxDevice, std::from_range_t fromRange, R&& r,
               vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
               std::size_t deviceBufferOffset = {}) {
     auto total_size = r.size() * sizeof(std::ranges::range_value_t<R>);
@@ -146,7 +146,7 @@ class DeviceBuffer : public AllocatedBuffer {
   explicit DeviceBuffer(AllocatedBuffer&& allocatedBuffer)
       : AllocatedBuffer{std::move(allocatedBuffer)} {}
 
-  void copy(const GFXDevice& gfxDevice, vk::Buffer srcBuffer,
+  void copy(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
             std::size_t srcOffset, std::size_t dstOffset, std::size_t size);
 };
 

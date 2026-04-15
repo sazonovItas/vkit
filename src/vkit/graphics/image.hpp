@@ -1,17 +1,22 @@
 #pragma once
 
 #include <ranges>
+#include <vk_mem_alloc.hpp>
 
+#include "vkit/dataformat/dataformat.hpp"
+#include "vkit/graphics/allocation.hpp"
 #include "vulkan/vulkan.hpp"
 
-namespace vku {
+namespace vkit::graphics {
+
 struct Image {
-  vk::Image image;
-  vk::Extent3D extent;
-  vk::Format format;
-  vk::SampleCountFlagBits samples;
-  std::uint32_t mipLevels;
-  std::uint32_t arrayLayers;
+  vk::Image image{nullptr};
+  vk::ImageType imageType{vk::ImageType::e2D};
+  vk::Extent3D extent{};
+  dataformat::Format format{dataformat::Format::eUndefined};
+  vk::SampleCountFlagBits samples{vk::SampleCountFlagBits::e1};
+  std::uint32_t mipLevels{0};
+  std::uint32_t arrayLayers{0};
 
   [[nodiscard]] explicit operator vk::Image() const noexcept { return image; }
 
@@ -30,7 +35,7 @@ struct Image {
   }
 
   [[nodiscard]] auto getViewCreateInfo(
-      const vk::ImageSubresourceRange &subresource_range,
+      const vk::ImageSubresourceRange& subresource_range,
       vk::ImageViewType type = vk::ImageViewType::e2D) const noexcept
       -> vk::ImageViewCreateInfo {
     return {
@@ -66,20 +71,25 @@ struct Image {
     return {inferAspectFlags(format), 0, mipLevels, 0, arrayLayers};
   }
 
-  [[nodiscard]] static constexpr auto inferAspectFlags(vk::Format format)
-      -> vk::ImageAspectFlags {
+  [[nodiscard]] auto getBaseMipSizeBytes() const -> std::size_t {
+    return extent.width * extent.height * extent.depth *
+           dataformat::getPixelByteSize(format) * arrayLayers;
+  }
+
+  [[nodiscard]] static constexpr auto inferAspectFlags(
+      dataformat::Format format) -> vk::ImageAspectFlags {
     switch (format) {
-      case vk::Format::eUndefined:
+      case dataformat::Format::eUndefined:
         std::unreachable();
-      case vk::Format::eD16Unorm:
-      case vk::Format::eD32Sfloat:
+      case dataformat::Format::eD16Unorm:
+      case dataformat::Format::eD32Sfloat:
         return vk::ImageAspectFlagBits::eDepth;
-      case vk::Format::eD16UnormS8Uint:
-      case vk::Format::eD24UnormS8Uint:
-      case vk::Format::eD32SfloatS8Uint:
+      case dataformat::Format::eD16UnormS8Uint:
+      case dataformat::Format::eD24UnormS8Uint:
+      case dataformat::Format::eD32SfloatS8Uint:
         return vk::ImageAspectFlagBits::eDepth |
                vk::ImageAspectFlagBits::eStencil;
-      case vk::Format::eS8Uint:
+      case dataformat::Format::eS8Uint:
         return vk::ImageAspectFlagBits::eStencil;
       default:
         return vk::ImageAspectFlagBits::eColor;
@@ -92,18 +102,18 @@ struct Image {
     return std::bit_width(size);
   }
 
-  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent2D &extent)
+  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent2D& extent)
       -> std::uint32_t {
     return maxMipLevels(std::max(extent.width, extent.height));
   }
 
-  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent3D &extent)
+  [[nodiscard]] static constexpr auto maxMipLevels(const vk::Extent3D& extent)
       -> std::uint32_t {
     return maxMipLevels(std::max({extent.width, extent.height, extent.depth}));
   }
 
   [[nodiscard]] static constexpr auto mipExtent(
-      const vk::Extent2D &extent, std::uint32_t mip_level) noexcept
+      const vk::Extent2D& extent, std::uint32_t mip_level) noexcept
       -> vk::Extent2D {
     assert(mip_level < maxMipLevels(extent) &&
            "mipLevel must be less than maxMipLevels(extent)");
@@ -114,7 +124,7 @@ struct Image {
   }
 
   [[nodiscard]] static constexpr auto mipExtent(
-      const vk::Extent3D &extent, std::uint32_t mip_level) noexcept
+      const vk::Extent3D& extent, std::uint32_t mip_level) noexcept
       -> vk::Extent3D {
     assert(mip_level < maxMipLevels(extent) &&
            "MipLevel must be less than maxMipLevels(extent).");
@@ -125,4 +135,57 @@ struct Image {
     };
   }
 };
-}  // namespace vku
+
+struct AllocatedImage : Image {
+  vma::Allocator allocator;
+  vma::Allocation allocation;
+
+  AllocatedImage(vma::Allocator allocator,
+                 const vk::ImageCreateInfo& createInfo,
+                 const vma::AllocationCreateInfo& allocationCreateInfo =
+                     allocation::kDeviceLocal)
+      : Image{
+            .image = nullptr,
+            .imageType = createInfo.imageType,
+            .extent = createInfo.extent,
+            .format = createInfo.format,
+            .samples = createInfo.samples,
+            .mipLevels = createInfo.mipLevels,
+            .arrayLayers = createInfo.arrayLayers,
+        },
+        allocator{allocator} {
+    std::tie(allocation, image) =
+        allocator.createImage(createInfo, allocationCreateInfo);
+  }
+
+  AllocatedImage() = delete;
+  AllocatedImage(const AllocatedImage&) = delete;
+  AllocatedImage& operator=(const AllocatedImage&) = delete;
+
+  AllocatedImage(AllocatedImage&& src) noexcept
+      : Image{static_cast<Image>(src)},
+        allocator{src.allocator},
+        allocation{std::exchange(src.allocation, nullptr)} {
+    image = std::exchange(src.image, nullptr);
+  }
+
+  AllocatedImage& operator=(AllocatedImage&& src) noexcept {
+    if (allocation) {
+      allocator.destroyImage(image, allocation);
+    }
+
+    static_cast<Image&>(*this) = static_cast<Image>(src);
+    allocator = src.allocator;
+    allocation = std::exchange(src.allocation, nullptr);
+    image = std::exchange(src.image, nullptr);
+    return *this;
+  }
+
+  virtual ~AllocatedImage() {
+    if (allocation) {
+      allocator.destroyImage(image, allocation);
+    }
+  }
+};
+
+}  // namespace vkit::graphics
