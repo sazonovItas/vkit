@@ -15,7 +15,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include "GLFW/glfw3.h"
 #include "app_types.hpp"
 #include "bindless_set_manager.hpp"
 #include "fastgltf/tools.hpp"
@@ -28,6 +27,7 @@
 #include "resource_buffering.hpp"
 #include "shader_program.hpp"
 #include "stb_image.h"
+#include "vkit/window/window_configuration.hpp"
 #include "vku/utils/utils.hpp"
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
@@ -36,8 +36,6 @@
 #include "vulkan/pipeline_layout/primitive.hpp"
 #include "vulkan/pipeline_layout/procedural_texture.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
-#include "vulkan/vulkan.hpp"
-#include "window.hpp"
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
 
@@ -155,8 +153,8 @@ void App::run() {
 }
 
 void App::mainLoop() {
-  while (glfwWindowShouldClose(window_.get()) == GLFW_FALSE) {
-    glfwPollEvents();
+  while (!window_.shouldClose()) {
+    window_.pollEvents();
 
     if (procTexParams_.triggerGeneration) {
       generateProceduralTexture();
@@ -697,7 +695,7 @@ void App::updateDescriptorSets() const {
 }
 
 auto App::acquireRenderTarget() -> bool {
-  frameBufferSize_ = glfw::framebufferSize(window_.get());
+  frameBufferSize_ = {window_.getWidth(), window_.getHeight()};
   if (frameBufferSize_.x <= 0 || frameBufferSize_.y <= 0) {
     return false;
   }
@@ -1115,7 +1113,7 @@ void App::createRenderSync() {
 
 void App::createUI() {
   auto const imgui_ci = DearImGui::CreateInfo{
-      .window = window_.get(),
+      .window = window_.getGlfwWindow(),
       .apiVersion = kVkVersionV,
       .instance = *instance_,
       .physicalDevice = gpu_->physicalDevice,
@@ -1129,7 +1127,7 @@ void App::createUI() {
   ui_.emplace(imgui_ci);
 }
 
-void App::createWindow() { window_ = glfw::createWindow({1280, 720}, "vkit"); }
+void App::createWindow() { window_.open({.size = vk::Extent2D{1200, 800}}); }
 
 void App::createInstance() {
   VULKAN_HPP_DEFAULT_DISPATCHER.init();
@@ -1157,7 +1155,7 @@ void App::createInstance() {
                           vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
           .setPfnUserCallback(&debugCallback);
 
-  auto glfw_extensions = glfw::instanceExtensions();
+  auto glfw_extensions = window::Window::getVulkanExtensions();
   auto extensions =
       std::vector<const char*>(glfw_extensions.begin(), glfw_extensions.end());
 
@@ -1180,9 +1178,7 @@ void App::createInstance() {
       debug_create_info, nullptr, VULKAN_HPP_DEFAULT_DISPATCHER);
 }
 
-void App::createSurface() {
-  surface_ = glfw::createSurface(window_.get(), *instance_);
-}
+void App::createSurface() { surface_ = window_.createSurface(*instance_); }
 
 void App::createDevice() {
   gpu_.emplace(*instance_, *surface_);
@@ -1190,9 +1186,10 @@ void App::createDevice() {
 }
 
 void App::createSwapchain() {
-  auto const size = glfw::framebufferSize(window_.get());
+  const auto size = glm::ivec2{window_.getHeight(), window_.getWidth()};
   swapchain_.emplace(*gpu_->device, gpu_->physicalDevice,
                      gpu_->queueFamilies.graphicsPresent, gpu_->allocator,
                      *surface_, size);
 }
+
 };  // namespace vkit

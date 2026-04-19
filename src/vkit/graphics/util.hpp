@@ -4,6 +4,12 @@
 
 namespace vkit::graphics::util {
 
+inline void requireSuccess(const vk::Result result, const char* msg) {
+  if (result != vk::Result::eSuccess) {
+    throw std::runtime_error{msg};
+  }
+}
+
 template <typename T, typename E>
 [[nodiscard]] inline auto contains(T flags, E bit) -> bool {
   return (flags & bit) == bit;

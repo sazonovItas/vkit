@@ -2,6 +2,9 @@
 
 #include <vk_mem_alloc.hpp>
 
+#include "vkit/graphics/instance.hpp"
+#include "vkit/graphics/surface.hpp"
+
 namespace vkit::graphics {
 
 struct QueueFamilies {
@@ -31,10 +34,9 @@ class GfxDevice {
   vk::UniqueCommandPool transferCommandPool;
   vk::UniqueCommandPool graphicsPresentCommandPool;
 
-  GfxDevice(const vk::Instance& instance, const vk::SurfaceKHR& surface);
+  GfxDevice(const Instance& instance, const Surface& surface);
 
-  auto getDevice() const -> vk::Device { return *device; }
-  auto getAllocator() const -> vma::Allocator { return allocator; }
+  auto get() const -> vk::Device { return *device; }
 
   auto getTransferCommandPool() const -> vk::CommandPool {
     return *transferCommandPool;

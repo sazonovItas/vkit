@@ -147,4 +147,4 @@ vec4 getWeights(Primitive prim, uint idx) {
   return load_vec4(a, getFetchAddress(a, idx));
 }
 
-#endif
+#endif // VERTEX_PULLING_GLSL

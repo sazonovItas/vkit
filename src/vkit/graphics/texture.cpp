@@ -25,23 +25,24 @@ auto getTextureLevelCount(int width, int height, int depth) -> int {
   return Image::maxMipLevels(getExtent3D(width, height, depth));
 }
 
-Texture::Texture(GfxDevice& device, const TextureCreateInfo& createInfo)
-    : device_{device},
+Texture::Texture(GfxDevice& gfxDevice, const TextureCreateInfo& createInfo)
+    : device_{gfxDevice},
       type_{createInfo.type},
       sampleCount_{createInfo.sampleCount},
-      image_{createAllocatedImage(device, createInfo)} {
+      useMipmaps_{createInfo.useMipmaps},
+      image_{createAllocatedImage(gfxDevice, createInfo)} {
   if (createInfo.buffer != nullptr) {
     update(*createInfo.buffer);
   }
 
-  if (createInfo.useMipmaps) {
+  if (useMipmaps_) {
     generateMipmaps();
   }
 }
 
 auto Texture::makeImageView() const -> vk::UniqueImageView {
   auto ci = image_.getViewCreateInfo(getImageViewType(type_));
-  return device_.getDevice().createImageViewUnique(ci);
+  return device_.get().createImageViewUnique(ci);
 }
 
 auto Texture::makeImageView(std::uint32_t baseMipLevel,
@@ -60,7 +61,7 @@ auto Texture::makeImageView(std::uint32_t baseMipLevel,
 
   auto ci = image_.getViewCreateInfo(subresource, getImageViewType(type_));
 
-  return device_.getDevice().createImageViewUnique(ci);
+  return device_.get().createImageViewUnique(ci);
 }
 
 auto Texture::getImage() const -> Image { return image_; };
@@ -158,11 +159,15 @@ void Texture::update(const Buffer& buffer) {
     }
   };
 
-  util::recordAndSubmit(device_.getDevice(), device_.queues.transfer,
+  util::recordAndSubmit(device_.get(), device_.queues.transfer,
                         device_.getTransferCommandPool(), fn);
 }
 
 void Texture::generateMipmaps() {
+  if (!useMipmaps_) {
+    return;
+  }
+
   auto fn = [&](vk::CommandBuffer cb) {
     const auto format = image_.format;
 
@@ -253,7 +258,7 @@ void Texture::generateMipmaps() {
     }
   };
 
-  util::recordAndSubmit(device_.getDevice(), device_.queues.graphicsPresent,
+  util::recordAndSubmit(device_.get(), device_.queues.graphicsPresent,
                         device_.getGraphicsPresentCommandPool(), fn);
 }
 
@@ -271,7 +276,7 @@ auto Texture::createAllocatedImage(GfxDevice& device,
       .setMipLevels(mip_levels)
       .setArrayLayers(createInfo.arrayLayerCount);
 
-  return AllocatedImage{device.getAllocator(), image_ci};
+  return AllocatedImage{device.allocator, image_ci};
 }
 
 };  // namespace vkit::graphics

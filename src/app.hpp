@@ -15,6 +15,7 @@
 #include "transform.hpp"
 #include "ui.hpp"
 #include "vk_mem_alloc.hpp"
+#include "vkit/window/window.hpp"
 #include "vku/scoped/device_waiter.hpp"
 #include "vulkan/descriptor_set_layout/material.hpp"
 #include "vulkan/descriptor_set_layout/scene.hpp"
@@ -25,9 +26,9 @@
 #include "vulkan/pipeline_layout/procedural_texture.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
 #include "vulkan/vulkan.hpp"
-#include "window.hpp"
 
 namespace vkit {
+
 class App {
  public:
   void run();
@@ -58,7 +59,6 @@ class App {
   void bindPrimitiveDescriptorSets(vk::CommandBuffer cb) const;
 
   void drawSkybox(vk::CommandBuffer cb) const;
-
   void draw(vk::CommandBuffer cb) const;
   void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
                 const fastgltf::math::fmat4x4& transform,
@@ -89,7 +89,6 @@ class App {
   void createBindlessSetManager();
 
   void createCommandPools();
-
   void createUI();
 
   std::filesystem::path assetDir_;
@@ -97,7 +96,9 @@ class App {
   Camera camera_;
   Transform transform_;
 
-  glfw::Window window_;
+  vkit::window::Context context_;
+  vkit::window::Window window_;
+
   glm::ivec2 frameBufferSize_;
 
   vk::UniqueInstance instance_;
@@ -105,7 +106,6 @@ class App {
   vk::UniqueSurfaceKHR surface_;
 
   std::optional<vulkan::Gpu> gpu_;
-
   std::optional<Swapchain> swapchain_;
 
   vk::UniqueCommandPool renderCommandPool_;
@@ -116,7 +116,6 @@ class App {
   Buffered<RenderSync> renderSync_{};
 
   std::optional<UI> ui_;
-
   vk::UniqueDescriptorPool descriptorPool_;
 
   std::optional<vulkan::dsl::SceneLayout> sceneSetLayout_;
@@ -152,15 +151,16 @@ class App {
   std::optional<BindlessSetManager> bindlessSetManager_;
 
   std::optional<RenderTarget> renderTarget_;
-
   std::optional<gltf::Asset> gltfAsset_;
 
   glm::vec4 envBaseColor_{0.2F, 0.2F, 0.2F, 1.0F};
   std::optional<std::uint32_t> currEnvMapIdx_;
+
   std::vector<vku::Texture2D> environmentMaps_;
   std::vector<vku::Texture2D> environmentDiffuseMaps_;
   std::vector<vku::Texture2D> environmentSpecularMaps_;
 
   vku::DeviceWaiter deviceWaiter_;
 };
+
 }  // namespace vkit

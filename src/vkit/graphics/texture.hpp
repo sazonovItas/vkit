@@ -27,7 +27,7 @@ struct TextureCreateInfo {
 
 class Texture {
  public:
-  Texture(GfxDevice& device, const TextureCreateInfo& createInfo);
+  Texture(GfxDevice& gfxDevice, const TextureCreateInfo& createInfo);
 
   [[nodiscard]] auto makeImageView() const -> vk::UniqueImageView;
   [[nodiscard]] auto makeImageView(std::uint32_t baseMipLevel,
@@ -56,6 +56,7 @@ class Texture {
 
   TextureType type_{TextureType::k2D};
   SampleCount sampleCount_{SampleCount::k1};
+  bool useMipmaps_{false};
 
   AllocatedImage image_;
 

@@ -80,7 +80,7 @@ QueueFamilies::QueueFamilies(vk::PhysicalDevice physicalDevice,
       }
     }
 
-    throw std::runtime_error{"the GPU does not have graphics capability"};
+    throw std::runtime_error{"GPU doesn't have graphics capability"};
   }();
 
   transfer = [&] -> std::uint32_t {
@@ -107,14 +107,13 @@ Queues::Queues(vk::Device device, const QueueFamilies &queueFamilies) noexcept
       graphicsPresent{device.getQueue(queueFamilies.graphicsPresent, 0)},
       transfer{device.getQueue(queueFamilies.transfer, 0)} {}
 
-GfxDevice::GfxDevice(const vk::Instance &instance,
-                     const vk::SurfaceKHR &surface)
-    : physicalDevice{selectGpu(instance, surface)},
+GfxDevice::GfxDevice(const Instance &instance, const Surface &surface)
+    : physicalDevice{selectGpu(instance.get(), surface.get())},
       properties{physicalDevice.getProperties()},
-      queueFamilies(physicalDevice, surface),
+      queueFamilies(physicalDevice, surface.get()),
       device{createDevice()},
       queues{*device, queueFamilies},
-      allocator{createAllocator(instance)},
+      allocator{createAllocator(instance.get())},
       transferCommandPool{
           createCommandPool(queueFamilies.transfer,
                             vk::CommandPoolCreateFlagBits::eTransient),
@@ -123,8 +122,7 @@ GfxDevice::GfxDevice(const vk::Instance &instance,
           createCommandPool(queueFamilies.graphicsPresent,
                             vk::CommandPoolCreateFlagBits::eTransient),
       } {
-  // TODO(itas): move this log somewhere else
-  // TODO(itas): add options for eVirtual, eCpu and eOther
+  // TODO: itas - move this log somewhere else
   std::println("Selected GPU: {}, type: {}",
                std::string_view{properties.deviceName},
                deviceTypeToString(properties.deviceType));
@@ -260,12 +258,13 @@ auto GfxDevice::createDevice() -> vk::UniqueDevice {
 
   auto device = physicalDevice.createDeviceUnique(ci.get());
   VULKAN_HPP_DEFAULT_DISPATCHER.init(*device);
+
   return device;
 }
 
 auto GfxDevice::createAllocator(const vk::Instance &instance) const
     -> vma::Allocator {
-  auto const &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
+  const auto &dispatcher = VULKAN_HPP_DEFAULT_DISPATCHER;
 
   auto vma_vk_funcs =
       vma::VulkanFunctions{}

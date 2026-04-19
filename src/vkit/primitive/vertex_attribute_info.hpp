@@ -14,8 +14,13 @@ struct VertexAttributeInfo {
 
   dataformat::Format format{dataformat::Format::eUndefined};
   dataformat::AttributeUsage usage{dataformat::AttributeUsage::kNone};
+  std::size_t offset{std::numeric_limits<std::size_t>::max()};
   std::size_t stride{std::numeric_limits<std::size_t>::max()};
   std::size_t size{0};
+};
+
+struct VertexAttribute {
+  VertexAttributeInfo info;
 };
 
 };  // namespace vkit::primitive

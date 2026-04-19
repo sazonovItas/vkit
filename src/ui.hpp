@@ -264,7 +264,7 @@ class UI : public DearImGui {
     ImGui::End();
   }
 
-  static void drawProceduralGenerator(ProceduralTextureParams& params) {
+  void drawProceduralGenerator(ProceduralTextureParams& params) {
     ImGui::SetNextWindowSize({350.0F, 350.0F}, ImGuiCond_Once);
     if (ImGui::Begin("Procedural Generator")) {
       const char* patterns[] = {"Grid / Tiles", "Bricks"};

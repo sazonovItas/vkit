@@ -10,4 +10,4 @@ using Format = vk::Format;
 
 [[nodiscard]] auto getPixelByteSize(Format format) -> std::size_t;
 
-}  // namespace vkit::dataformat
+};  // namespace vkit::dataformat

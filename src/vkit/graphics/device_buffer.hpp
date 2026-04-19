@@ -21,7 +21,7 @@ class DeviceBuffer : public AllocatedBuffer {
                vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice.getAllocator(),
+      : AllocatedBuffer(gfxDevice.allocator,
                         vk::BufferCreateInfo{
                             {},
                             size,
@@ -37,7 +37,7 @@ class DeviceBuffer : public AllocatedBuffer {
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice.getAllocator(),
+      : AllocatedBuffer(gfxDevice.allocator,
                         vk::BufferCreateInfo{
                             {},
                             size,
@@ -56,7 +56,7 @@ class DeviceBuffer : public AllocatedBuffer {
                vk::Flags<vk::BufferUsageFlagBits> usage,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice.getAllocator(),
+      : AllocatedBuffer(gfxDevice.allocator,
                         vk::BufferCreateInfo{
                             {},
                             r.size() * sizeof(std::ranges::range_value_t<R>),
@@ -74,7 +74,7 @@ class DeviceBuffer : public AllocatedBuffer {
                vk::ArrayProxy<const std::uint32_t> queueFamilyIndices,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(gfxDevice.getAllocator(),
+      : AllocatedBuffer(gfxDevice.allocator,
                         vk::BufferCreateInfo{
                             {},
                             r.size() * sizeof(std::ranges::range_value_t<R>),

@@ -18,7 +18,7 @@ void DeviceBuffer::copy(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
     cb.copyBuffer2(copy_buffer_info);
   };
 
-  util::recordAndSubmit(gfxDevice.getDevice(), gfxDevice.queues.transfer,
+  util::recordAndSubmit(gfxDevice.get(), gfxDevice.queues.transfer,
                         gfxDevice.getTransferCommandPool(), copy_buffer_fn);
 }
 
