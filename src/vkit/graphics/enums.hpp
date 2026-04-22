@@ -2,11 +2,19 @@
 
 namespace vkit::graphics {
 
-enum class TextureType { k1D, k2D, kCubeMap, k3D };
+enum class TextureType {
+  k1D,
+  k1DArray,
+  k2D,
+  k2DArray,
+  kCubeMap,
+  kCubeArray,
+  k3D,
+};
 
-auto getImageType(TextureType type) -> vk::ImageType;
+auto toVkImageType(TextureType type) -> vk::ImageType;
 
-auto getImageViewType(TextureType type) -> vk::ImageViewType;
+auto toVkImageViewType(TextureType type) -> vk::ImageViewType;
 
 enum class SampleCount { k1, k4, k8, k16, k32 };
 

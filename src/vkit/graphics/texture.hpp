@@ -38,6 +38,7 @@ class Texture {
       -> vk::UniqueImageView;
 
   [[nodiscard]] auto getImage() const -> Image;
+  [[nodiscard]] auto getView() const -> vk::ImageView;
   [[nodiscard]] auto getTextureType() const -> TextureType;
   [[nodiscard]] auto getPixelFormat() const -> dataformat::Format;
   [[nodiscard]] auto getWidth(std::uint32_t level = 0) const -> int;
@@ -58,10 +59,16 @@ class Texture {
   bool useMipmaps_{false};
 
   AllocatedImage image_;
+  vk::UniqueImageView view_;
 
   static auto createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)
       -> AllocatedImage;
+};
+
+struct TextureBinding {
+  vk::Sampler sampler;
+  std::shared_ptr<Texture> texture;
 };
 
 };  // namespace vkit::graphics

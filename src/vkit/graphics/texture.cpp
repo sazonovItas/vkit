@@ -30,7 +30,8 @@ Texture::Texture(vma::Allocator allocator,
     : type_{createInfo.type},
       sampleCount_{createInfo.sampleCount},
       useMipmaps_{createInfo.useMipmaps},
-      image_{createAllocatedImage(allocator, createInfo)} {
+      image_{createAllocatedImage(allocator, createInfo)},
+      view_{makeImageView(rsInfo.device)} {
   if (createInfo.buffer != nullptr) {
     update(rsInfo, *createInfo.buffer);
   }
@@ -41,7 +42,7 @@ Texture::Texture(vma::Allocator allocator,
 }
 
 auto Texture::makeImageView(vk::Device device) const -> vk::UniqueImageView {
-  auto ci = image_.getViewCreateInfo(getImageViewType(type_));
+  auto ci = image_.getViewCreateInfo(toVkImageViewType(type_));
   return device.createImageViewUnique(ci);
 }
 
@@ -59,12 +60,14 @@ auto Texture::makeImageView(vk::Device device, std::uint32_t baseMipLevel,
       .setBaseArrayLayer(baseArrayLayer)
       .setLayerCount(layerCount);
 
-  auto ci = image_.getViewCreateInfo(subresource, getImageViewType(type_));
+  auto ci = image_.getViewCreateInfo(subresource, toVkImageViewType(type_));
 
   return device.createImageViewUnique(ci);
 }
 
 auto Texture::getImage() const -> Image { return image_; };
+
+auto Texture::getView() const -> vk::ImageView { return *view_; }
 
 auto Texture::getTextureType() const -> TextureType { return type_; }
 
@@ -267,7 +270,7 @@ auto Texture::createAllocatedImage(vma::Allocator allocator,
   auto mip_levels = createInfo.useMipmaps ? createInfo.levelCount : 1;
 
   auto image_ci = vk::ImageCreateInfo{};
-  image_ci.setImageType(getImageType(createInfo.type))
+  image_ci.setImageType(toVkImageType(createInfo.type))
       .setFormat(createInfo.pixelFormat)
       .setExtent(
           getExtent3D(createInfo.width, createInfo.height, createInfo.depth))

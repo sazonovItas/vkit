@@ -1,5 +1,7 @@
 #include "vkit/dataformat/vertex_format.hpp"
 
+#include "vulkan/vulkan.hpp"
+
 namespace vkit::dataformat {
 
 auto c_str(const AttributeUsage usage) -> const char* {
@@ -26,6 +28,27 @@ auto c_str(const AttributeUsage usage) -> const char* {
       return "custom";
     default:
       return "?";
+  }
+}
+
+auto getBufferUsage(AttributeUsage usage) -> BufferUsageFlags {
+  switch (usage) {
+    case AttributeUsage::kIndex:
+      return vk::BufferUsageFlagBits::eIndexBuffer |
+             vk::BufferUsageFlagBits::eTransferDst;
+
+    case AttributeUsage::kPosition:
+    case AttributeUsage::kNormal:
+    case AttributeUsage::kTangent:
+    case AttributeUsage::kBitangent:
+    case AttributeUsage::kColor:
+    case AttributeUsage::kTexCoord:
+    case AttributeUsage::kJointIndices:
+    case AttributeUsage::kJointWeights:
+    case AttributeUsage::kCustom:
+    case AttributeUsage::kNone:
+    default:
+      return vk::BufferUsageFlagBits::eTransferDst;
   }
 }
 

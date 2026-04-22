@@ -11,10 +11,12 @@ namespace vkit::graphics {
 
 class DeviceBuffer : public AllocatedBuffer {
  public:
-  DeviceBuffer(vma::Allocator allocator, const vk::BufferCreateInfo& createInfo,
+  DeviceBuffer(vk::Device device, vma::Allocator allocator,
+               const vk::BufferCreateInfo& createInfo,
                const vma::AllocationCreateInfo& allocationCreateInfo =
                    allocation::kDeviceLocal)
-      : AllocatedBuffer(allocator, createInfo, allocationCreateInfo) {}
+      : AllocatedBuffer(allocator, createInfo, allocationCreateInfo),
+        bufferDeviceAddress_{getAddress(device)} {}
 
   DeviceBuffer(vma::Allocator allocator,
                const util::RecordAndSubmitInfo& rsInfo, vk::Buffer srcBuffer,
@@ -28,7 +30,8 @@ class DeviceBuffer : public AllocatedBuffer {
                             size,
                             usage | vk::BufferUsageFlagBits::eTransferDst,
                         },
-                        allocationCreateInfo) {
+                        allocationCreateInfo),
+        bufferDeviceAddress_(getAddress(rsInfo.device)) {
     copy(rsInfo, srcBuffer, offset, {}, size);
   }
 
@@ -47,7 +50,8 @@ class DeviceBuffer : public AllocatedBuffer {
                             util::getSharingMode(queueFamilyIndices),
                             queueFamilyIndices,
                         },
-                        allocationCreateInfo) {
+                        allocationCreateInfo),
+        bufferDeviceAddress_(getAddress(rsInfo.device)) {
     copy(rsInfo, srcBuffer, offset, {}, size);
   }
 
@@ -66,7 +70,8 @@ class DeviceBuffer : public AllocatedBuffer {
                             r.size() * sizeof(std::ranges::range_value_t<R>),
                             usage | vk::BufferUsageFlagBits::eTransferDst,
                         },
-                        allocationCreateInfo) {
+                        allocationCreateInfo),
+        bufferDeviceAddress_(getAddress(rsInfo.device)) {
     update(rsInfo, fromRange, r);
   }
 
@@ -88,7 +93,8 @@ class DeviceBuffer : public AllocatedBuffer {
                             util::getSharingMode(queueFamilyIndices),
                             queueFamilyIndices,
                         },
-                        allocationCreateInfo) {
+                        allocationCreateInfo),
+        bufferDeviceAddress_(getAddress(rsInfo.device)) {
     update(rsInfo, fromRange, r);
   }
 
@@ -103,6 +109,10 @@ class DeviceBuffer : public AllocatedBuffer {
         std::move(static_cast<AllocatedBuffer&>(src));
     return *this;
   };
+
+  [[nodiscard]] auto getAddress() const -> vk::DeviceAddress {
+    return bufferDeviceAddress_;
+  }
 
   [[nodiscard]] auto getAddress(vk::Device device) const noexcept
       -> vk::DeviceAddress {
@@ -150,6 +160,8 @@ class DeviceBuffer : public AllocatedBuffer {
   }
 
  private:
+  vk::DeviceAddress bufferDeviceAddress_{0};
+
   explicit DeviceBuffer(AllocatedBuffer&& allocatedBuffer)
       : AllocatedBuffer{std::move(allocatedBuffer)} {}
 

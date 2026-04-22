@@ -71,7 +71,6 @@ void main() {
         }
     }
     
-    // Average the integration
     irradiance = PI * irradiance * (1.0 / float(nrSamples));
 
     writeStorageImage(pcs.outIrradianceMapIdx, texelCoord, vec4(irradiance, 1.0));
