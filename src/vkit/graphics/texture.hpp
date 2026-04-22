@@ -1,12 +1,10 @@
 #pragma once
 
-#include <stb_image.h>
-
 #include "vkit/dataformat/dataformat.hpp"
 #include "vkit/graphics/buffer.hpp"
-#include "vkit/graphics/device.hpp"
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
+#include "vkit/graphics/util.hpp"
 
 namespace vkit::graphics {
 
@@ -27,10 +25,13 @@ struct TextureCreateInfo {
 
 class Texture {
  public:
-  Texture(GfxDevice& gfxDevice, const TextureCreateInfo& createInfo);
+  Texture(vma::Allocator allocator, const util::RecordAndSubmitInfo& rsInfo,
+          const TextureCreateInfo& createInfo);
 
-  [[nodiscard]] auto makeImageView() const -> vk::UniqueImageView;
-  [[nodiscard]] auto makeImageView(std::uint32_t baseMipLevel,
+  [[nodiscard]] auto makeImageView(vk::Device device) const
+      -> vk::UniqueImageView;
+  [[nodiscard]] auto makeImageView(vk::Device device,
+                                   std::uint32_t baseMipLevel,
                                    std::uint32_t levelCount,
                                    std::uint32_t baseArrayLayer,
                                    std::uint32_t layerCount) const
@@ -47,20 +48,18 @@ class Texture {
   [[nodiscard]] auto getSampleCount() const -> SampleCount;
   [[nodiscard]] auto isLayered() const -> bool;
 
-  void update(const Buffer& buffer);
+  void update(const util::RecordAndSubmitInfo& info, const Buffer& buffer);
 
-  void generateMipmaps();
+  void generateMipmaps(const util::RecordAndSubmitInfo& info);
 
  private:
-  const GfxDevice& device_;
-
   TextureType type_{TextureType::k2D};
   SampleCount sampleCount_{SampleCount::k1};
   bool useMipmaps_{false};
 
   AllocatedImage image_;
 
-  static auto createAllocatedImage(GfxDevice& device,
+  static auto createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)
       -> AllocatedImage;
 };

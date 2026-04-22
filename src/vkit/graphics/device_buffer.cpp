@@ -1,12 +1,12 @@
 #include "vkit/graphics/device_buffer.hpp"
 
-#include "vkit/graphics/device.hpp"
+#include "vkit/graphics/util.hpp"
 
 namespace vkit::graphics {
 
-void DeviceBuffer::copy(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
-                        std::size_t srcOffset, std::size_t dstOffset,
-                        vk::DeviceSize size) {
+void DeviceBuffer::copy(const util::RecordAndSubmitInfo& info,
+                        vk::Buffer srcBuffer, std::size_t srcOffset,
+                        std::size_t dstOffset, vk::DeviceSize size) {
   auto copy_buffer_fn = [&](vk::CommandBuffer cb) {
     auto buffer_copy = vk::BufferCopy2{};
     buffer_copy.setSize(size).setSrcOffset(srcOffset).setDstOffset(dstOffset);
@@ -18,8 +18,7 @@ void DeviceBuffer::copy(const GfxDevice& gfxDevice, vk::Buffer srcBuffer,
     cb.copyBuffer2(copy_buffer_info);
   };
 
-  util::recordAndSubmit(gfxDevice.get(), gfxDevice.queues.transfer,
-                        gfxDevice.getTransferCommandPool(), copy_buffer_fn);
+  util::recordAndSubmit(info, copy_buffer_fn);
 }
 
 };  // namespace vkit::graphics

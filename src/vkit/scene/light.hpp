@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vkit/scene/item.hpp"
+
 namespace vkit::scene {
 
 enum class LightType : std::uint32_t {
@@ -8,7 +10,7 @@ enum class LightType : std::uint32_t {
   kSpot,
 };
 
-class Light {
+class Light : public Item {
  public:
   using Type = LightType;
 

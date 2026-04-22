@@ -19,8 +19,4 @@ struct VertexAttributeInfo {
   std::size_t size{0};
 };
 
-struct VertexAttribute {
-  VertexAttributeInfo info;
-};
-
 };  // namespace vkit::primitive

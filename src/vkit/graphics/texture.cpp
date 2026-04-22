@@ -2,7 +2,6 @@
 
 #include <stdexcept>
 
-#include "vkit/graphics/device.hpp"
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
 #include "vkit/graphics/util.hpp"
@@ -25,27 +24,28 @@ auto getTextureLevelCount(int width, int height, int depth) -> int {
   return Image::maxMipLevels(getExtent3D(width, height, depth));
 }
 
-Texture::Texture(GfxDevice& gfxDevice, const TextureCreateInfo& createInfo)
-    : device_{gfxDevice},
-      type_{createInfo.type},
+Texture::Texture(vma::Allocator allocator,
+                 const util::RecordAndSubmitInfo& rsInfo,
+                 const TextureCreateInfo& createInfo)
+    : type_{createInfo.type},
       sampleCount_{createInfo.sampleCount},
       useMipmaps_{createInfo.useMipmaps},
-      image_{createAllocatedImage(gfxDevice, createInfo)} {
+      image_{createAllocatedImage(allocator, createInfo)} {
   if (createInfo.buffer != nullptr) {
-    update(*createInfo.buffer);
+    update(rsInfo, *createInfo.buffer);
   }
 
   if (useMipmaps_) {
-    generateMipmaps();
+    generateMipmaps(rsInfo);
   }
 }
 
-auto Texture::makeImageView() const -> vk::UniqueImageView {
+auto Texture::makeImageView(vk::Device device) const -> vk::UniqueImageView {
   auto ci = image_.getViewCreateInfo(getImageViewType(type_));
-  return device_.get().createImageViewUnique(ci);
+  return device.createImageViewUnique(ci);
 }
 
-auto Texture::makeImageView(std::uint32_t baseMipLevel,
+auto Texture::makeImageView(vk::Device device, std::uint32_t baseMipLevel,
                             std::uint32_t levelCount,
                             std::uint32_t baseArrayLayer,
                             std::uint32_t layerCount) const
@@ -61,7 +61,7 @@ auto Texture::makeImageView(std::uint32_t baseMipLevel,
 
   auto ci = image_.getViewCreateInfo(subresource, getImageViewType(type_));
 
-  return device_.get().createImageViewUnique(ci);
+  return device.createImageViewUnique(ci);
 }
 
 auto Texture::getImage() const -> Image { return image_; };
@@ -92,7 +92,8 @@ auto Texture::getSampleCount() const -> SampleCount { return sampleCount_; }
 
 auto Texture::isLayered() const -> bool { return image_.arrayLayers > 1; }
 
-void Texture::update(const Buffer& buffer) {
+void Texture::update(const util::RecordAndSubmitInfo& info,
+                     const Buffer& buffer) {
   auto image_size_bytes = image_.getBaseMipSizeBytes();
   if (buffer.size != image_size_bytes) {
     throw std::runtime_error{
@@ -159,11 +160,10 @@ void Texture::update(const Buffer& buffer) {
     }
   };
 
-  util::recordAndSubmit(device_.get(), device_.queues.transfer,
-                        device_.getTransferCommandPool(), fn);
+  util::recordAndSubmit(info, fn);
 }
 
-void Texture::generateMipmaps() {
+void Texture::generateMipmaps(const util::RecordAndSubmitInfo& info) {
   if (!useMipmaps_) {
     return;
   }
@@ -258,11 +258,10 @@ void Texture::generateMipmaps() {
     }
   };
 
-  util::recordAndSubmit(device_.get(), device_.queues.graphicsPresent,
-                        device_.getGraphicsPresentCommandPool(), fn);
+  util::recordAndSubmit(info, fn);
 }
 
-auto Texture::createAllocatedImage(GfxDevice& device,
+auto Texture::createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)
     -> AllocatedImage {
   auto mip_levels = createInfo.useMipmaps ? createInfo.levelCount : 1;
@@ -276,7 +275,7 @@ auto Texture::createAllocatedImage(GfxDevice& device,
       .setMipLevels(mip_levels)
       .setArrayLayers(createInfo.arrayLayerCount);
 
-  return AllocatedImage{device.allocator, image_ci};
+  return AllocatedImage{allocator, image_ci};
 }
 
 };  // namespace vkit::graphics
