@@ -21,13 +21,19 @@ auto Link::getSrc() const -> Pin* { return src_; }
 
 auto Link::getSink() const -> Pin* { return sink_; }
 
-auto Link::isConnected() const -> bool { return (src_ != nullptr) && (sink_ != nullptr); }
+auto Link::isConnected() const -> bool {
+  return (src_ != nullptr) && (sink_ != nullptr);
+}
 
 void Link::disconnect() {
-  src_->removeLink(this);
-  sink_->removeLink(this);
-  src_ = nullptr;
-  sink_ = nullptr;
+  if (src_) {
+    src_->removeLink(this);
+    src_ = nullptr;
+  }
+  if (sink_) {
+    sink_->removeLink(this);
+    sink_ = nullptr;
+  }
 }
 
 };  // namespace vkit::graph

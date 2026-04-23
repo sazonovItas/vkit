@@ -7,7 +7,8 @@
 
 namespace vkit::graph {
 
-Pin::Pin(Node* ownerNode, std::size_t slot, bool isSrc, std::size_t key, std::string_view name)
+Pin::Pin(Node* ownerNode, std::size_t slot, bool isSrc, std::size_t key,
+         std::string_view name)
     : id_{makeGraphId()},
       key_{key},
       ownerNode_{ownerNode},
@@ -30,8 +31,11 @@ auto Pin::getName() const -> std::string_view { return name_; }
 void Pin::addLink(Link* link) { links_.push_back(link); }
 
 void Pin::removeLink(Link* link) {
-  auto i = std::ranges::find_if(links_, [link](Link* entry) { return entry == link; });
-  links_.erase(i);
+  auto i = std::ranges::find_if(links_,
+                                [link](Link* entry) { return entry == link; });
+  if (i != links_.end()) {
+    links_.erase(i);
+  }
 }
 
 auto Pin::getLinks() const -> const std::vector<Link*>& { return links_; }
@@ -41,5 +45,7 @@ auto Pin::getLinks() -> std::vector<Link*>& { return links_; }
 auto Pin::getOwnerNode() const -> Node* { return ownerNode_; }
 
 auto Pin::getSlot() const -> std::size_t { return slot_; }
+
+void Pin::setOwnerNode(Node* node) { ownerNode_ = node; }
 
 };  // namespace vkit::graph

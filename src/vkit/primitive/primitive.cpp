@@ -1,13 +1,11 @@
 #include "vkit/primitive/primitive.hpp"
 
-#include "vkit/graphics/buffer.hpp"
-
 namespace vkit::primitive {
 
-Primitive::Primitive(std::shared_ptr<DeviceBuffers> buffers, Mode mode,
-                     const PrimitiveAttributes& attrs)
-    : buffers_{std::move(buffers)},
-      mode{mode},
+Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
+                     VertexMode mode, const PrimitiveAttributes& attrs)
+    : buffers_{buffers},
+      vertexMode{mode},
       attrs{createDeviceAttributes(attrs)} {}
 
 auto Primitive::createDeviceAttributes(const PrimitiveAttributes& attrs) const

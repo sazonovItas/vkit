@@ -3,7 +3,6 @@
 namespace vkit::graph {
 
 class Pin;
-class Link;
 
 class Link {
  public:

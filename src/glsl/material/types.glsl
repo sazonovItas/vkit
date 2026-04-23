@@ -6,7 +6,7 @@ struct Attribute {
     uint offset;
     uint stride;
     uint format;
-    uint _pad0;
+    uint count;
 };
 
 struct Primitive {

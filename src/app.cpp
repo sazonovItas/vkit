@@ -37,8 +37,6 @@
 #include "vulkan/pipeline_layout/procedural_texture.hpp"
 #include "vulkan/pipeline_layout/skybox.hpp"
 
-VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE;
-
 #define MODEL_PATH "models/sphere/scene.gltf"
 #define ENVIRONMENT_MAP_PATH "environment/ferndale_studio_03_4k.hdr"
 

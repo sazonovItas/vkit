@@ -9,7 +9,6 @@ namespace vkit::graph {
 class Node;
 class Pin;
 class Link;
-class Graph;
 
 [[nodiscard]] inline auto makeGraphId() -> int {
   static std::atomic<int> counter{1};

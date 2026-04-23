@@ -1,9 +1,12 @@
 #pragma once
 
+#include <string>
+#include <string_view>
+#include <vector>
+
 namespace vkit::graph {
 
 class Node;
-class Pin;
 class Link;
 
 class Pin {
@@ -28,6 +31,8 @@ class Pin {
   [[nodiscard]] auto getLinks() -> std::vector<Link*>&;
   [[nodiscard]] auto getOwnerNode() const -> Node*;
   [[nodiscard]] auto getSlot() const -> std::size_t;
+
+  void setOwnerNode(Node* node);
 
  protected:
   int id_;

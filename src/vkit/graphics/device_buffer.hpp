@@ -162,9 +162,6 @@ class DeviceBuffer : public AllocatedBuffer {
  private:
   vk::DeviceAddress bufferDeviceAddress_{0};
 
-  explicit DeviceBuffer(AllocatedBuffer&& allocatedBuffer)
-      : AllocatedBuffer{std::move(allocatedBuffer)} {}
-
   void copy(const util::RecordAndSubmitInfo& info, vk::Buffer srcBuffer,
             std::size_t srcOffset, std::size_t dstOffset, std::size_t size);
 };

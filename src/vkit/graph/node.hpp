@@ -7,17 +7,17 @@
 
 namespace vkit::graph {
 
-class Graph;
-
 class Node {
  public:
   Node();
   explicit Node(std::string_view name);
   Node(const Node&);
   Node& operator=(const Node&);
+  virtual ~Node() = default;
 
  protected:
   int graphNodeId_;
+  std::string name_;
   std::vector<Pin> inputPins_;
   std::vector<Pin> outputPins_;
 };
