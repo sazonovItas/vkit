@@ -3,59 +3,60 @@
 
 #include "types.glsl"
 
-// NOTE: formats fully depends on the Vulkan VK_FORMAT
-#define FORMAT_R32G32B32_SFLOAT   106u
-#define FORMAT_R32G32B32A32_SFLOAT 109u
+// Float32 (4 bytes)
+#define ATTR_FORMAT_SCALAR_FLOAT32 1u
+#define ATTR_FORMAT_VEC2_FLOAT32   2u
+#define ATTR_FORMAT_VEC3_FLOAT32   3u
+#define ATTR_FORMAT_VEC4_FLOAT32   4u
 
-#define FORMAT_R32G32_SFLOAT      103u
-#define FORMAT_R32_SFLOAT         100u
+// UInt32 (4 bytes)
+#define ATTR_FORMAT_SCALAR_UINT32  8u
+#define ATTR_FORMAT_VEC2_UINT32    9u
+#define ATTR_FORMAT_VEC3_UINT32    10u
+#define ATTR_FORMAT_VEC4_UINT32    11u
 
-#define FORMAT_R16G16B16A16_SFLOAT 89u
-#define FORMAT_R16G16_SFLOAT      79u
+// UInt16 (2 bytes)
+#define ATTR_FORMAT_SCALAR_UINT16  15u
+#define ATTR_FORMAT_VEC2_UINT16    16u
+#define ATTR_FORMAT_VEC3_UINT16    17u
+#define ATTR_FORMAT_VEC4_UINT16    18u
 
-#define FORMAT_R8G8B8A8_UNORM     37u
-#define FORMAT_R8G8B8A8_SNORM     38u
+// UInt8 (1 byte)
+#define ATTR_FORMAT_SCALAR_UINT8   29u
+#define ATTR_FORMAT_VEC2_UINT8     30u
+#define ATTR_FORMAT_VEC3_UINT8     31u
+#define ATTR_FORMAT_VEC4_UINT8     32u
 
-#define FORMAT_R8G8B8A8_UINT      41u
+// Int8 (1 byte)
+#define ATTR_FORMAT_SCALAR_INT8    36u
+#define ATTR_FORMAT_VEC2_INT8      37u
+#define ATTR_FORMAT_VEC3_INT8      38u
+#define ATTR_FORMAT_VEC4_INT8      39u
 
 
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer UIntRef { uint data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer UIntRef { uint data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer Vec2Ref { vec2 data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer Vec3Ref { vec3 data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer Vec4Ref { vec4 data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer UVec2Ref { uvec2 data; };
+layout(std430, buffer_reference, buffer_reference_align = 4) readonly buffer UVec4Ref { uvec4 data; };
 
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer Vec2Ref { vec2 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer Vec3Ref { vec3 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer Vec4Ref { vec4 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer IVec2Ref { ivec2 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer IVec3Ref { ivec3 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer IVec4Ref { ivec4 data; };
-
-layout(std430, buffer_reference, buffer_reference_align = 4)
-readonly buffer UVec4Ref { uvec4 data; };
 
 vec2 load_vec2(Attribute a, uvec2 addr) {
   switch (a.format)
   {
-    case FORMAT_R32G32_SFLOAT:
+    case ATTR_FORMAT_VEC2_FLOAT32:
       return Vec2Ref(addr).data;
 
-    case FORMAT_R16G16_SFLOAT:
-      return Vec2Ref(addr).data;
+    case ATTR_FORMAT_VEC2_UINT16:
+      return unpackUnorm2x16(UIntRef(addr).data);
 
-    case FORMAT_R8G8B8A8_UNORM:
+    case ATTR_FORMAT_VEC2_UINT8:
+    case ATTR_FORMAT_VEC4_UINT8:
       return unpackUnorm4x8(UIntRef(addr).data).xy;
 
-    case FORMAT_R8G8B8A8_SNORM:
+    case ATTR_FORMAT_VEC2_INT8:
+    case ATTR_FORMAT_VEC4_INT8:
       return unpackSnorm4x8(UIntRef(addr).data).xy;
   }
 
@@ -65,16 +66,15 @@ vec2 load_vec2(Attribute a, uvec2 addr) {
 vec3 load_vec3(Attribute a, uvec2 addr) {
   switch (a.format)
   {
-    case FORMAT_R32G32B32_SFLOAT:
+    case ATTR_FORMAT_VEC3_FLOAT32:
       return Vec3Ref(addr).data;
 
-    case FORMAT_R16G16B16A16_SFLOAT:
-      return Vec3Ref(addr).data;
-
-    case FORMAT_R8G8B8A8_UNORM:
+    case ATTR_FORMAT_VEC3_UINT8:
+    case ATTR_FORMAT_VEC4_UINT8:
       return unpackUnorm4x8(UIntRef(addr).data).xyz;
 
-    case FORMAT_R8G8B8A8_SNORM:
+    case ATTR_FORMAT_VEC3_INT8:
+    case ATTR_FORMAT_VEC4_INT8:
       return unpackSnorm4x8(UIntRef(addr).data).xyz;
   }
 
@@ -84,13 +84,13 @@ vec3 load_vec3(Attribute a, uvec2 addr) {
 vec4 load_vec4(Attribute a, uvec2 addr) {
   switch (a.format)
   {
-    case FORMAT_R32G32B32A32_SFLOAT:
+    case ATTR_FORMAT_VEC4_FLOAT32:
       return Vec4Ref(addr).data;
 
-    case FORMAT_R8G8B8A8_UNORM:
+    case ATTR_FORMAT_VEC4_UINT8:
       return unpackUnorm4x8(UIntRef(addr).data);
 
-    case FORMAT_R8G8B8A8_SNORM:
+    case ATTR_FORMAT_VEC4_INT8:
       return unpackSnorm4x8(UIntRef(addr).data);
   }
 
@@ -100,12 +100,31 @@ vec4 load_vec4(Attribute a, uvec2 addr) {
 uvec4 load_uvec4(Attribute a, uvec2 addr) {
   switch (a.format)
   {
-    case FORMAT_R8G8B8A8_UINT:
+    case ATTR_FORMAT_VEC4_UINT32:
       return UVec4Ref(addr).data;
+    
+    case ATTR_FORMAT_VEC4_UINT16: {
+      uvec2 raw = UVec2Ref(addr).data;
+      return uvec4(
+        raw.x & 0xFFFFu, raw.x >> 16u, 
+        raw.y & 0xFFFFu, raw.y >> 16u
+      );
+    }
+
+    case ATTR_FORMAT_VEC4_UINT8: {
+      uint raw = UIntRef(addr).data;
+      return uvec4(
+        raw & 0xFFu, 
+        (raw >> 8u) & 0xFFu, 
+        (raw >> 16u) & 0xFFu, 
+        (raw >> 24u) & 0xFFu
+      );
+    }
   }
 
   return uvec4(0);
 }
+
 
 vec3 getPosition(Primitive prim, uint idx) {
   Attribute a = prim.position;
@@ -117,9 +136,9 @@ vec3 getNormal(Primitive prim, uint idx) {
   return load_vec3(a, getFetchAddress(a, idx));
 }
 
-vec3 getTangent(Primitive prim, uint idx) {
+vec4 getTangent(Primitive prim, uint idx) {
   Attribute a = prim.tangent;
-  return load_vec3(a, getFetchAddress(a, idx));
+  return load_vec4(a, getFetchAddress(a, idx));
 }
 
 vec3 getBitangent(Primitive prim, uint idx) {

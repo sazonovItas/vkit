@@ -1,5 +1,5 @@
-#ifndef BSDF_MATH_GLSL
-#define BSDF_MATH_GLSL
+#ifndef MATERIAL_BSDF_MATH_GLSL
+#define MATERIAL_BSDF_MATH_GLSL
 
 const float PI = 3.14159265359;
 
@@ -68,4 +68,26 @@ vec2 directionToUV(vec3 v) {
   return uv;
 }
 
-#endif // BSDF_MATH_GLSL
+float D_Charlie(float roughness, float dotNH) {
+    float alpha = max(roughness, 0.000001);
+    float invAlpha = 1.0 / alpha;
+    float cos2h = dotNH * dotNH;
+    float sin2h = max(1.0 - cos2h, 0.0078125); 
+    return (2.0 + invAlpha) * pow(sin2h, invAlpha * 0.5) / (2.0 * PI);
+}
+
+float D_GGX_Anisotropic(float at, float ab, float dotToH, float dotBoH, float dotNH) {
+    float a2 = at * ab;
+    vec3 d = vec3(ab * dotToH, at * dotBoH, a2 * dotNH);
+    float d2 = dot(d, d);
+    float b2 = a2 / d2;
+    return a2 * b2 * b2 * (1.0 / PI);
+}
+
+vec3 calculateVolumeAttenuation(float thickness, float attenuationDistance, vec3 attenuationColor) {
+    if (attenuationDistance == 0.0 || thickness == 0.0) return vec3(1.0);
+    vec3 attenuationCoefficient = -log(attenuationColor) / attenuationDistance;
+    return exp(-attenuationCoefficient * thickness);
+}
+
+#endif // MATERIAL_BSDF_MATH_GLSL

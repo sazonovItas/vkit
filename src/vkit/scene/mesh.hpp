@@ -11,7 +11,7 @@ namespace vkit::scene {
 
 struct MeshPrimitive {
   std::shared_ptr<primitive::Primitive> geometry;
-  std::shared_ptr<Material> material;
+  std::shared_ptr<MaterialBsdf> material;
 };
 
 class Mesh : public NodeAttachment {

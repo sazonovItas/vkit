@@ -2,11 +2,11 @@
 #define TYPES_GLSL
 
 struct Attribute {
-    uvec2 bufferAddress;
+    uvec2 addr;
+    uint count;
     uint offset;
     uint stride;
     uint format;
-    uint count;
 };
 
 struct Primitive {
@@ -22,7 +22,7 @@ struct Primitive {
 
 bool isAttributeExisting(Attribute attr)
 {
-    return (attr.bufferAddress.x != 0u || attr.bufferAddress.y != 0u);
+    return (attr.addr.x != 0u || attr.addr.y != 0u);
 }
 
 uvec2 add64(uvec2 a, uint b)
@@ -42,7 +42,7 @@ uvec2 add64(uvec2 a, uvec2 b)
 uvec2 getFetchAddress(Attribute attr, uint vertexIndex)
 {
     uint byteOffset = attr.offset + attr.stride * vertexIndex;
-    return add64(attr.bufferAddress, byteOffset);
+    return add64(attr.addr, byteOffset);
 }
 
 #endif // TYPES_GLSL

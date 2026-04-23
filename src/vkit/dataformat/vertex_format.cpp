@@ -52,4 +52,132 @@ auto getBufferUsage(AttributeUsage usage) -> BufferUsageFlags {
   }
 }
 
+[[nodiscard]] auto getComponentCount(AttributeFormat format) -> std::size_t {
+  switch (format) {
+    // Scalars
+    case AttributeFormat::kScalarFloat32:
+    case AttributeFormat::kScalarUInt32:
+    case AttributeFormat::kScalarUInt16:
+    case AttributeFormat::kScalarInt16:
+    case AttributeFormat::kScalarUInt8:
+    case AttributeFormat::kScalarInt8:
+      return 1;
+
+    // Vec2
+    case AttributeFormat::kVec2Float32:
+    case AttributeFormat::kVec2UInt32:
+    case AttributeFormat::kVec2UInt16:
+    case AttributeFormat::kVec2Int16:
+    case AttributeFormat::kVec2UInt8:
+    case AttributeFormat::kVec2Int8:
+      return 2;
+
+    // Vec3
+    case AttributeFormat::kVec3Float32:
+    case AttributeFormat::kVec3UInt32:
+    case AttributeFormat::kVec3UInt16:
+    case AttributeFormat::kVec3Int16:
+    case AttributeFormat::kVec3UInt8:
+    case AttributeFormat::kVec3Int8:
+      return 3;
+
+    // Vec4 & Mat2 (2x2 = 4)
+    case AttributeFormat::kVec4Float32:
+    case AttributeFormat::kMat2Float32:
+    case AttributeFormat::kVec4UInt32:
+    case AttributeFormat::kMat2UInt32:
+    case AttributeFormat::kVec4UInt16:
+    case AttributeFormat::kMat2UInt16:
+    case AttributeFormat::kVec4Int16:
+    case AttributeFormat::kMat2Int16:
+    case AttributeFormat::kVec4UInt8:
+    case AttributeFormat::kMat2UInt8:
+    case AttributeFormat::kVec4Int8:
+    case AttributeFormat::kMat2Int8:
+      return 4;
+
+    // Mat3 (3x3 = 9)
+    case AttributeFormat::kMat3Float32:
+    case AttributeFormat::kMat3UInt32:
+    case AttributeFormat::kMat3UInt16:
+    case AttributeFormat::kMat3Int16:
+    case AttributeFormat::kMat3UInt8:
+    case AttributeFormat::kMat3Int8:
+      return 9;
+
+    // Mat4 (4x4 = 16)
+    case AttributeFormat::kMat4Float32:
+    case AttributeFormat::kMat4UInt32:
+    case AttributeFormat::kMat4UInt16:
+    case AttributeFormat::kMat4Int16:
+    case AttributeFormat::kMat4UInt8:
+    case AttributeFormat::kMat4Int8:
+      return 16;
+
+    default:
+      return 0;
+  }
+}
+
+[[nodiscard]] auto getComponentByteSize(AttributeFormat format) -> std::size_t {
+  switch (format) {
+    // 4 Bytes (Float32, UInt32)
+    case AttributeFormat::kScalarFloat32:
+    case AttributeFormat::kVec2Float32:
+    case AttributeFormat::kVec3Float32:
+    case AttributeFormat::kVec4Float32:
+    case AttributeFormat::kMat2Float32:
+    case AttributeFormat::kMat3Float32:
+    case AttributeFormat::kMat4Float32:
+
+    case AttributeFormat::kScalarUInt32:
+    case AttributeFormat::kVec2UInt32:
+    case AttributeFormat::kVec3UInt32:
+    case AttributeFormat::kVec4UInt32:
+    case AttributeFormat::kMat2UInt32:
+    case AttributeFormat::kMat3UInt32:
+    case AttributeFormat::kMat4UInt32:
+      return 4;
+
+    // 2 Bytes (UInt16, Int16)
+    case AttributeFormat::kScalarUInt16:
+    case AttributeFormat::kVec2UInt16:
+    case AttributeFormat::kVec3UInt16:
+    case AttributeFormat::kVec4UInt16:
+    case AttributeFormat::kMat2UInt16:
+    case AttributeFormat::kMat3UInt16:
+    case AttributeFormat::kMat4UInt16:
+
+    case AttributeFormat::kScalarInt16:
+    case AttributeFormat::kVec2Int16:
+    case AttributeFormat::kVec3Int16:
+    case AttributeFormat::kVec4Int16:
+    case AttributeFormat::kMat2Int16:
+    case AttributeFormat::kMat3Int16:
+    case AttributeFormat::kMat4Int16:
+      return 2;
+
+    // 1 Byte (UInt8, Int8)
+    case AttributeFormat::kScalarUInt8:
+    case AttributeFormat::kVec2UInt8:
+    case AttributeFormat::kVec3UInt8:
+    case AttributeFormat::kVec4UInt8:
+    case AttributeFormat::kMat2UInt8:
+    case AttributeFormat::kMat3UInt8:
+    case AttributeFormat::kMat4UInt8:
+
+    case AttributeFormat::kScalarInt8:
+    case AttributeFormat::kVec2Int8:
+    case AttributeFormat::kVec3Int8:
+    case AttributeFormat::kVec4Int8:
+    case AttributeFormat::kMat2Int8:
+    case AttributeFormat::kMat3Int8:
+    case AttributeFormat::kMat4Int8:
+      return 1;
+
+    default:
+      return 0;
+  }
+}
+
 };  // namespace vkit::dataformat

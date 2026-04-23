@@ -2,6 +2,11 @@ EXECUTABLE ?= ./build/vkit
 
 .PHONY: glslc
 glslc:
+	glslc ./src/glsl/material/primitive.vert -o ./assets/shaders/material/primitive.vert
+	glslc ./src/glsl/material/primitive_material_bsdf.frag -o ./assets/shaders/material/primitive_material_bsdf.frag
+	glslc ./src/glsl/material/ray_sphere.vert -o ./assets/shaders/material/ray_sphere.vert
+	glslc ./src/glsl/material/ray_sphere_material_bsdf.frag -o ./assets/shaders/material/ray_sphere_material_bsdf.frag
+
 	# primitive shader
 	glslc ./src/glsl/primitive.vert -o ./assets/shaders/primitive.vert
 	glslc ./src/glsl/primitive.frag -o ./assets/shaders/primitive.frag

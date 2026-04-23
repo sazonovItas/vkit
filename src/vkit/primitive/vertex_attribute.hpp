@@ -2,13 +2,12 @@
 
 #include <limits>
 
-#include "vkit/dataformat/dataformat.hpp"
 #include "vkit/dataformat/vertex_format.hpp"
 
 namespace vkit::primitive {
 
 struct AttributeInfo {
-  dataformat::Format format{dataformat::Format::eUndefined};
+  dataformat::AttributeFormat format{dataformat::AttributeFormat::kInvalid};
   dataformat::AttributeUsage usage{dataformat::AttributeUsage::kNone};
   std::size_t offset{std::numeric_limits<std::size_t>::max()};
   std::size_t stride{std::numeric_limits<std::size_t>::max()};
@@ -16,7 +15,7 @@ struct AttributeInfo {
   std::size_t count{0};
 
   auto isValid() const -> bool {
-    return format != dataformat::Format::eUndefined &&
+    return format != dataformat::AttributeFormat::kInvalid &&
            usage != dataformat::AttributeUsage::kNone &&
            offset != std::numeric_limits<std::size_t>::max() &&
            stride != std::numeric_limits<std::size_t>::max() && count != 0 &&
