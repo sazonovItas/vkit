@@ -1,8 +1,11 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <numbers>
 #include <optional>
+#include <string_view>
 
+#include "vkit/item/item.hpp"
 #include "vkit/scene/node_attachment.hpp"
 #include "vkit/scene/transform.hpp"
 
@@ -24,35 +27,116 @@ struct OrthographicParams {
   float zFar{100.0F};
 };
 
-class Camera : public NodeAttachment {
+class Camera : public Item<Camera>, public NodeAttachment {
  public:
-  explicit Camera(std::string_view name = "Camera") : NodeAttachment(name) {}
+  explicit Camera(std::string_view name = "Camera") : Item{name} {
+    updateProjection();
+    updateView();
+  }
 
-  [[nodiscard]] auto getType() const -> AttachmentType override {
+  [[nodiscard]] auto getAttachmentType() const -> AttachmentType override {
     return AttachmentType::kCamera;
   }
 
-  CameraType type{CameraType::kPerspective};
-  PerspectiveParams perspective;
-  OrthographicParams orthographic;
-
-  [[nodiscard]] auto getProjection(float fallbackAspectRatio = 16.0F /
-                                                               9.0F) const
-      -> Transform {
-    Transform proj;
-
-    if (type == CameraType::kPerspective) {
-      float aspect = perspective.aspectRatio.value_or(fallbackAspectRatio);
-      float z_far = perspective.zFar.value_or(10000.0F);
-      proj.setPerspective(perspective.fovY, aspect, perspective.zNear, z_far);
-    } else {
-      proj.setOrthographic(-orthographic.xMag, orthographic.xMag,
-                           -orthographic.yMag, orthographic.yMag,
-                           orthographic.zNear, orthographic.zFar);
-    }
-
-    return proj;
+  void setType(CameraType newType) {
+    type_ = newType;
+    updateProjection();
   }
+
+  void setPerspective(const PerspectiveParams& params) {
+    perspective_ = params;
+    updateProjection();
+  }
+
+  void setOrthographic(const OrthographicParams& params) {
+    orthographic_ = params;
+    updateProjection();
+  }
+
+  void setFallbackAspectRatio(float aspect) {
+    fallbackAspectRatio_ = aspect;
+    updateProjection();
+  }
+
+  void setAspectRatio(float aspect) {
+    perspective_.aspectRatio = aspect;
+    updateProjection();
+  }
+
+  void setPosition(glm::vec3 newPosition) {
+    position_ = newPosition;
+    updateView();
+  }
+
+  void setTarget(glm::vec3 newTarget) {
+    target_ = newTarget;
+    updateView();
+  }
+
+  void setUpVector(glm::vec3 newUp) {
+    up_ = newUp;
+    updateView();
+  }
+
+  void lookAt(glm::vec3 newPosition, glm::vec3 newTarget,
+              glm::vec3 newUp = glm::vec3(0.0F, 1.0F, 0.0F)) {
+    position_ = newPosition;
+    target_ = newTarget;
+    up_ = newUp;
+    updateView();
+  }
+
+  void setViewTransform(const Transform& transform) {
+    viewTransform_ = transform;
+  }
+
+  [[nodiscard]] auto getProjection() const -> const Transform& {
+    return projectionTransform_;
+  }
+  [[nodiscard]] auto getView() const -> const Transform& {
+    return viewTransform_;
+  }
+
+  [[nodiscard]] auto getPosition() const -> glm::vec3 { return position_; }
+  [[nodiscard]] auto getTarget() const -> glm::vec3 { return target_; }
+  [[nodiscard]] auto getUpVector() const -> glm::vec3 { return up_; }
+  [[nodiscard]] auto getCameraType() const -> CameraType { return type_; }
+  [[nodiscard]] auto getPerspectiveParams() const -> const PerspectiveParams& {
+    return perspective_;
+  }
+  [[nodiscard]] auto getOrthographicParams() const
+      -> const OrthographicParams& {
+    return orthographic_;
+  }
+
+ private:
+  CameraType type_{CameraType::kPerspective};
+  PerspectiveParams perspective_;
+  OrthographicParams orthographic_;
+
+  glm::vec3 position_{0.0F, 0.0F, 0.0F};
+  glm::vec3 target_{0.0F, 0.0F, -1.0F};
+  glm::vec3 up_{0.0F, 1.0F, 0.0F};
+
+  float fallbackAspectRatio_{16.0F / 9.0F};
+
+  Transform projectionTransform_;
+  Transform viewTransform_;
+
+  void updateProjection() {
+    if (type_ == CameraType::kPerspective) {
+      float aspect = perspective_.aspectRatio.value_or(fallbackAspectRatio_);
+      float z_far = perspective_.zFar.value_or(10000.0F);
+      projectionTransform_.setPerspective(perspective_.fovY, aspect,
+                                          perspective_.zNear, z_far);
+    } else {
+      projectionTransform_.setOrthographic(
+          -orthographic_.xMag, orthographic_.xMag, -orthographic_.yMag,
+          orthographic_.yMag, orthographic_.zNear, orthographic_.zFar);
+    }
+  }
+
+  void updateView() { viewTransform_.setView(position_, target_, up_); }
 };
 
 };  // namespace vkit::scene

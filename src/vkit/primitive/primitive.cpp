@@ -8,6 +8,24 @@ Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
       vertexMode{mode},
       attrs{createDeviceAttributes(attrs)} {}
 
+void Primitive::attach(const std::shared_ptr<PrimitiveAttachment>& attachment) {
+  if (attachment) {
+    attachment->setNode(this);
+    attachments_.push_back(attachment);
+  }
+}
+
+void Primitive::detach(PrimitiveAttachment* attachment) {
+  std::erase_if(attachments_,
+                [attachment](const std::shared_ptr<PrimitiveAttachment>& a) {
+                  if (a.get() == attachment) {
+                    a->setNode(nullptr);
+                    return true;
+                  }
+                  return false;
+                });
+}
+
 auto Primitive::createDeviceAttributes(const PrimitiveAttributes& attrs) const
     -> DevicePrimitiveAttributes {
   DevicePrimitiveAttributes out{};

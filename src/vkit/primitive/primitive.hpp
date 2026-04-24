@@ -4,6 +4,7 @@
 
 #include "vkit/primitive/buffers.hpp"
 #include "vkit/primitive/enums.hpp"
+#include "vkit/primitive/primitive_attachment.hpp"
 #include "vkit/primitive/vertex_attribute.hpp"
 
 namespace vkit::primitive {
@@ -42,6 +43,9 @@ class Primitive {
 
   VertexMode vertexMode;
   DevicePrimitiveAttributes attrs;
+
+  void attach(const std::shared_ptr<PrimitiveAttachment>& attachment);
+  void detach(PrimitiveAttachment* attachment);
 
   auto getIndexBuffer() const
       -> const std::shared_ptr<graphics::DeviceBuffer>& {
@@ -91,6 +95,7 @@ class Primitive {
 
  private:
   std::shared_ptr<DeviceBuffers> buffers_;
+  std::vector<std::shared_ptr<PrimitiveAttachment>> attachments_;
 
   auto createDeviceAttributes(const PrimitiveAttributes& attrs) const
       -> DevicePrimitiveAttributes;

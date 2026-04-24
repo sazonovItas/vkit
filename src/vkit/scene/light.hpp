@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <numbers>
 
+#include "vkit/item/item.hpp"
 #include "vkit/scene/node_attachment.hpp"
 
 namespace vkit::scene {
@@ -14,7 +15,7 @@ enum class LightType : std::uint32_t {
   kSpot,
 };
 
-class Light : public NodeAttachment {
+class Light : public Item<Light>, public NodeAttachment {
  public:
   using Type = LightType;
 
@@ -24,11 +25,7 @@ class Light : public NodeAttachment {
       "Spot",
   };
 
-  explicit Light(std::string_view name = "Light") : NodeAttachment(name) {}
-
-  [[nodiscard]] auto getType() const -> AttachmentType override {
-    return AttachmentType::kLight;
-  }
+  explicit Light(std::string_view name = "Light") : Item(name) {}
 
   Type type{Type::kDirectional};
   glm::vec3 color{1.0F, 1.0F, 1.0F};

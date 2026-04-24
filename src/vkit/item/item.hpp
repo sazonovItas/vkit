@@ -2,7 +2,7 @@
 
 #include <atomic>
 
-namespace vkit::scene {
+namespace vkit {
 
 template <class T>
 class UniqueId {
@@ -39,6 +39,7 @@ class UniqueId {
   IdType id_{kNullId};
 };
 
+template <class T>
 class Item {
  public:
   explicit Item(std::string_view name);
@@ -49,8 +50,8 @@ class Item {
   void setName(std::string_view name);
 
  protected:
-  UniqueId<Item> id_;
+  UniqueId<T> id_;
   std::string name_;
 };
 
-};  // namespace vkit::scene
+};  // namespace vkit

@@ -7,13 +7,12 @@
 #include "vkit/scene/camera.hpp"
 #include "vkit/scene/item.hpp"
 #include "vkit/scene/light.hpp"
-#include "vkit/scene/mesh.hpp"
 #include "vkit/scene/node.hpp"
 #include "vkit/scene/skin.hpp"
 
 namespace vkit::scene {
 
-class Scene : public Item {
+class Scene : public Item<Scene> {
  public:
   explicit Scene(std::string_view name = "Scene");
 

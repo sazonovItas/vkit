@@ -1,43 +1,34 @@
 #pragma once
 
-#include <memory>
 #include <vector>
 
+#include "vkit/item/item.hpp"
 #include "vkit/primitive/primitive.hpp"
-#include "vkit/scene/material.hpp"
 #include "vkit/scene/node_attachment.hpp"
 
 namespace vkit::scene {
 
-struct MeshPrimitive {
-  std::shared_ptr<primitive::Primitive> geometry;
-  std::shared_ptr<MaterialBsdf> material;
-};
-
-class Mesh : public NodeAttachment {
+class Mesh : public Item<Mesh>, public NodeAttachment {
  public:
   explicit Mesh(std::string_view name = "Mesh",
-                std::vector<MeshPrimitive> primitives = {})
-      : NodeAttachment(name), primitives_{std::move(primitives)} {}
-
-  [[nodiscard]] auto getType() const -> AttachmentType override {
-    return AttachmentType::kMesh;
-  }
+                const std::vector<vkit::primitive::Primitive>& primitives = {})
+      : Item(name), primitives_{std::move(primitives)} {}
 
   [[nodiscard]] auto getPrimitives() const
-      -> const std::vector<MeshPrimitive>& {
+      -> const std::vector<vkit::primitive::Primitive>& {
     return primitives_;
   }
-  [[nodiscard]] auto getPrimitives() -> std::vector<MeshPrimitive>& {
+  [[nodiscard]] auto getPrimitives()
+      -> std::vector<vkit::primitive::Primitive>& {
     return primitives_;
   }
 
-  void addPrimitive(MeshPrimitive primitive) {
+  void addPrimitive(const vkit::primitive::Primitive& primitive) {
     primitives_.push_back(std::move(primitive));
   }
 
  private:
-  std::vector<MeshPrimitive> primitives_;
+  std::vector<vkit::primitive::Primitive> primitives_;
 };
 
 };  // namespace vkit::scene

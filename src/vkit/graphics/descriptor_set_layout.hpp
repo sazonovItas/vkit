@@ -1,6 +1,6 @@
 #pragma once
 
-namespace vkit::graphics::dsl {
+namespace vkit::graphics {
 
 struct DescriptorSetLayout : public vk::UniqueDescriptorSetLayout {
   DescriptorSetLayout(vk::Device device,
@@ -10,4 +10,4 @@ struct DescriptorSetLayout : public vk::UniqueDescriptorSetLayout {
         } {}
 };
 
-};  // namespace vkit::graphics::dsl
+};  // namespace vkit::graphics

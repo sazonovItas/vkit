@@ -3,13 +3,13 @@
 #include <memory>
 #include <vector>
 
-#include "vkit/scene/item.hpp"
+#include "vkit/item/item.hpp"
 #include "vkit/scene/node_attachment.hpp"
 #include "vkit/scene/trs_transform.hpp"
 
 namespace vkit::scene {
 
-class Node : public Item, public std::enable_shared_from_this<Node> {
+class Node : public Item<Node>, public std::enable_shared_from_this<Node> {
  public:
   explicit Node(std::string_view name = "Node");
 

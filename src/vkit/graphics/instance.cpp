@@ -57,7 +57,7 @@ Instance::Instance() {
   auto const loader_version = vk::enumerateInstanceVersion();
   if (loader_version < kVkVersionV) {
     throw std::runtime_error{
-        std::format("Loader doesn't support vulkan {}.{}.{}", kVkMajor,
+        std::format("[VULKAN] Loader doesn't support vulkan {}.{}.{}", kVkMajor,
                     kVkMinor, kVkPatch),
     };
   }
