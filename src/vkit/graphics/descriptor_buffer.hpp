@@ -10,15 +10,15 @@ namespace vkit::graphics {
 
 class DescriptorBuffer {
  public:
+  static constexpr std::uint32_t kBufferDefaultSize = 256;
+
   explicit DescriptorBuffer(vma::Allocator allocator,
-                            std::uint32_t queue_family,
                             dataformat::BufferUsageFlags usage)
       : allocator_{allocator},
-        queueFamily_{queue_family},
         usage_{usage},
         buffer_{
             allocator,
-            vk::BufferCreateInfo{}.setUsage(usage).setSize(0),
+            vk::BufferCreateInfo{}.setUsage(usage).setSize(kBufferDefaultSize),
             allocation::kHostWrite,
         } {}
 
@@ -31,24 +31,26 @@ class DescriptorBuffer {
   }
 
  private:
-  void writeTo(AllocatedBuffer& out, std::span<std::byte const> bytes) const {
-    static constexpr auto kBlankByteV = std::array{std::byte{}};
-    if (bytes.empty()) {
-      bytes = kBlankByteV;
-    }
+  void writeTo(AllocatedBuffer& out, std::span<std::byte const> bytes) {
+    if (bytes.empty()) return;
 
-    if (out.size < bytes.size()) {
+    if (out.size < bytes.size_bytes()) {
+      size_t new_size = bytes.size_bytes();
+      if (out.size > 0) {
+        new_size = std::max(new_size, static_cast<size_t>(out.size * 1.5));
+      }
+
       auto buffer_ci =
-          vk::BufferCreateInfo{}.setSize(bytes.size_bytes()).setUsage(usage_);
-      out = {allocator_, buffer_ci, allocation::kHostWrite};
+          vk::BufferCreateInfo{}.setSize(new_size).setUsage(usage_);
+
+      out = AllocatedBuffer{allocator_, buffer_ci, allocation::kHostWrite};
     }
 
-    allocator_.copyMemoryToAllocation(bytes.data(), out.allocation, {},
+    allocator_.copyMemoryToAllocation(bytes.data(), out.allocation, 0,
                                       bytes.size_bytes());
   }
 
   vma::Allocator allocator_;
-  std::uint32_t queueFamily_{};
   vk::BufferUsageFlags usage_;
   AllocatedBuffer buffer_;
 };
