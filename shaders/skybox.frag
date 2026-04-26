@@ -7,7 +7,7 @@ layout(location = 0) out vec4 outColor;
 #include "common/bindless.glsl"
 #include "common/environment.glsl"
 
-layout(set = 0, binding = 1) uniform Environment { EnvironmentParams params; } env;
+layout(set = 0, binding = 2) uniform Environment { EnvironmentParams params; } env;
 
 layout(push_constant) uniform PushConstants {
   vec4  baseColor;

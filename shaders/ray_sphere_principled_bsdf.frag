@@ -1,12 +1,11 @@
 #version 450
 
-layout(location = 0) in vec3 inWorldPos;
-layout(location = 1) in vec2 inUV;
-layout(location = 2) in vec3 inNormal;
-layout(location = 3) in vec3 inTangent;
-layout(location = 4) in vec3 inBitangent;
+layout(location = 0) in vec3 inLocalPos;
+layout(location = 1) in vec3 inWorldPos;
 
 layout(location = 0) out vec4 outColor;
+
+#include "ray_sphere.glsl"
 
 #include "common/bindless.glsl" 
 #include "common/environment.glsl"
@@ -16,7 +15,7 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
 layout(set = 0, binding = 1) uniform Environment { EnvironmentParams params; } env;
 
-layout(std430, set = 3, binding = 0) readonly buffer BSDFMaterials { 
+layout(std430, set = 2, binding = 2) readonly buffer BSDFMaterials { 
   PrincipledBSDFData materials[]; 
 } bsdfBlock;
 
@@ -26,21 +25,19 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 void main() {
+  SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
+
   PrincipledBSDFData mat = bsdfBlock.materials[pcs.materialIndex];
 
-  vec3 N = normalize(inNormal);
-  vec3 T = length(inTangent) > 0.1 ? normalize(inTangent) : vec3(1.0, 0.0, 0.0);
-  vec3 B = length(inBitangent) > 0.1 ? normalize(inBitangent) : cross(N, T);
-  mat3 baseTBN = mat3(T, B, N);
+  mat3 baseTBN = mat3(hit.tangent, hit.bitangent, hit.normal);
 
-  vec3 V = normalize(camera.position - inWorldPos);
+  vec3 V = normalize(camera.position - hit.worldPos);
   
-  Surface s = buildSurface(inWorldPos, V, baseTBN, inUV, mat);
+  Surface s = buildSurface(hit.worldPos, V, baseTBN, hit.uv, mat);
   
   if (s.albedo.a < 0.01) discard;
 
-  vec3 L = V;
-  
+  vec3 L = V; 
   vec3 finalColor = evaluateUberLighting(s, L, baseTBN, mat, env.params);
 
   outColor = vec4(finalColor, s.albedo.a);

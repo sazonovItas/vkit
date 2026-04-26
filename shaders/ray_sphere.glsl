@@ -11,7 +11,7 @@ struct SphereHit {
   vec2 uv;
 };
 
-SphereHit calculateSphereImpostor(vec3 inLocalPos, vec3 camWorldPos, mat4 model, mat4 view, mat4 proj) {
+SphereHit calculateSphereHit(vec3 inLocalPos, vec3 camWorldPos, mat4 model, mat4 view, mat4 proj) {
   mat4 invModel = inverse(model);
   vec3 camLocalPos = (invModel * vec4(camWorldPos, 1.0)).xyz;
 

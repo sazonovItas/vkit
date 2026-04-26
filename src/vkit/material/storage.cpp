@@ -105,7 +105,7 @@ void Storage::update() {
 auto Storage::getData(Type type) const -> std::span<const std::byte> {
   switch (type) {
     case Type::kDiffuse:
-      return util::toByteSpan(diffuseData_);
+      return std::as_bytes(std::span{diffuseData_});
     case Type::kDiffuseSpecular:
       return util::toByteSpan(diffuseSpecularData_);
     case Type::kPrincipledBSDF:

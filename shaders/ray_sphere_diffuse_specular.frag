@@ -25,7 +25,7 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 void main() {
-  SphereHit hit = calculateSphereImpostor(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
+  SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
 
   DiffuseSpecularData mat = diffSpecBlock.materials[pcs.materialIndex];
 

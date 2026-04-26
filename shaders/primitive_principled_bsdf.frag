@@ -17,13 +17,13 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
 layout(set = 0, binding = 1) uniform Environment { EnvironmentParams params; } env;
 
-layout(std430, set = 3, binding = 0) readonly buffer BSDFMaterials { 
+layout(std430, set = 2, binding = 2) readonly buffer BSDFMaterials { 
   PrincipledBSDFData materials[]; 
 } bsdfBlock;
 
 layout(push_constant) uniform PushConstants {
   mat4 model;
-  Primitive prim;
+  uint primIndex;
   uint materialIndex;
 } pcs;
 

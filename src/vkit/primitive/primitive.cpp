@@ -25,8 +25,8 @@ void Primitive::detach(Attachment* attachment) {
 }
 
 auto Primitive::createDeviceAttributes(const PrimitiveAttributes& attrs) const
-    -> Devic4PrimitiveAttributes {
-  Devic4PrimitiveAttributes out{};
+    -> DevicePrimitiveAttributes {
+  DevicePrimitiveAttributes out{};
 
   auto convert = [&](const Attribute& src) -> DeviceAttribute {
     if (!src.isValid()) return {};

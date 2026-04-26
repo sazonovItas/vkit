@@ -24,7 +24,7 @@ layout(std430, set = 2, binding = 1) readonly buffer DiffuseSpecularMaterials {
 
 layout(push_constant) uniform PushConstants {
   mat4 model;
-  Primitive prim;
+  uint primIndex;
   uint materialIndex;
 } pcs;
 

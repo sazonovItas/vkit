@@ -20,8 +20,7 @@ struct Primitive {
   Attribute jointWeights;
 };
 
-bool isAttributeExists(Attribute attr)
-{
+bool isAttributeExists(Attribute attr) {
   return (attr.addr.x != 0u || attr.addr.y != 0u);
 }
 

@@ -18,13 +18,13 @@ const vec3 AMBIENT_COLOR = vec3(0.05, 0.05, 0.05);
 
 layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
 
-layout(std430, set = 2, binding = 0) readonly buffer DiffuseMaterials { 
+layout(std430, set = 2, binding = 1) readonly buffer DiffuseMaterials { 
   DiffuseData materials[]; 
 } diffuseBlock;
 
 layout(push_constant) uniform PushConstants {
   mat4 model;
-  Primitive prim;
+  uint primIndex;
   uint materialIndex;
 } pcs;
 

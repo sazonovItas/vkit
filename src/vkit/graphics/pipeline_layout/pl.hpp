@@ -1,6 +1,6 @@
 #pragma once
 
-namespace vkit::graphics {
+namespace vkit::graphics::pl {
 
 struct PipelineLayout : public vk::UniquePipelineLayout {
   explicit PipelineLayout(vk::Device device,
@@ -10,4 +10,4 @@ struct PipelineLayout : public vk::UniquePipelineLayout {
         } {}
 };
 
-};  // namespace vkit::graphics
+};  // namespace vkit::graphics::pl

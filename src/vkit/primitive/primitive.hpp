@@ -66,6 +66,11 @@ class Primitive {
   void setVertexMode(const VertexMode mode) { vertexMode = mode; }
   void setPolygonMode(const PolygonMode mode) { polygonMode = mode; }
 
+  [[nodiscard]] auto getId() const -> std::optional<std::uint32_t> {
+    return id_;
+  }
+  void setId(std::optional<std::uint32_t> id) { id_ = id; }
+
   [[nodiscard]] auto getData() const -> PrimitiveData {
     return PrimitiveData{
         .position = attrs.position.getData(),
@@ -132,6 +137,7 @@ class Primitive {
   }
 
  private:
+  std::optional<std::uint32_t> id_;
   std::shared_ptr<DeviceBuffers> buffers_;
   std::vector<std::shared_ptr<Attachment>> attachments_;
 
