@@ -3,21 +3,19 @@
 namespace vkit::primitive {
 
 Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
-                     VertexMode mode, const PrimitiveAttributes& attrs)
-    : buffers_{buffers},
-      vertexMode{mode},
-      attrs{createDeviceAttributes(attrs)} {}
+                     const PrimitiveAttributes& attrs)
+    : buffers_{buffers}, attrs{createDeviceAttributes(attrs)} {}
 
-void Primitive::attach(const std::shared_ptr<PrimitiveAttachment>& attachment) {
+void Primitive::attach(const std::shared_ptr<Attachment>& attachment) {
   if (attachment) {
     attachment->setNode(this);
     attachments_.push_back(attachment);
   }
 }
 
-void Primitive::detach(PrimitiveAttachment* attachment) {
+void Primitive::detach(Attachment* attachment) {
   std::erase_if(attachments_,
-                [attachment](const std::shared_ptr<PrimitiveAttachment>& a) {
+                [attachment](const std::shared_ptr<Attachment>& a) {
                   if (a.get() == attachment) {
                     a->setNode(nullptr);
                     return true;
@@ -27,8 +25,8 @@ void Primitive::detach(PrimitiveAttachment* attachment) {
 }
 
 auto Primitive::createDeviceAttributes(const PrimitiveAttributes& attrs) const
-    -> DevicePrimitiveAttributes {
-  DevicePrimitiveAttributes out{};
+    -> Devic4PrimitiveAttributes {
+  Devic4PrimitiveAttributes out{};
 
   auto convert = [&](const Attribute& src) -> DeviceAttribute {
     if (!src.isValid()) return {};

@@ -33,6 +33,18 @@ struct Attribute {
   }
 };
 
+struct AttributeData {
+  std::uint64_t address{0};
+  std::uint32_t count{0};
+  std::uint32_t offset{0};
+  std::uint32_t stride{0};
+  std::uint32_t format{0};
+};
+
+static_assert(
+    sizeof(AttributeData) == 24,
+    "AttributeData must be exactly 24 bytes to match GLSL std430 alignment.");
+
 struct DeviceAttribute {
   AttributeInfo info{};
   vk::DeviceAddress address{0};
@@ -43,7 +55,25 @@ struct DeviceAttribute {
   DeviceAttribute(const Attribute& attr, vk::DeviceAddress addr)
       : info(attr.info), address(addr), bufferViewIdx(attr.bufferViewIdx) {}
 
-  bool isValid() const { return info.isValid() && address != 0; }
+  [[nodiscard]] bool isValid() const { return info.isValid() && address != 0; }
+
+  [[nodiscard]] auto getData() const -> AttributeData {
+    AttributeData data{};
+
+    if (!isValid()) {
+      return data;
+    }
+
+    data.address = static_cast<std::uint64_t>(address);
+
+    data.count = info.count;
+    data.offset = info.offset;
+    data.stride = info.stride;
+
+    data.format = static_cast<std::uint32_t>(info.format);
+
+    return data;
+  }
 };
 
 };  // namespace vkit::primitive

@@ -4,7 +4,7 @@ namespace vkit::primitive {
 
 class Primitive;
 
-class PrimitiveAttachment {
+class Attachment {
  public:
   void setNode(Primitive* node) { node_ = node; }
   [[nodiscard]] auto getNode() const -> Primitive* { return node_; }

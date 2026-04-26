@@ -2,25 +2,22 @@ EXECUTABLE ?= ./build/vkit
 
 .PHONY: glslc
 glslc:
-	glslc ./src/glsl/material/primitive.vert -o ./assets/shaders/material/primitive.vert
-	glslc ./src/glsl/material/primitive_material_bsdf.frag -o ./assets/shaders/material/primitive_material_bsdf.frag
-	glslc ./src/glsl/material/ray_sphere.vert -o ./assets/shaders/material/ray_sphere.vert
-	glslc ./src/glsl/material/ray_sphere_material_bsdf.frag -o ./assets/shaders/material/ray_sphere_material_bsdf.frag
+	glslc ./shaders/primitive.vert -o ./assets/shaders/primitive.vert
+	glslc ./shaders/primitive_diffuse.frag -o ./assets/shaders/primitive_diffuse.frag
+	glslc ./shaders/primitive_diffuse_specular.frag -o ./assets/shaders/primitive_diffuse_specular.frag
+	glslc ./shaders/primitive_principled_bsdf.frag -o ./assets/shaders/primitive_principled_bsdf.frag
 
-	# primitive shader
-	glslc ./src/glsl/primitive.vert -o ./assets/shaders/primitive.vert
-	glslc ./src/glsl/primitive.frag -o ./assets/shaders/primitive.frag
+	glslc ./shaders/ray_sphere.vert -o ./assets/shaders/ray_sphere.vert
+	glslc ./shaders/ray_sphere_diffuse.frag -o ./assets/shaders/ray_sphere_diffuse.frag
+	glslc ./shaders/ray_sphere_diffuse_specular.frag -o ./assets/shaders/ray_sphere_diffuse_specular.frag
+	glslc ./shaders/ray_sphere_principled_bsdf.frag -o ./assets/shaders/ray_sphere_principled_bsdf.frag
 
-	# skybox shader
-	glslc ./src/glsl/skybox.vert -o ./assets/shaders/skybox.vert
-	glslc ./src/glsl/skybox.frag -o ./assets/shaders/skybox.frag
+	glslc ./shaders/skybox.vert -o ./assets/shaders/skybox.vert
+	glslc ./shaders/skybox.frag -o ./assets/shaders/skybox.frag
 
-	# prefilter ibl compute shaders
-	glslc ./src/glsl/prefilter_diffuse_ibl.comp -o ./assets/shaders/prefilter_diffuse_ibl.comp
-	glslc ./src/glsl/prefilter_specular_ibl.comp -o ./assets/shaders/prefilter_specular_ibl.comp
-
-	# procedural generation texture
-	glslc ./src/glsl/procedural_texture.comp -o ./assets/shaders/procedural_texture.comp
+	glslc ./shaders/ibl/brdf_lut.comp -o ./assets/shaders/ibl/brdf_lut.comp
+	glslc ./shaders/ibl/diffuse_ibl.comp -o ./assets/shaders/ibl/diffuse_ibl.comp
+	glslc ./shaders/ibl/specular_ibl.comp -o ./assets/shaders/ibl/specular_ibl.comp
 
 .PHONY: cmake
 cmake:
