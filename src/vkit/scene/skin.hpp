@@ -1,7 +1,7 @@
 #pragma once
 
-#include <glm/glm.hpp>
 #include <memory>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -21,11 +21,18 @@ class Skin : public Item<Skin>, public NodeAttachment {
   std::shared_ptr<Node> skeleton;
   std::vector<std::shared_ptr<Node>> joints;
   std::vector<glm::mat4> inverseBindMatrices;
-  std::vector<glm::mat4> jointMatrices;
+
+  std::span<glm::mat4> jointMatrices;
+  std::uint32_t dataOffset{0};
+
+  void setJointData(std::span<glm::mat4> span, std::uint32_t offset) {
+    jointMatrices = span;
+    dataOffset = offset;
+  }
 
   void update(const TrsTransform& meshTransform) {
-    if (jointMatrices.size() != joints.size()) {
-      jointMatrices.resize(joints.size());
+    if (jointMatrices.empty() || joints.size() != jointMatrices.size()) {
+      return;
     }
 
     for (std::size_t i = 0; i < joints.size(); ++i) {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <glm/glm.hpp>
 #include <string_view>
 
 #include "vkit/material/material.hpp"

@@ -7,6 +7,7 @@
 #define NEAREST_SAMPLER_ID 1
 
 layout(set = 1, binding = 0) uniform sampler samplers[];
+
 layout(set = 1, binding = 1) uniform texture2D textures[];
 layout(set = 1, binding = 1) uniform texture2DArray textureArrays[];
 

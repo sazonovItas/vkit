@@ -34,10 +34,6 @@ class Camera : public Item<Camera>, public NodeAttachment {
     updateView();
   }
 
-  [[nodiscard]] auto getAttachmentType() const -> AttachmentType override {
-    return AttachmentType::kCamera;
-  }
-
   void setType(CameraType newType) {
     type_ = newType;
     updateProjection();

@@ -5,10 +5,11 @@
 #include <vector>
 
 #include "vkit/scene/camera.hpp"
-#include "vkit/scene/item.hpp"
 #include "vkit/scene/light.hpp"
+#include "vkit/scene/mesh.hpp"
 #include "vkit/scene/node.hpp"
 #include "vkit/scene/skin.hpp"
+#include "vkit/scene/skin_storage.hpp"
 
 namespace vkit::scene {
 
@@ -20,17 +21,15 @@ class Scene : public Item<Scene> {
   void removeRootNode(const std::shared_ptr<Node>& node);
 
   [[nodiscard]] auto getRootNodes() const
-      -> const std::vector<std::shared_ptr<Node>>&;
-  [[nodiscard]] auto getNodes() const
-      -> const std::vector<std::shared_ptr<Node>>&;
+      -> std::span<const std::shared_ptr<Node>>;
+  [[nodiscard]] auto getNodes() const -> std::span<const std::shared_ptr<Node>>;
   [[nodiscard]] auto getMeshes() const
-      -> const std::vector<std::shared_ptr<Mesh>>&;
+      -> std::span<const std::shared_ptr<Mesh>>;
   [[nodiscard]] auto getLights() const
-      -> const std::vector<std::shared_ptr<Light>>&;
+      -> std::span<const std::shared_ptr<Light>>;
   [[nodiscard]] auto getCameras() const
-      -> const std::vector<std::shared_ptr<Camera>>&;
-  [[nodiscard]] auto getSkins() const
-      -> const std::vector<std::shared_ptr<Skin>>&;
+      -> std::span<const std::shared_ptr<Camera>>;
+  [[nodiscard]] auto getSkins() const -> std::span<const std::shared_ptr<Skin>>;
 
   void registerNode(const std::shared_ptr<Node>& node);
   void unregisterNode(const std::shared_ptr<Node>& node);
@@ -48,9 +47,10 @@ class Scene : public Item<Scene> {
 
   std::vector<std::shared_ptr<Node>> nodes_;
   std::vector<std::shared_ptr<Mesh>> meshes_;
-  std::vector<std::shared_ptr<Skin>> skins_;
   std::vector<std::shared_ptr<Light>> lights_;
   std::vector<std::shared_ptr<Camera>> cameras_;
+
+  SkinStorage skinsStorage_;
 };
 
 };  // namespace vkit::scene

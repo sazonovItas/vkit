@@ -4,6 +4,26 @@ namespace vkit::scene {
 
 Scene::Scene(std::string_view name) : Item(name) {}
 
+auto Scene::getRootNodes() const -> std::span<const std::shared_ptr<Node>> {
+  return rootNodes_;
+}
+
+auto Scene::getNodes() const -> std::span<const std::shared_ptr<Node>> {
+  return nodes_;
+}
+
+auto Scene::getMeshes() const -> std::span<const std::shared_ptr<Mesh>> {
+  return meshes_;
+}
+
+auto Scene::getLights() const -> std::span<const std::shared_ptr<Light>> {
+  return lights_;
+}
+
+auto Scene::getCameras() const -> std::span<const std::shared_ptr<Camera>> {
+  return cameras_;
+}
+
 void Scene::addRootNode(const std::shared_ptr<Node>& node) {
   if (node) {
     rootNodes_.push_back(node);
@@ -12,10 +32,6 @@ void Scene::addRootNode(const std::shared_ptr<Node>& node) {
 
 void Scene::removeRootNode(const std::shared_ptr<Node>& node) {
   std::erase(rootNodes_, node);
-}
-
-auto Scene::getRootNodes() const -> const std::vector<std::shared_ptr<Node>>& {
-  return rootNodes_;
 }
 
 void Scene::registerNode(const std::shared_ptr<Node>& node) {
@@ -50,17 +66,12 @@ void Scene::unregisterCamera(const std::shared_ptr<Camera>& camera) {
   std::erase(cameras_, camera);
 }
 
-auto Scene::getNodes() const -> const std::vector<std::shared_ptr<Node>>& {
-  return nodes_;
+void Scene::registerSkin(const std::shared_ptr<Skin>& skin) {
+  if (skin) skinsStorage_.add(skin);
 }
-auto Scene::getMeshes() const -> const std::vector<std::shared_ptr<Mesh>>& {
-  return meshes_;
-}
-auto Scene::getLights() const -> const std::vector<std::shared_ptr<Light>>& {
-  return lights_;
-}
-auto Scene::getCameras() const -> const std::vector<std::shared_ptr<Camera>>& {
-  return cameras_;
+
+void Scene::unregisterSkin(const std::shared_ptr<Skin>& skin) {
+  skinsStorage_.remove(skin);
 }
 
 };  // namespace vkit::scene

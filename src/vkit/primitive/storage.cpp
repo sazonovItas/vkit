@@ -46,6 +46,11 @@ auto Storage::getPrimitives() const
   return primitives_;
 }
 
+auto Storage::getPrimitive(std::uint32_t index) const
+    -> const std::shared_ptr<Primitive>& {
+  return primitives_.at(index);
+}
+
 auto Storage::getData() const -> std::span<const std::byte> {
   return std::as_bytes(std::span{primitiveData_});
 }

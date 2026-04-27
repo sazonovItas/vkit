@@ -24,11 +24,11 @@ class Material : public Item<Material>, public primitive::Attachment {
   [[nodiscard]] virtual auto getType() const -> Type = 0;
 
   [[nodiscard]] auto isDirty() const -> bool { return isDirty_; };
+  void setDirty(const bool dirty) { isDirty_ = dirty; }
+
   [[nodiscard]] auto getStorageId() const -> std::optional<std::uint32_t> {
     return storageId_;
   };
-
-  void setDirty(const bool dirty) { isDirty_ = dirty; }
   void setStorageId(const std::optional<std::uint32_t> id) { storageId_ = id; }
 
   [[nodiscard]] auto getAlphaMode() const -> AlphaMode { return alphaMode_; }

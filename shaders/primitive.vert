@@ -12,8 +12,8 @@ layout(location = 4) out vec3 outBitangent;
 layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
 
 layout(std430, set = 3, binding = 0) readonly buffer PrimitiveBlock { 
-  Primitive data[]; 
-} primitives;
+  Primitive primitives[]; 
+} primData;
 
 layout(std430, set = 3, binding = 1) readonly buffer JointBlock {
   mat4 joints[];
@@ -23,10 +23,11 @@ layout(push_constant) uniform PushConstants {
   mat4 model;
   uint primIndex;
   uint materialIndex;
+  uint skinOffset;
 } pcs;
 
 void main() {
-  Primitive prim = primitives.data[pcs.primIndex];
+  Primitive prim = primData.primitives[pcs.primIndex];
 
   vec3 pos    = getPosition(prim, gl_VertexIndex);
   vec3 normal = getNormal(prim, gl_VertexIndex);
@@ -42,10 +43,10 @@ void main() {
     vec4 w  = getWeights(prim, gl_VertexIndex);
 
     skinMatrix = 
-        w.x * jointData.joints[j.x] +
-        w.y * jointData.joints[j.y] +
-        w.z * jointData.joints[j.z] +
-        w.w * jointData.joints[j.w];
+        w.x * jointData.joints[pcs.skinOffset + j.x] +
+        w.y * jointData.joints[pcs.skinOffset + j.y] +
+        w.z * jointData.joints[pcs.skinOffset + j.z] +
+        w.w * jointData.joints[pcs.skinOffset + j.w];
   }
 
   vec4 worldPos = pcs.model * skinMatrix * vec4(pos, 1.0);

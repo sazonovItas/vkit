@@ -1,5 +1,8 @@
 #pragma once
 
+#include <memory>
+#include <span>
+#include <string_view>
 #include <vector>
 
 #include "vkit/item/item.hpp"
@@ -10,25 +13,35 @@ namespace vkit::scene {
 
 class Mesh : public Item<Mesh>, public NodeAttachment {
  public:
-  explicit Mesh(std::string_view name = "Mesh",
-                const std::vector<vkit::primitive::Primitive>& primitives = {})
-      : Item(name), primitives_{std::move(primitives)} {}
+  explicit Mesh(
+      std::string_view name = "Mesh",
+      std::span<const std::shared_ptr<primitive::Primitive>> primitives = {})
+      : Item(name), primitives_{primitives.begin(), primitives.end()} {}
 
   [[nodiscard]] auto getPrimitives() const
-      -> const std::vector<vkit::primitive::Primitive>& {
-    return primitives_;
-  }
-  [[nodiscard]] auto getPrimitives()
-      -> std::vector<vkit::primitive::Primitive>& {
+      -> std::span<const std::shared_ptr<primitive::Primitive>> {
     return primitives_;
   }
 
-  void addPrimitive(const vkit::primitive::Primitive& primitive) {
-    primitives_.push_back(std::move(primitive));
+  [[nodiscard]] auto getPrimitivesMutable()
+      -> std::span<std::shared_ptr<primitive::Primitive>> {
+    return primitives_;
+  }
+
+  void addPrimitive(std::shared_ptr<primitive::Primitive> primitive) {
+    if (primitive) {
+      primitives_.push_back(std::move(primitive));
+    }
+  }
+
+  void removePrimitive(const std::shared_ptr<primitive::Primitive>& primitive) {
+    if (primitive) {
+      std::erase(primitives_, primitive);
+    }
   }
 
  private:
-  std::vector<vkit::primitive::Primitive> primitives_;
+  std::vector<std::shared_ptr<primitive::Primitive>> primitives_;
 };
 
 };  // namespace vkit::scene

@@ -17,6 +17,8 @@ class Storage {
 
   [[nodiscard]] auto getPrimitives() const
       -> const std::vector<std::shared_ptr<Primitive>>&;
+  [[nodiscard]] auto getPrimitive(std::uint32_t index) const
+      -> const std::shared_ptr<Primitive>&;
 
   [[nodiscard]] auto getData() const -> std::span<const std::byte>;
 
