@@ -8,7 +8,7 @@ Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
 
 void Primitive::attach(const std::shared_ptr<Attachment>& attachment) {
   if (attachment) {
-    attachment->setNode(this);
+    attachment->setPrimitive(this);
     attachments_.push_back(attachment);
   }
 }
@@ -17,7 +17,7 @@ void Primitive::detach(Attachment* attachment) {
   std::erase_if(attachments_,
                 [attachment](const std::shared_ptr<Attachment>& a) {
                   if (a.get() == attachment) {
-                    a->setNode(nullptr);
+                    a->setPrimitive(nullptr);
                     return true;
                   }
                   return false;

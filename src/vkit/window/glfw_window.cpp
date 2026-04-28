@@ -85,7 +85,7 @@ void cursorEnterCallback(GLFWwindow* w, int entered) {
 
 Context::Context() {
   static auto const kOnError = [](int const code, char const* description) {
-    std::println(stderr, "[GLFW] ERROR {}: {}", code, description);
+    std::println(stderr, "[GLFW] [ERROR] {}: {}", code, description);
   };
   glfwSetErrorCallback(kOnError);
 
@@ -125,9 +125,8 @@ auto Window::open(const WindowConfiguration& config) -> bool {
 
   GLFWmonitor* monitor = config.fullscreen ? glfwGetPrimaryMonitor() : nullptr;
 
-  window_ = glfwCreateWindow(static_cast<int>(config.size.width),
-                             static_cast<int>(config.size.height),
-                             config.title.c_str(), monitor, nullptr);
+  window_ = glfwCreateWindow(config.size.x, config.size.y, config.title.c_str(),
+                             monitor, nullptr);
 
   if (!window_) {
     return false;

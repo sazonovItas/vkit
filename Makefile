@@ -2,6 +2,9 @@ EXECUTABLE ?= ./build/vkit
 
 .PHONY: glslc
 glslc:
+	glslc ./shaders/imgui.vert -o ./assets/shaders/imgui.vert
+	glslc ./shaders/imgui.frag -o ./assets/shaders/imgui.frag
+
 	glslc ./shaders/primitive.vert -o ./assets/shaders/primitive.vert
 	glslc ./shaders/primitive_material.frag -o ./assets/shaders/primitive_material.frag
 	glslc ./shaders/ray_sphere.vert -o ./assets/shaders/ray_sphere.vert

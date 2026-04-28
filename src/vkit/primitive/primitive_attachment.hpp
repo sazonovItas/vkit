@@ -6,11 +6,11 @@ class Primitive;
 
 class Attachment {
  public:
-  void setNode(Primitive* node) { node_ = node; }
-  [[nodiscard]] auto getNode() const -> Primitive* { return node_; }
+  void setPrimitive(Primitive* node) { primitive_ = node; }
+  [[nodiscard]] auto getPrimitive() const -> Primitive* { return primitive_; }
 
  protected:
-  Primitive* node_{nullptr};
+  Primitive* primitive_{nullptr};
 };
 
 };  // namespace vkit::primitive

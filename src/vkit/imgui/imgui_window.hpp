@@ -1,36 +1,50 @@
 #pragma once
 
-#include <memory>
+#include <imgui.h>
 
-#include "vkit/graphics/texture.hpp"
+#include <string>
+#include <string_view>
 
 namespace vkit::imgui {
 
 class ImguiWindow {
  public:
-  ImguiWindow();
-  virtual ~ImguiWindow() noexcept;
+  explicit ImguiWindow(std::string_view title, bool showInMenu = true);
+  virtual ~ImguiWindow() = default;
 
-  void setMinSize(float width, float height);
-  void setMaxSize(float width, float height);
-  auto begin() -> bool;
-  void end();
+  virtual void onDraw() = 0;
 
-  void drawImage(const std::shared_ptr<graphics::Texture>& texture, int width,
-                 int height);
+  virtual void onBegin() {}
+  virtual void onEnd() {}
 
-  virtual void imgui() = 0;
-  virtual void onBegin();
-  virtual void onEnd();
+  [[nodiscard]] auto isVisible() const -> bool;
+  void setVisibility(bool visible);
+  void toggleVisibility();
+  void show();
+  void hide();
+
+  [[nodiscard]] auto title() const -> const std::string&;
+  [[nodiscard]] auto showInMenu() const -> bool;
+  [[nodiscard]] auto isHovered() const -> bool;
+  [[nodiscard]] auto isFocused() const -> bool;
+
+  void setMinSize(float minWidth, float minHeight);
+  void setMaxSize(float maxWidth, float maxHeight);
+  virtual auto getFlags() -> ImGuiWindowFlags;
+
+  void render();
 
  protected:
   std::string title_;
-  float minSize_[2]{200.0F, 100.0F};
+  bool showInMenu_{true};
+
+  float minSize_[2]{100.0F, 100.0F};
   float maxSize_[2]{99999.0F, 99999.0F};
 
  private:
-  bool isHovered_{false};
   bool isVisible_{true};
+  bool isHovered_{false};
+  bool isFocused_{false};
 };
 
-};  // namespace vkit::imgui
+}  // namespace vkit::imgui

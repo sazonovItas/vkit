@@ -4,7 +4,9 @@
 
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
-#include "vkit/graphics/util.hpp"
+#include "vulkan/vulkan.hpp"
+
+namespace vkit::graphics {
 
 namespace {
 
@@ -18,50 +20,20 @@ auto getExtent3D(int width, int height, int depth) -> vk::Extent3D {
 
 };  // namespace
 
-namespace vkit::graphics {
-
 auto getTextureLevelCount(int width, int height, int depth) -> int {
   return Image::maxMipLevels(getExtent3D(width, height, depth));
 }
 
-Texture::Texture(vma::Allocator allocator,
-                 const util::RecordAndSubmitInfo& rsInfo,
+Texture::Texture(vk::Device device, vma::Allocator allocator,
                  const TextureCreateInfo& createInfo)
     : type_{createInfo.type},
       sampleCount_{createInfo.sampleCount},
       useMipmaps_{createInfo.useMipmaps},
       image_{createAllocatedImage(allocator, createInfo)},
-      view_{makeImageView(rsInfo.device)} {
-  if (createInfo.buffer != nullptr) {
-    update(rsInfo, *createInfo.buffer);
-  }
-
-  if (useMipmaps_) {
-    generateMipmaps(rsInfo);
-  }
-}
+      view_{makeImageView(device)} {}
 
 auto Texture::makeImageView(vk::Device device) const -> vk::UniqueImageView {
   auto ci = image_.getViewCreateInfo(toVkImageViewType(type_));
-  return device.createImageViewUnique(ci);
-}
-
-auto Texture::makeImageView(vk::Device device, std::uint32_t baseMipLevel,
-                            std::uint32_t levelCount,
-                            std::uint32_t baseArrayLayer,
-                            std::uint32_t layerCount) const
-    -> vk::UniqueImageView {
-  const auto aspect = Image::inferAspectFlags(image_.format);
-
-  vk::ImageSubresourceRange subresource{};
-  subresource.setAspectMask(aspect)
-      .setBaseMipLevel(baseMipLevel)
-      .setLevelCount(levelCount)
-      .setBaseArrayLayer(baseArrayLayer)
-      .setLayerCount(layerCount);
-
-  auto ci = image_.getViewCreateInfo(subresource, toVkImageViewType(type_));
-
   return device.createImageViewUnique(ci);
 }
 
@@ -95,65 +67,48 @@ auto Texture::getSampleCount() const -> SampleCount { return sampleCount_; }
 
 auto Texture::isLayered() const -> bool { return image_.arrayLayers > 1; }
 
-void Texture::update(const util::RecordAndSubmitInfo& info,
-                     const Buffer& buffer) {
+void Texture::recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer) {
   auto image_size_bytes = image_.getBaseMipSizeBytes();
-  if (buffer.size != image_size_bytes) {
-    throw std::runtime_error{
-        std::format("size in bytes of the buffer and image are mismatched: "
-                    "buffer size {}, "
-                    "image size {}",
-                    buffer.size, image_size_bytes)};
+  if (stagingBuffer.size != image_size_bytes) {
+    throw std::runtime_error("Staging buffer size mismatch!");
   }
 
   auto fn = [&](vk::CommandBuffer cb) {
-    {
-      vk::ImageMemoryBarrier barrier{};
-      barrier.setOldLayout(vk::ImageLayout::eUndefined)
-          .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
-          .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-          .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-          .setImage(image_.image)
-          .setSubresourceRange(image_.subresourceRange())
-          .setSrcAccessMask({})
-          .setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
+    vk::ImageMemoryBarrier barrier{};
+    barrier.setOldLayout(vk::ImageLayout::eUndefined)
+        .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
+        .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+        .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+        .setImage(image_.image)
+        .setSubresourceRange(image_.subresourceRange())
+        .setSrcAccessMask({})
+        .setDstAccessMask(vk::AccessFlagBits::eTransferWrite);
 
-      cb.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe,
-                         vk::PipelineStageFlagBits::eTransfer, {}, nullptr,
-                         nullptr, barrier);
-    }
+    cb.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe,
+                       vk::PipelineStageFlagBits::eTransfer, {}, nullptr,
+                       nullptr, barrier);
 
-    vk::ImageSubresourceLayers image_subresource_layers{};
-    image_subresource_layers
-        .setAspectMask(Image::inferAspectFlags(image_.format))
+    vk::ImageSubresourceLayers subresource_layers{};
+    subresource_layers.setAspectMask(Image::inferAspectFlags(image_.format))
         .setBaseArrayLayer(0)
         .setLayerCount(image_.arrayLayers)
         .setMipLevel(0);
 
     vk::BufferImageCopy2 region{};
-    region.setBufferOffset(0)
-        .setBufferRowLength(0)
-        .setBufferImageHeight(0)
-        .setImageSubresource(image_subresource_layers)
-        .setImageOffset({0, 0, 0})
+    region.setImageSubresource(subresource_layers)
         .setImageExtent(image_.extent);
 
     vk::CopyBufferToImageInfo2 copy_info{};
-    copy_info.setSrcBuffer(buffer.buffer)
+    copy_info.setSrcBuffer(stagingBuffer.buffer)
         .setDstImage(image_.image)
         .setDstImageLayout(vk::ImageLayout::eTransferDstOptimal)
         .setRegions(region);
 
     cb.copyBufferToImage2(copy_info);
 
-    {
-      vk::ImageMemoryBarrier barrier{};
+    if (!useMipmaps_) {
       barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
           .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-          .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-          .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-          .setImage(image_.image)
-          .setSubresourceRange(image_.subresourceRange())
           .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
           .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
 
@@ -163,13 +118,11 @@ void Texture::update(const util::RecordAndSubmitInfo& info,
     }
   };
 
-  util::recordAndSubmit(info, fn);
-}
+  fn(cb);
+};
 
-void Texture::generateMipmaps(const util::RecordAndSubmitInfo& info) {
-  if (!useMipmaps_) {
-    return;
-  }
+void Texture::recordMipmapGeneration(vk::CommandBuffer cb) {
+  if (!useMipmaps_ || image_.mipLevels <= 1) return;
 
   auto fn = [&](vk::CommandBuffer cb) {
     const auto format = image_.format;
@@ -261,7 +214,7 @@ void Texture::generateMipmaps(const util::RecordAndSubmitInfo& info) {
     }
   };
 
-  util::recordAndSubmit(info, fn);
+  fn(cb);
 }
 
 auto Texture::createAllocatedImage(vma::Allocator allocator,

@@ -10,9 +10,10 @@
 namespace vkit::material {
 
 enum class Type : std::uint32_t {
-  kDiffuse = 0,
-  kDiffuseSpecular = 1,
-  kPrincipledBSDF = 2,
+  kNone = 0,
+  kDiffuse = 1,
+  kDiffuseSpecular = 2,
+  kPrincipledBSDF = 3,
 };
 
 enum class AlphaMode : std::uint32_t { kOpaque = 0, kMask = 1, kBlend = 2 };

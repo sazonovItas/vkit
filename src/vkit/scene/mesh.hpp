@@ -23,11 +23,6 @@ class Mesh : public Item<Mesh>, public NodeAttachment {
     return primitives_;
   }
 
-  [[nodiscard]] auto getPrimitivesMutable()
-      -> std::span<std::shared_ptr<primitive::Primitive>> {
-    return primitives_;
-  }
-
   void addPrimitive(std::shared_ptr<primitive::Primitive> primitive) {
     if (primitive) {
       primitives_.push_back(std::move(primitive));

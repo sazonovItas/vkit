@@ -4,7 +4,6 @@
 #include "vkit/graphics/buffer.hpp"
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
-#include "vkit/graphics/util.hpp"
 
 namespace vkit::graphics {
 
@@ -20,22 +19,12 @@ struct TextureCreateInfo {
   int depth{1};
   int arrayLayerCount{1};
   int levelCount{1};
-  Buffer* buffer{nullptr};
 };
 
 class Texture {
  public:
-  Texture(vma::Allocator allocator, const util::RecordAndSubmitInfo& rsInfo,
+  Texture(vk::Device device, vma::Allocator allocator,
           const TextureCreateInfo& createInfo);
-
-  [[nodiscard]] auto makeImageView(vk::Device device) const
-      -> vk::UniqueImageView;
-  [[nodiscard]] auto makeImageView(vk::Device device,
-                                   std::uint32_t baseMipLevel,
-                                   std::uint32_t levelCount,
-                                   std::uint32_t baseArrayLayer,
-                                   std::uint32_t layerCount) const
-      -> vk::UniqueImageView;
 
   [[nodiscard]] auto getImage() const -> Image;
   [[nodiscard]] auto getView() const -> vk::ImageView;
@@ -49,9 +38,8 @@ class Texture {
   [[nodiscard]] auto getSampleCount() const -> SampleCount;
   [[nodiscard]] auto isLayered() const -> bool;
 
-  void update(const util::RecordAndSubmitInfo& info, const Buffer& buffer);
-
-  void generateMipmaps(const util::RecordAndSubmitInfo& info);
+  void recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer);
+  void recordMipmapGeneration(vk::CommandBuffer cb);
 
  private:
   TextureType type_{TextureType::k2D};
@@ -64,11 +52,8 @@ class Texture {
   static auto createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)
       -> AllocatedImage;
-};
 
-struct TextureBinding {
-  vk::Sampler sampler;
-  std::shared_ptr<Texture> texture;
+  auto makeImageView(vk::Device device) const -> vk::UniqueImageView;
 };
 
 };  // namespace vkit::graphics

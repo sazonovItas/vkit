@@ -8,11 +8,8 @@ class WindowConfiguration {
  public:
   bool show{true};
   bool fullscreen{false};
-  bool highPixelDensity{false};
 
-  int swapInterval{1};
-
-  vk::Extent2D size{};
+  glm::ivec2 size{1200, 800};
   std::string title{"vkit"};
 };
 

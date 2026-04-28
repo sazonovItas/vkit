@@ -3,9 +3,9 @@
 
 #include "common/environment.glsl"
 
-#define DIFFUSE_MATERIAL          0
-#define DIFFUSE_SPECULAR_MATERIAL 1
-#define PRINCIPLED_MATERIAL       2
+#define DIFFUSE_MATERIAL          1
+#define DIFFUSE_SPECULAR_MATERIAL 2
+#define PRINCIPLED_MATERIAL       3
 
 const vec4 FALLBACK_COLOR = vec4(1.0, 0.0, 0.0, 1.0);
 
