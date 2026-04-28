@@ -66,8 +66,6 @@ class GraphicsPipelineBuilder {
   explicit GraphicsPipelineBuilder(vk::PipelineLayout layout) {
     pipelineInfo_.setLayout(layout);
 
-    vertexInputInfo_ = vk::PipelineVertexInputStateCreateInfo{};
-
     inputAssembly_ = vk::PipelineInputAssemblyStateCreateInfo{}
                          .setTopology(vk::PrimitiveTopology::eTriangleList)
                          .setPrimitiveRestartEnable(vk::False);
@@ -179,6 +177,16 @@ class GraphicsPipelineBuilder {
     return *this;
   }
 
+  auto setVertexInput(
+      vk::ArrayProxy<const vk::VertexInputBindingDescription> bindings,
+      vk::ArrayProxy<const vk::VertexInputAttributeDescription> attributes)
+      -> GraphicsPipelineBuilder& {
+    vertexBindings_ = {bindings.begin(), bindings.end()};
+    vertexAttributes_ = {attributes.begin(), attributes.end()};
+
+    return *this;
+  }
+
   [[nodiscard]] auto build(vk::Device device, vk::PipelineCache cache = {})
       -> GraphicsPipeline {
     colorBlending_ = vk::PipelineColorBlendStateCreateInfo{}
@@ -188,8 +196,13 @@ class GraphicsPipelineBuilder {
     dynamicStateInfo_ =
         vk::PipelineDynamicStateCreateInfo{}.setDynamicStates(dynamicStates_);
 
+    auto vertex_input_state =
+        vk::PipelineVertexInputStateCreateInfo{}
+            .setVertexBindingDescriptions(vertexBindings_)
+            .setVertexAttributeDescriptions(vertexAttributes_);
+
     pipelineInfo_.setStages(shaderStages_);
-    pipelineInfo_.setPVertexInputState(&vertexInputInfo_);
+    pipelineInfo_.setPVertexInputState(&vertex_input_state);
     pipelineInfo_.setPInputAssemblyState(&inputAssembly_);
     pipelineInfo_.setPViewportState(&viewportState_);
     pipelineInfo_.setPRasterizationState(&rasterizer_);
@@ -205,7 +218,10 @@ class GraphicsPipelineBuilder {
   vk::GraphicsPipelineCreateInfo pipelineInfo_;
 
   std::vector<vk::PipelineShaderStageCreateInfo> shaderStages_;
-  vk::PipelineVertexInputStateCreateInfo vertexInputInfo_;
+
+  std::vector<vk::VertexInputBindingDescription> vertexBindings_;
+  std::vector<vk::VertexInputAttributeDescription> vertexAttributes_;
+
   vk::PipelineInputAssemblyStateCreateInfo inputAssembly_;
   vk::PipelineViewportStateCreateInfo viewportState_;
   vk::PipelineRasterizationStateCreateInfo rasterizer_;

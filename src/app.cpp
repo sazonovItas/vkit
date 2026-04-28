@@ -1,1193 +1,347 @@
 #include "app.hpp"
 
-#include <backends/imgui_impl_glfw.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 
-#include <algorithm>
-#include <array>
-#include <cassert>
-#include <chrono>
-#include <cstddef>
-#include <cstring>
-#include <optional>
-#include <print>
-#include <ranges>
-#include <stdexcept>
-#include <vector>
-
-#include "app_types.hpp"
-#include "bindless_set_manager.hpp"
-#include "fastgltf/tools.hpp"
-#include "fastgltf/types.hpp"
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/fwd.hpp"
-#include "glm/gtc/type_ptr.hpp"
-#include "render_target.hpp"
-#include "resource_buffering.hpp"
-#include "shader_program.hpp"
-#include "stb_image.h"
-#include "vkit/window/window_configuration.hpp"
-#include "vku/utils/utils.hpp"
-#include "vulkan/descriptor_set_layout/material.hpp"
-#include "vulkan/descriptor_set_layout/scene.hpp"
-#include "vulkan/gpu.hpp"
-#include "vulkan/pipeline_layout/prefilter_specular_ibl.hpp"
-#include "vulkan/pipeline_layout/primitive.hpp"
-#include "vulkan/pipeline_layout/procedural_texture.hpp"
-#include "vulkan/pipeline_layout/skybox.hpp"
-
-#define MODEL_PATH "models/sphere/scene.gltf"
-#define ENVIRONMENT_MAP_PATH "environment/ferndale_studio_03_4k.hdr"
-
-namespace {
-constexpr auto kVkMajor = 1;
-constexpr auto kVkMinor = 3;
-constexpr auto kVkPatch = 0;
-
-constexpr auto kVkVersionV = VK_MAKE_VERSION(kVkMajor, kVkMinor, kVkPatch);
-
-vk::Bool32 VKAPI_CALL
-debugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
-              vk::DebugUtilsMessageTypeFlagsEXT /*messageType*/,
-              const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
-              void* /*pUserData*/) {
-  if (pCallbackData && pCallbackData->pMessage) {
-    std::println("[Validation]: {}", pCallbackData->pMessage);
-  }
-
-  return vk::False;
-}
-
-[[nodiscard]] auto locateAssetsDir() -> std::filesystem::path {
-  static constexpr std::string_view kDirNameV{"assets"};
-
-  for (auto path = std::filesystem::current_path();
-       !path.empty() && path.has_parent_path(); path = path.parent_path()) {
-    auto ret = path / kDirNameV;
-    if (std::filesystem::is_directory(ret)) {
-      return ret;
-    }
-  }
-
-  std::println("[vkit] warning could not locate '{}' directory", kDirNameV);
-  return std::filesystem::current_path();
-}
-
-[[nodiscard]] auto getLayers(std::span<char const* const> desired)
-    -> std::vector<char const*> {
-  auto ret = std::vector<char const*>{};
-  ret.reserve(desired.size());
-
-  auto const available = vk::enumerateInstanceLayerProperties();
-  for (char const* layer : desired) {
-    auto const pred = [layer = std::string_view{layer}](
-                          vk::LayerProperties const& properties) {
-      return properties.layerName == layer;
-    };
-
-    if (std::ranges::find_if(available, pred) == available.end()) {
-      std::println("[vkit] [WARNING] Vulkan layer '{}' not found", layer);
-      continue;
-    }
-
-    ret.push_back(layer);
-  }
-
-  return ret;
-}
-
-template <typename T>
-[[nodiscard]] constexpr auto toByteArray(T const& t) {
-  return std::bit_cast<std::array<std::byte, sizeof(T)>>(t);
-}
-
-template <typename T>
-[[nodiscard]] constexpr auto toByteSpan(std::vector<T> const& v) {
-  return std::as_bytes(std::span{v});
-}
-
-constexpr auto layoutBinding(std::uint32_t binding,
-                             vk::DescriptorType const type) {
-  return vk::DescriptorSetLayoutBinding{
-      binding,
-      type,
-      1,
-      vk::ShaderStageFlagBits::eAllGraphics,
-  };
-}
-};  // namespace
+#include "vkit/graphics/util.hpp"
 
 namespace vkit {
-void App::run() {
-  assetDir_ = locateAssetsDir();
 
-  createWindow();
-  createInstance();
-  createSurface();
-  createDevice();
-  createSwapchain();
-
-  createRenderCommandPool();
-  createRenderSync();
-
-  createDescriptorLayouts();
-  createPipelineLayouts();
-  createShaders();
-
-  createDescriptorResources();
-  createDescriptorPool();
-  createDescriptorSets();
-  createBindlessSetManager();
-
-  createCommandPools();
-
-  createUI();
-
-  loadGLTF(assetPath(MODEL_PATH));
-  loadEnvironmentMap(assetPath(ENVIRONMENT_MAP_PATH));
-
-  mainLoop();
+App::App() {
+  initWindow();
+  initVulkan();
+  initImgui();
+  createDummyTextures();
 }
+
+App::~App() {
+  if (gfxDevice_) {
+    gfxDevice_->waitIdle();
+  }
+
+  for (auto& tex : dummyTextures_) {
+    if (tex.imguiId) {
+      imguiRenderer_->unregisterTexture(tex.imguiId);
+    }
+  }
+}
+
+void App::initWindow() {
+  glfwContext_ = std::make_unique<window::Context>();
+
+  const auto config = window::WindowConfiguration{
+      .show = true,
+      .fullscreen = false,
+      .size = {1280, 720},
+      .title = "vkit",
+  };
+  window_ = std::make_unique<window::Window>(config);
+}
+
+void App::initVulkan() {
+  instance_ = std::make_unique<graphics::Instance>();
+  surface_ = std::make_unique<graphics::Surface>(*window_, *instance_);
+  gfxDevice_ = std::make_shared<graphics::GfxDevice>(*instance_, *surface_);
+
+  swapchain_ = std::make_unique<graphics::Swapchain>(
+      *gfxDevice_, surface_->get(), 3, glm::ivec2{1280, 720});
+
+  auto const device = gfxDevice_->get();
+
+  commandPool_ =
+      gfxDevice_->createCommandPool(gfxDevice_->queueFamilies.graphicsPresent);
+
+  commandBuffers_.reserve(kMaxFramesInFlight);
+  imageAvailableSemaphores_.reserve(kMaxFramesInFlight);
+  renderFinishedSemaphores_.reserve(kMaxFramesInFlight);
+  inFlightFences_.reserve(kMaxFramesInFlight);
+
+  auto alloc_info = vk::CommandBufferAllocateInfo{}
+                        .setCommandPool(*commandPool_)
+                        .setLevel(vk::CommandBufferLevel::ePrimary)
+                        .setCommandBufferCount(kMaxFramesInFlight);
+
+  commandBuffers_ = device.allocateCommandBuffersUnique(alloc_info);
+
+  for (int i = 0; i < kMaxFramesInFlight; ++i) {
+    imageAvailableSemaphores_.push_back(device.createSemaphoreUnique({}));
+    renderFinishedSemaphores_.push_back(device.createSemaphoreUnique({}));
+    inFlightFences_.push_back(
+        device.createFenceUnique({vk::FenceCreateFlagBits::eSignaled}));
+  }
+}
+
+void App::initImgui() {
+  imguiRenderer_ = std::make_unique<imgui::ImguiRenderer>(
+      gfxDevice_->get(), gfxDevice_->allocator, swapchain_->getFormat(),
+      vk::SampleCountFlagBits::e1, kMaxFramesInFlight);
+
+  imguiHost_ =
+      std::make_unique<imgui::WindowImguiHost>(*imguiRenderer_, "vkit", "");
+  imguiHost_->setStyle();
+
+  imguiHost_->setDockLayoutCallback(
+      [](vkit::imgui::WindowImguiHost& host, ImVec2 availableSize) {
+        ImGuiID root_id = host.getRootDockId();
+
+        if (ImGui::DockBuilderGetNode(root_id) == nullptr ||
+            ImGui::DockBuilderGetNode(root_id)->ChildNodes[0] == nullptr) {
+          ImGui::DockBuilderRemoveNode(root_id);
+          ImGui::DockBuilderAddNode(root_id, ImGuiDockNodeFlags_DockSpace);
+          ImGui::DockBuilderSetNodeSize(root_id, availableSize);
+
+          ImGuiID dock_main_id = root_id;
+          ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(
+              dock_main_id, ImGuiDir_Left, 0.20F, nullptr, &dock_main_id);
+          ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(
+              dock_main_id, ImGuiDir_Right, 0.25F, nullptr, &dock_main_id);
+
+          ImGui::DockBuilderDockWindow("Red Viewport", dock_left_id);
+          ImGui::DockBuilderDockWindow("Green Viewport", dock_right_id);
+          ImGui::DockBuilderDockWindow("Blue Viewport", dock_main_id);
+
+          ImGui::DockBuilderFinish(root_id);
+        }
+      });
+
+  std::optional<graphics::MappedBuffer> font_staging;
+  auto const submit_info = graphics::util::RecordAndSubmitInfo{
+      .device = gfxDevice_->get(),
+      .queue = gfxDevice_->queues.graphicsPresent,
+      .commandPool = gfxDevice_->getGraphicsPresentCommandPool()};
+
+  graphics::util::recordAndSubmit(submit_info, [&](vk::CommandBuffer cb) {
+    font_staging = imguiRenderer_->uploadFont(cb);
+  });
+
+  windowManager_ = std::make_unique<imgui::ImguiWindowManager>();
+
+  auto dummy_resize = [](std::uint32_t w, std::uint32_t h) {};
+
+  viewportRed_ = std::make_shared<imgui::windows::ViewportWindow>(
+      "Red Viewport", dummy_resize);
+  viewportGreen_ = std::make_shared<imgui::windows::ViewportWindow>(
+      "Green Viewport", dummy_resize);
+  viewportBlue_ = std::make_shared<imgui::windows::ViewportWindow>(
+      "Blue Viewport", dummy_resize);
+
+  windowManager_->addWindow(viewportRed_);
+  windowManager_->addWindow(viewportGreen_);
+  windowManager_->addWindow(viewportBlue_);
+}
+
+void App::createDummyTextures() {
+  auto sampler_ci = vk::SamplerCreateInfo{}
+                        .setMagFilter(vk::Filter::eNearest)
+                        .setMinFilter(vk::Filter::eNearest);
+  defaultSampler_ = gfxDevice_->get().createSamplerUnique(sampler_ci);
+
+  dummyTextures_.push_back(create1x1Texture({255, 0, 0, 255}));
+  dummyTextures_.push_back(create1x1Texture({0, 255, 0, 255}));
+  dummyTextures_.push_back(create1x1Texture({0, 0, 255, 255}));
+
+  viewportRed_->setCurrentTexture(dummyTextures_[0].imguiId);
+  viewportGreen_->setCurrentTexture(dummyTextures_[1].imguiId);
+  viewportBlue_->setCurrentTexture(dummyTextures_[2].imguiId);
+}
+
+void App::run() { mainLoop(); }
 
 void App::mainLoop() {
-  while (!window_.shouldClose()) {
-    window_.pollEvents();
+  const auto device = gfxDevice_->get();
+  auto last_time = std::chrono::steady_clock::now();
+  auto swapchain_needs_recreation = false;
 
-    if (procTexParams_.triggerGeneration) {
-      generateProceduralTexture();
-      procTexParams_.triggerGeneration = false;
+  while (!window_->shouldClose()) {
+    window_->pollEvents();
+
+    auto current_time = std::chrono::steady_clock::now();
+    float dt = std::chrono::duration<float, std::chrono::seconds::period>(
+                   current_time - last_time)
+                   .count();
+    last_time = current_time;
+
+    for (auto& event : window_->getInputEvents()) {
+      bool handled = imguiHost_->dispatchInputEvent(event);
+
+      if (event.type == window::InputEventType::kWindowResizeEvent) {
+        swapchain_needs_recreation = true;
+      }
     }
 
-    if (!acquireRenderTarget()) {
+    if (swapchain_needs_recreation) {
+      recreateSwapchain();
+      swapchain_needs_recreation = false;
       continue;
     }
 
-    const auto cb = beginFrame();
+    std::ignore = device.waitForFences(*inFlightFences_[currentFrame_],
+                                       vk::True, UINT64_MAX);
 
-    transitionForRender(cb);
-    render(cb);
+    auto image_index_opt =
+        swapchain_->acquireNextImage(*imageAvailableSemaphores_[currentFrame_]);
 
-    transitionForPresent(cb);
-    submitAndPresent();
-  }
-}
-
-auto App::assetPath(std::string_view uri) const -> std::filesystem::path {
-  return assetDir_ / uri;
-}
-
-void App::loadGLTF(const std::filesystem::path& path) {
-  const auto copy_info = vku::DeviceCopyInfo{
-      .device = *gpu_->device,
-      .commandPool = *graphicsCommandPool_,
-      .queue = gpu_->queues.graphicsPresent,
-  };
-
-  gltfAsset_.emplace(path, gpu_->allocator, copy_info);
-
-  for (const auto& [idx, texture] : gltfAsset_->textures) {
-    bindlessSetManager_->addTexture2D(*gpu_->device, static_cast<uint32_t>(idx),
-                                      *texture);
-  }
-
-  ui_->uploadTextures(*gpu_->device, *gltfAsset_);
-}
-
-void App::loadEnvironmentMap(const std::filesystem::path& path) {
-  auto const copy_info = vku::DeviceCopyInfo{
-      .device = *gpu_->device,
-      .commandPool = *graphicsCommandPool_,
-      .queue = gpu_->queues.graphicsPresent,
-  };
-
-  const auto env_info =
-      vku::TextureInfo::fromPath(path, vk::Format::eR32G32B32A32Sfloat, 4, 4);
-
-  environmentMaps_.emplace_back(env_info, gpu_->allocator, copy_info);
-
-  bindlessSetManager_->addEnvMapTexture2D(*gpu_->device, 0,
-                                          environmentMaps_.back());
-
-  const uint32_t diffuse_width = env_info.width;
-  const uint32_t diffuse_height = env_info.height;
-
-  environmentDiffuseMaps_.emplace_back(
-      gpu_->allocator, copy_info, diffuse_width, diffuse_height,
-      vk::Format::eR32G32B32A32Sfloat, 1,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
-      vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
-      vk::PipelineStageFlagBits2::eComputeShader);
-
-  auto& diffuse_tex = environmentDiffuseMaps_.back();
-
-  bindlessSetManager_->addStorageImage2D(*gpu_->device, 1, diffuse_tex);
-
-  const uint32_t spec_base_width = env_info.width;
-  const uint32_t spec_base_height = env_info.height;
-  const uint32_t mip_levels = 10;
-
-  environmentSpecularMaps_.emplace_back(
-      gpu_->allocator, copy_info, spec_base_width, spec_base_height,
-      vk::Format::eR32G32B32A32Sfloat, mip_levels,
-      vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
-      vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
-      vk::PipelineStageFlagBits2::eComputeShader);
-
-  auto& specular_tex = environmentSpecularMaps_.back();
-
-  std::vector<vk::UniqueImageView> temp_mip_views;
-  for (uint32_t mip = 0; mip < mip_levels; ++mip) {
-    auto view_ci = specular_tex.image.getViewCreateInfo();
-    view_ci.subresourceRange.baseMipLevel = mip;
-    view_ci.subresourceRange.levelCount = 1;
-    temp_mip_views.push_back(gpu_->device->createImageViewUnique(view_ci));
-
-    auto image_info = vk::DescriptorImageInfo{}
-                          .setImageLayout(vk::ImageLayout::eGeneral)
-                          .setImageView(*temp_mip_views.back());
-
-    auto write =
-        vk::WriteDescriptorSet{}
-            .setDstSet(bindlessSetManager_->getSet())
-            .setDstBinding(vulkan::dsl::BindlessLayout::kStorageImageBindingIdx)
-            .setDstArrayElement(10 + mip)
-            .setDescriptorCount(1)
-            .setDescriptorType(vk::DescriptorType::eStorageImage)
-            .setImageInfo(image_info);
-
-    gpu_->device->updateDescriptorSets(write, nullptr);
-  }
-
-  auto generate_ibl_fn = [&](vk::CommandBuffer cb) {
-    prefilterDiffuseShader_->bind(cb);
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                          prefilterDiffuseLayout_->get(), 0,
-                          bindlessSetManager_->getSet(), {});
-
-    auto diffuse_pcs = vulkan::pl::PrefilterDiffuseIBLLayout::PushConstants{
-        .sourceEnvMapIdx =
-            static_cast<uint32_t>(BindlessSetManager::getEnvMapId(0)),
-        .outIrradianceMapIdx = 1,
-    };
-
-    cb.pushConstants(prefilterDiffuseLayout_->get(),
-                     vk::ShaderStageFlagBits::eCompute, 0, sizeof(diffuse_pcs),
-                     &diffuse_pcs);
-
-    uint32_t diff_groups_x = (diffuse_width + 15) / 16;
-    uint32_t diff_groups_y = (diffuse_height + 15) / 16;
-    prefilterDiffuseShader_->dispatch(cb, diff_groups_x, diff_groups_y, 1);
-
-    prefilterSpecularShader_->bind(cb);
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                          prefilterSpecularLayout_->get(), 0,
-                          bindlessSetManager_->getSet(), {});
-
-    for (uint32_t mip = 0; mip < mip_levels; ++mip) {
-      uint32_t mip_width = std::max(1U, spec_base_width >> mip);
-      uint32_t mip_height = std::max(1U, spec_base_height >> mip);
-
-      float roughness =
-          static_cast<float>(mip) / static_cast<float>(mip_levels - 1);
-
-      auto spec_pcs = vulkan::pl::PrefilterSpecularIBLLayout::PushConstants{
-          .sourceEnvMapIdx =
-              static_cast<uint32_t>(BindlessSetManager::getEnvMapId(0)),
-          .outPrefilterMapIdx = 10 + mip,
-          .roughness = roughness,
-      };
-
-      cb.pushConstants(prefilterSpecularLayout_->get(),
-                       vk::ShaderStageFlagBits::eCompute, 0, sizeof(spec_pcs),
-                       &spec_pcs);
-
-      uint32_t spec_groups_x = (mip_width + 15) / 16;
-      uint32_t spec_groups_y = (mip_height + 15) / 16;
-      prefilterSpecularShader_->dispatch(cb, spec_groups_x, spec_groups_y, 1);
-    }
-  };
-
-  vku::executeCommandAndWait(*gpu_->device, *computeCommandPool_,
-                             gpu_->queues.compute, generate_ibl_fn);
-
-  // Diffuse
-  diffuse_tex.transferToImageLayout(
-      copy_info, vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::AccessFlagBits2::eShaderWrite,
-      vk::PipelineStageFlagBits2::eComputeShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::PipelineStageFlagBits2::eFragmentShader);
-
-  // Specular
-  specular_tex.transferToImageLayout(
-      copy_info, vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::AccessFlagBits2::eShaderWrite,
-      vk::PipelineStageFlagBits2::eComputeShader,
-      vk::AccessFlagBits2::eShaderRead,
-      vk::PipelineStageFlagBits2::eFragmentShader);
-
-  // Bind to the Sampled Image array so your Graphics Pipeline can read them!
-  bindlessSetManager_->addDiffuseEnvMapTexture2D(*gpu_->device, 0, diffuse_tex);
-  bindlessSetManager_->addSpecularEnvMapTexture2D(*gpu_->device, 0,
-                                                  specular_tex);
-
-  currEnvMapIdx_ = 0;
-}
-
-void App::generateProceduralTexture() {
-  if (!gltfAsset_.has_value()) return;
-
-  auto const copy_info = vku::DeviceCopyInfo{
-      .device = *gpu_->device,
-      .commandPool = *graphicsCommandPool_,
-      .queue = gpu_->queues.graphicsPresent,
-  };
-
-  bool want_color = (procTexParams_.generationMode == 0 ||
-                     procTexParams_.generationMode == 2);
-  bool want_normal = (procTexParams_.generationMode == 1 ||
-                      procTexParams_.generationMode == 2);
-
-  uint32_t color_idx = 512;
-  if (want_color) {
-    while (gltfAsset_->textures.contains(color_idx)) color_idx++;
-    gltfAsset_->textures[color_idx] = std::make_unique<vku::Texture2D>(
-        gpu_->allocator, copy_info, procTexParams_.width, procTexParams_.height,
-        vk::Format::eR8G8B8A8Unorm, 1,
-        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
-        vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
-        vk::PipelineStageFlagBits2::eComputeShader);
-    bindlessSetManager_->addStorageImage2D(*gpu_->device, 2,
-                                           *gltfAsset_->textures[color_idx]);
-  }
-
-  uint32_t normal_idx = 512;
-  if (want_normal) {
-    while (gltfAsset_->textures.contains(normal_idx)) normal_idx++;
-    gltfAsset_->textures[normal_idx] = std::make_unique<vku::Texture2D>(
-        gpu_->allocator, copy_info, procTexParams_.width, procTexParams_.height,
-        vk::Format::eR8G8B8A8Unorm, 1,
-        vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eStorage,
-        vk::ImageLayout::eGeneral, vk::AccessFlagBits2::eShaderWrite,
-        vk::PipelineStageFlagBits2::eComputeShader);
-    bindlessSetManager_->addStorageImage2D(*gpu_->device, 3,
-                                           *gltfAsset_->textures[normal_idx]);
-  }
-
-  auto generate_fn = [&](vk::CommandBuffer cb) {
-    proceduralTextureShader_->bind(cb);
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute,
-                          proceduralTextureLayout_->get(), 0,
-                          bindlessSetManager_->getSet(), {});
-
-    auto pcs = vulkan::pl::ProceduralTextureLayout::PushConstants{
-        .outImageIdx = 2,
-        .outNormalImageIdx = 3,
-        .generateColorMap = want_color ? 1U : 0U,
-        .generateNormalMap = want_normal ? 1U : 0U,
-        .tileSize = procTexParams_.tileSize,
-        .patternType = static_cast<uint32_t>(procTexParams_.patternType),
-        .mortarThickness = procTexParams_.mortarThickness,
-        .brickColor = procTexParams_.brickColor,
-        .mortarColor = procTexParams_.mortarColor,
-    };
-
-    cb.pushConstants(proceduralTextureLayout_->get(),
-                     vk::ShaderStageFlagBits::eCompute, 0, sizeof(pcs), &pcs);
-    proceduralTextureShader_->dispatch(cb, (procTexParams_.width + 15) / 16,
-                                       (procTexParams_.height + 15) / 16, 1);
-  };
-
-  vku::executeCommandAndWait(*gpu_->device, *computeCommandPool_,
-                             gpu_->queues.compute, generate_fn);
-
-  // --- 3. Finalize ---
-  if (want_color) {
-    auto& tex = *gltfAsset_->textures[color_idx];
-    tex.transferToImageLayout(copy_info,
-                              vk::ImageLayout::eShaderReadOnlyOptimal,
-                              vk::AccessFlagBits2::eShaderWrite,
-                              vk::PipelineStageFlagBits2::eComputeShader,
-                              vk::AccessFlagBits2::eShaderRead,
-                              vk::PipelineStageFlagBits2::eFragmentShader);
-    bindlessSetManager_->addTexture2D(*gpu_->device, color_idx, tex);
-  }
-  if (want_normal) {
-    auto& tex = *gltfAsset_->textures[normal_idx];
-    tex.transferToImageLayout(copy_info,
-                              vk::ImageLayout::eShaderReadOnlyOptimal,
-                              vk::AccessFlagBits2::eShaderWrite,
-                              vk::PipelineStageFlagBits2::eComputeShader,
-                              vk::AccessFlagBits2::eShaderRead,
-                              vk::PipelineStageFlagBits2::eFragmentShader);
-    bindlessSetManager_->addTexture2D(*gpu_->device, normal_idx, tex);
-  }
-
-  ui_->uploadTextures(*gpu_->device, *gltfAsset_);
-}
-
-void App::drawUI() {
-  ui_->moveCamera(camera_);
-
-  ui_->drawViewManipulation(camera_);
-
-  ui_->drawInspect(camera_, transform_, uboParams_, lights_);
-
-  ui_->drawProceduralGenerator(procTexParams_);
-
-  if (gltfAsset_.has_value()) {
-    ui_->drawGraphEditor(*gltfAsset_);
-  }
-}
-
-void App::update() {
-  auto model = transform_.modelMatrix();
-  auto cam_pos = camera_.getPosition();
-  auto view = glm::lookAt(cam_pos, camera_.target, camera_.up);
-
-  float aspect = static_cast<float>(frameBufferSize_.x) /
-                 static_cast<float>(frameBufferSize_.y);
-  auto projection =
-      glm::perspective(glm::radians(60.0F), aspect, 0.1F, 1000.0F);
-
-  ubo_ = UBO{
-      .model = model,
-      .view = view,
-      .projection = projection,
-      .cameraPosition = cam_pos,
-  };
-
-  const auto ubo_bytes =
-      std::bit_cast<std::array<std::byte, sizeof(ubo_)>>(ubo_);
-  uboBuffers_->writeAt(frameIndex_, ubo_bytes);
-
-  uboParams_.lightCount = lights_.size();
-  uboParams_.diffuseEnvMapIdx =
-      !currEnvMapIdx_ ? -1
-                      : BindlessSetManager::getDiffuseEnvMapId(*currEnvMapIdx_);
-  uboParams_.specularEnvMapIdx =
-      !currEnvMapIdx_
-          ? -1
-          : BindlessSetManager::getSpecularEnvMapId(*currEnvMapIdx_);
-  uboParams_.maxSpecularLod = 9.0F;
-
-  const auto ubo_params_bytes =
-      std::bit_cast<std::array<std::byte, sizeof(uboParams_)>>(uboParams_);
-  uboParamsBuffers_->writeAt(frameIndex_, ubo_params_bytes);
-
-  const auto lights_bytes = toByteSpan(lights_);
-  lightsBuffers_->writeAt(frameIndex_, lights_bytes);
-
-  size_t max_idx = 0;
-  for (const auto& [idx, m] : gltfAsset_->materials) {
-    max_idx = std::max(max_idx, idx);
-  }
-  materials_.clear();
-  materials_.resize(max_idx + 1);
-
-  for (const auto& [idx, m] : gltfAsset_->materials) {
-    Material mat{};
-
-    mat.baseColorFactor = m.baseColorFactor;
-    mat.emissiveFactor = glm::vec4(glm::make_vec3(&m.emissiveFactor.x), 1.0F);
-    mat.metallicFactor = m.metallicFactor;
-    mat.roughnessFactor = m.roughnessFactor;
-    mat.alphaMaskCutoff =
-        (m.alphaMode == fastgltf::AlphaMode::Mask) ? m.alphaCutoff : 0.0F;
-    mat.emissiveStrength = m.emissiveStrength;
-    mat.dissolveStrength = m.dissolveStrength;
-
-    auto get_tex_idx = [](const std::optional<std::uint32_t>& tex) -> int32_t {
-      return tex.has_value() ? static_cast<int32_t>(*tex) : -1;
-    };
-
-    mat.baseColorTextureIdx = get_tex_idx(m.baseColorTexture);
-    mat.metallicRoughnessTextureIdx = get_tex_idx(m.metallicRoughnessTexture);
-    mat.normalTextureIdx = get_tex_idx(m.normalTexture);
-    mat.occlusionTextureIdx = get_tex_idx(m.occlusionTexture);
-    mat.emissiveTextureIdx = get_tex_idx(m.emissiveTexture);
-
-    materials_[idx] = mat;
-  }
-
-  const auto materials_bytes = toByteSpan(materials_);
-  materialsBuffers_->writeAt(frameIndex_, materials_bytes);
-}
-
-void App::bindSkyboxDescriptorSets(vk::CommandBuffer cb) const {
-  const auto descriptor_sets = std::array<vk::DescriptorSet, 2>{
-      *sceneSets_.at(frameIndex_),
-      bindlessSetManager_->getSet(),
-  };
-
-  cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, skyboxLayout_->get(),
-                        0, descriptor_sets, {});
-}
-
-void App::bindPrimitiveDescriptorSets(vk::CommandBuffer cb) const {
-  const auto descriptor_sets = std::array<vk::DescriptorSet, 3>{
-      *sceneSets_.at(frameIndex_),
-      *materialsSets_.at(frameIndex_),
-      bindlessSetManager_->getSet(),
-  };
-
-  cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                        primitiveLayout_->get(), 0, descriptor_sets, {});
-}
-
-void App::draw(vk::CommandBuffer cb) const {
-  if (!gltfAsset_.has_value()) {
-    return;
-  }
-
-  bindSkyboxDescriptorSets(cb);
-  skyboxShader_->bind(cb, frameBufferSize_);
-
-  drawSkybox(cb);
-
-  bindPrimitiveDescriptorSets(cb);
-  primitiveShader_->bind(cb, frameBufferSize_);
-
-  cb.setDepthWriteEnable(vk::True);
-  cb.setColorBlendEnableEXT(0, vk::False);
-  cb.setCullMode(vk::CullModeFlagBits::eBack);
-
-  fastgltf::iterateSceneNodes(gltfAsset_->asset, gltfAsset_->sceneIdx,
-                              fastgltf::math::fmat4x4(),
-                              [&](const fastgltf::Node& node,
-                                  const fastgltf::math::fmat4x4& transform) {
-                                drawNode(cb, node, transform, false);
-                              });
-
-  cb.setDepthWriteEnable(vk::False);
-
-  auto color_blend_equation =
-      vk::ColorBlendEquationEXT{}
-          .setSrcColorBlendFactor(vk::BlendFactor::eSrcAlpha)
-          .setDstColorBlendFactor(vk::BlendFactor::eOneMinusSrcAlpha)
-          .setColorBlendOp(vk::BlendOp::eAdd)
-          .setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
-          .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
-          .setAlphaBlendOp(vk::BlendOp::eAdd);
-
-  cb.setColorBlendEnableEXT(0, vk::True);
-  cb.setColorBlendEquationEXT(0, color_blend_equation);
-
-  fastgltf::iterateSceneNodes(gltfAsset_->asset, gltfAsset_->sceneIdx,
-                              fastgltf::math::fmat4x4(),
-                              [&](const fastgltf::Node& node,
-                                  const fastgltf::math::fmat4x4& transform) {
-                                drawNode(cb, node, transform, true);
-                              });
-}
-
-void App::drawSkybox(vk::CommandBuffer cb) const {
-  using PushConstants = vulkan::pl::SkyboxLayout::PushConstants;
-
-  auto env_map_idx = std::int32_t{-1};
-  if (currEnvMapIdx_) {
-    env_map_idx = static_cast<std::int32_t>(*currEnvMapIdx_);
-  }
-
-  auto push_constants = PushConstants{
-      .envBaseColor = envBaseColor_,
-      .envMapIdx =
-          env_map_idx < 0 ? -1 : BindlessSetManager::getEnvMapId(env_map_idx),
-  };
-
-  cb.pushConstants(skyboxLayout_->get(), vk::ShaderStageFlagBits::eFragment, 0,
-                   sizeof(PushConstants), &push_constants);
-  cb.draw(6, 1, 0, 0);
-}
-
-void App::drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
-                   const fastgltf::math::fmat4x4& transform,
-                   bool isTransparentPass) const {
-  using PushConstants = vulkan::pl::PrimitiveLayout::PushConstants;
-
-  if (!node.meshIndex.has_value()) return;
-
-  auto it = gltfAsset_->meshes.find(node.meshIndex.value());
-  assert(it != gltfAsset_->meshes.end());
-  const auto& mesh = it->second;
-
-  glm::mat4 node_transform;
-  std::memcpy(glm::value_ptr(node_transform), transform.data(),
-              sizeof(glm::mat4));
-
-  auto push_constants = PushConstants{
-      .meshIdx = static_cast<uint32_t>(node.meshIndex.value()),
-      .transform = node_transform,
-  };
-
-  for (const auto& primitive : mesh->primitives) {
-    if (!gltfAsset_->materials.contains(primitive.materialIdx)) {
+    if (!image_index_opt) {
+      swapchain_needs_recreation = true;
       continue;
     }
 
-    const auto& material = gltfAsset_->materials.at(primitive.materialIdx);
-    bool is_transparent = (material.alphaMode == fastgltf::AlphaMode::Blend);
+    device.resetFences(*inFlightFences_[currentFrame_]);
+    const auto image_index = image_index_opt.value();
 
-    if (isTransparentPass && !is_transparent) continue;
-    if (!isTransparentPass && is_transparent) continue;
+    imguiHost_->beginFrame(window_->getWidth(), window_->getHeight(), dt);
+    windowManager_->drawWindows();
+    imguiHost_->endFrame();
 
-    vk::CullModeFlags cull_mode = material.doubleSided
-                                      ? vk::CullModeFlagBits::eNone
-                                      : vk::CullModeFlagBits::eBack;
-    cb.setCullMode(cull_mode);
+    const auto& cb = *commandBuffers_[currentFrame_];
 
-    push_constants.materialIdx = primitive.materialIdx;
-    push_constants.vertices = primitive.vertexBuffer.getAddress(*gpu_->device);
+    cb.reset();
+    auto begin_info = vk::CommandBufferBeginInfo{}.setFlags(
+        vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cb.begin(begin_info);
 
-    cb.pushConstants(
-        primitiveLayout_->get(),
-        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-        0, sizeof(PushConstants), &push_constants);
+    auto barrier = swapchain_->imageBaseBarrier(image_index);
+    barrier.setOldLayout(vk::ImageLayout::eUndefined)
+        .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
+        .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+        .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentWrite)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
+        .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+    cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
 
-    cb.bindIndexBuffer(primitive.indexBuffer.buffer, 0, vk::IndexType::eUint32);
-    cb.drawIndexed(primitive.indexCount, 1, 0, 0, 0);
+    auto color_attachment =
+        vk::RenderingAttachmentInfo{}
+            .setImageView(swapchain_->getImageView(image_index))
+            .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+            .setLoadOp(vk::AttachmentLoadOp::eClear)
+            .setStoreOp(vk::AttachmentStoreOp::eStore)
+            .setClearValue(vk::ClearColorValue{
+                std::array<float, 4>{0.02F, 0.02F, 0.02F, 1.0F}});
+
+    auto render_info =
+        vk::RenderingInfo{}
+            .setRenderArea(vk::Rect2D{{0, 0}, swapchain_->getExtent()})
+            .setLayerCount(1)
+            .setColorAttachments(color_attachment);
+
+    cb.beginRendering(render_info);
+
+    imguiHost_->render(cb, currentFrame_);
+
+    cb.endRendering();
+
+    barrier.setOldLayout(vk::ImageLayout::eColorAttachmentOptimal)
+        .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
+        .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentWrite)
+        .setDstAccessMask(vk::AccessFlagBits2::eNone)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
+        .setDstStageMask(vk::PipelineStageFlagBits2::eBottomOfPipe);
+    cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
+
+    cb.end();
+
+    vk::PipelineStageFlags wait_stages =
+        vk::PipelineStageFlagBits::eColorAttachmentOutput;
+
+    auto submit_info =
+        vk::SubmitInfo{}
+            .setWaitSemaphores(*imageAvailableSemaphores_[currentFrame_])
+            .setWaitDstStageMask(wait_stages)
+            .setCommandBuffers(cb)
+            .setSignalSemaphores(*renderFinishedSemaphores_[currentFrame_]);
+
+    gfxDevice_->queues.graphicsPresent.submit(submit_info,
+                                              *inFlightFences_[currentFrame_]);
+
+    const auto presented = swapchain_->present(
+        image_index, *renderFinishedSemaphores_[currentFrame_]);
+    if (!presented) {
+      swapchain_needs_recreation = true;
+    }
+
+    currentFrame_ = (currentFrame_ + 1) % kMaxFramesInFlight;
   }
 }
 
-void App::updateDescriptorSets() const {
-  auto writes = std::array<vk::WriteDescriptorSet, 4>{};
-
-  auto write = vk::WriteDescriptorSet{};
-
-  const auto scene_set = *sceneSets_.at(frameIndex_);
-  const auto ubo_info = uboBuffers_->descriptorInfoAt(frameIndex_);
-  write.setBufferInfo(ubo_info)
-      .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-      .setDescriptorCount(1)
-      .setDstSet(scene_set)
-      .setDstBinding(vulkan::dsl::SceneLayout::kUBOBindingIdx);
-  writes[0] = write;
-
-  const auto ubo_params_info = uboParamsBuffers_->descriptorInfoAt(frameIndex_);
-  write.setBufferInfo(ubo_params_info)
-      .setDescriptorType(vk::DescriptorType::eUniformBuffer)
-      .setDescriptorCount(1)
-      .setDstSet(scene_set)
-      .setDstBinding(vulkan::dsl::SceneLayout::kUBOParamsBindingIdx);
-  writes[1] = write;
-
-  const auto lights_info = lightsBuffers_->descriptorInfoAt(frameIndex_);
-  write.setBufferInfo(lights_info)
-      .setDescriptorType(vk::DescriptorType::eStorageBuffer)
-      .setDescriptorCount(1)
-      .setDstSet(scene_set)
-      .setDstBinding(vulkan::dsl::SceneLayout::kSSBOLightsBindingIdx);
-  writes[2] = write;
-
-  const auto materials_set = *materialsSets_.at(frameIndex_);
-  const auto materials_info = materialsBuffers_->descriptorInfoAt(frameIndex_);
-  write.setBufferInfo(materials_info)
-      .setDescriptorType(vk::DescriptorType::eStorageBuffer)
-      .setDescriptorCount(1)
-      .setDstSet(materials_set)
-      .setDstBinding(vulkan::dsl::MaterialLayout::kMaterialBindingIdx);
-  writes[3] = write;
-
-  gpu_->device->updateDescriptorSets(writes, {});
-}
-
-auto App::acquireRenderTarget() -> bool {
-  frameBufferSize_ = {window_.getWidth(), window_.getHeight()};
-  if (frameBufferSize_.x <= 0 || frameBufferSize_.y <= 0) {
-    return false;
-  }
-
-  auto& render_sync = renderSync_.at(frameIndex_);
-
-  static constexpr auto kFenceTimeoutV = static_cast<std::uint64_t>(
-      std::chrono::nanoseconds{std::chrono::seconds{3}}.count());
-  auto result =
-      gpu_->device->waitForFences(*render_sync.drawn, vk::True, kFenceTimeoutV);
-  if (result != vk::Result::eSuccess) {
-    throw std::runtime_error{"failed to wait for render fence"};
-  }
-
-  renderTarget_ = swapchain_->acquireNextImage(*render_sync.draw);
-  if (!renderTarget_) {
-    swapchain_->recreate(frameBufferSize_);
-    return false;
-  }
-
-  gpu_->device->resetFences(*render_sync.drawn);
-
-  return true;
-}
-
-auto App::beginFrame() -> vk::CommandBuffer {
-  auto const& render_sync = renderSync_.at(frameIndex_);
-
-  auto bi = vk::CommandBufferBeginInfo{};
-  bi.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-  render_sync.cb.begin(bi);
-
-  return render_sync.cb;
-}
-
-void App::transitionForRender(vk::CommandBuffer cb) const {
-  auto color_barrier = swapchain_->baseColorBarrier();
-  color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
-      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
-      .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentWrite |
-                        vk::AccessFlagBits2::eColorAttachmentRead);
-
-  auto depth_barrier = swapchain_->baseDepthBarrier();
-  depth_barrier.setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-      .setSrcAccessMask(vk::AccessFlagBits2::eNone)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
-      .setDstAccessMask(vk::AccessFlagBits2::eDepthStencilAttachmentRead |
-                        vk::AccessFlagBits2::eDepthStencilAttachmentWrite)
-      .setDstStageMask(vk::PipelineStageFlagBits2::eEarlyFragmentTests |
-                       vk::PipelineStageFlagBits2::eLateFragmentTests);
-
-  auto swapchain_color_barrier = swapchain_->baseBarrier();
-  swapchain_color_barrier.setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
-                        vk::AccessFlagBits2::eColorAttachmentWrite)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(swapchain_color_barrier.srcAccessMask)
-      .setDstStageMask(swapchain_color_barrier.srcStageMask);
-
-  auto barriers =
-      std::array{color_barrier, depth_barrier, swapchain_color_barrier};
-  cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barriers));
-}
-
-void App::render(vk::CommandBuffer cb) {
-  const auto render_area = vk::Rect2D{vk::Offset2D{}, renderTarget_->extent};
-
-  auto color_attachment = vk::RenderingAttachmentInfo{};
-  color_attachment.setImageView(renderTarget_->colorImageView)
-      .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setResolveMode(vk::ResolveModeFlagBits::eAverage)
-      .setResolveImageView(renderTarget_->swapchainImageView)
-      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setLoadOp(vk::AttachmentLoadOp::eClear)
-      .setStoreOp(vk::AttachmentStoreOp::eStore)
-      .setClearValue(vk::ClearColorValue{0.0F, 0.0F, 0.0F, 1.0F});
-
-  auto depth_attachment = vk::RenderingAttachmentInfo{};
-  depth_attachment.setImageView(renderTarget_->depthImageView)
-      .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-      .setLoadOp(vk::AttachmentLoadOp::eClear)
-      .setStoreOp(vk::AttachmentStoreOp::eDontCare)
-      .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
-
-  auto rendering_info = vk::RenderingInfo{};
-  rendering_info.setRenderArea(render_area)
-      .setLayerCount(1)
-      .setColorAttachments(color_attachment)
-      .setPDepthAttachment(&depth_attachment);
-
-  update();
-  updateDescriptorSets();
-
-  cb.beginRendering(rendering_info);
-  draw(cb);
-  cb.endRendering();
-
-  auto imgui_attachment = vk::RenderingAttachmentInfo{};
-  imgui_attachment.setImageView(renderTarget_->colorImageView)
-      .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setResolveMode(vk::ResolveModeFlagBits::eAverage)
-      .setResolveImageView(renderTarget_->swapchainImageView)
-      .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
-      .setLoadOp(vk::AttachmentLoadOp::eLoad)
-      .setStoreOp(vk::AttachmentStoreOp::eStore);
-
-  auto imgui_rendering = vk::RenderingInfo{};
-  imgui_rendering.setRenderArea(render_area)
-      .setLayerCount(1)
-      .setColorAttachments(imgui_attachment);
-
-  ui_->newFrame();
-  drawUI();
-  ui_->endFrame();
-
-  cb.beginRendering(imgui_rendering);
-  ui_->render(cb);
-  cb.endRendering();
-}
-
-void App::transitionForPresent(vk::CommandBuffer cb) const {
-  auto barrier = swapchain_->baseBarrier();
-  barrier.setOldLayout(vk::ImageLayout::eAttachmentOptimal)
-      .setNewLayout(vk::ImageLayout::ePresentSrcKHR)
-      .setSrcAccessMask(vk::AccessFlagBits2::eColorAttachmentRead |
-                        vk::AccessFlagBits2::eColorAttachmentWrite)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-      .setDstAccessMask(barrier.srcAccessMask)
-      .setDstStageMask(barrier.srcStageMask);
-
-  auto dependency_info = vk::DependencyInfo{};
-  dependency_info.setImageMemoryBarriers(barrier);
-
-  cb.pipelineBarrier2(dependency_info);
-}
-
-void App::submitAndPresent() {
-  auto const& render_sync = renderSync_.at(frameIndex_);
-  render_sync.cb.end();
-
-  auto submit_info = vk::SubmitInfo2{};
-  auto const cb_info = vk::CommandBufferSubmitInfo{render_sync.cb};
-
-  auto wait_semaphore_info = vk::SemaphoreSubmitInfo{};
-  wait_semaphore_info.setSemaphore(*render_sync.draw)
-      .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
-
-  auto signal_semaphore_info = vk::SemaphoreSubmitInfo{};
-  signal_semaphore_info.setSemaphore(swapchain_->getPresentSemaphore())
-      .setStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput);
-
-  submit_info.setCommandBufferInfos(cb_info)
-      .setWaitSemaphoreInfos(wait_semaphore_info)
-      .setSignalSemaphoreInfos(signal_semaphore_info);
-
-  gpu_->queues.graphicsPresent.submit2(submit_info, *render_sync.drawn);
-
-  frameIndex_ = (frameIndex_ + 1) % renderSync_.size();
-  renderTarget_.reset();
-
-  auto const fb_size_changed = frameBufferSize_ != swapchain_->getSize();
-  auto const out_of_date = !swapchain_->present(gpu_->queues.graphicsPresent);
-  if (fb_size_changed || out_of_date) swapchain_->recreate(frameBufferSize_);
-}
-
-void App::createDescriptorLayouts() {
-  sceneSetLayout_.emplace(*gpu_->device);
-  materialSetLayout_.emplace(*gpu_->device);
-  bindlessSetLayout_.emplace(*gpu_->device);
-}
-
-void App::createPipelineLayouts() {
-  skyboxLayout_.emplace(*gpu_->device,
-                        std::tie(*sceneSetLayout_, *bindlessSetLayout_));
-
-  primitiveLayout_.emplace(
-      *gpu_->device,
-      std::tie(*sceneSetLayout_, *materialSetLayout_, *bindlessSetLayout_));
-
-  prefilterDiffuseLayout_.emplace(*gpu_->device, std::tie(*bindlessSetLayout_));
-
-  prefilterSpecularLayout_.emplace(*gpu_->device,
-                                   std::tie(*bindlessSetLayout_));
-
-  proceduralTextureLayout_.emplace(*gpu_->device,
-                                   std::tie(*bindlessSetLayout_));
-}
-
-void App::createShaders() {
-  {
-    const auto vertex_shader_spirv =
-        vku::toSpirV(assetPath("shaders/skybox.vert"));
-    const auto fragment_shader_spirv =
-        vku::toSpirV(assetPath("shaders/skybox.frag"));
-
-    auto set_layouts = std::array<vk::DescriptorSetLayout, 2>{
-        sceneSetLayout_->get(),
-        bindlessSetLayout_->get(),
-    };
-
-    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::SkyboxLayout::kPushConstantRange,
-    };
-
-    const auto ci = ShaderProgramCreateInfo{
-        .device = *gpu_->device,
-        .vertexSpirv = vertex_shader_spirv,
-        .fragmentSpirv = fragment_shader_spirv,
-        .setLayouts = set_layouts,
-        .pushConstantRanges = push_constant_ranges,
-    };
-    skyboxShader_.emplace(ci);
-
-    skyboxShader_->flags = kNone;
-  }
-
-  {
-    const auto vertex_shader_spirv =
-        vku::toSpirV(assetPath("shaders/primitive.vert"));
-    const auto fragment_shader_spirv =
-        vku::toSpirV(assetPath("shaders/primitive.frag"));
-
-    auto set_layouts = std::array<vk::DescriptorSetLayout, 3>{
-        sceneSetLayout_->get(),
-        materialSetLayout_->get(),
-        bindlessSetLayout_->get(),
-    };
-
-    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::PrimitiveLayout::kPushConstantRange,
-    };
-
-    const auto ci = ShaderProgramCreateInfo{
-        .device = *gpu_->device,
-        .vertexSpirv = vertex_shader_spirv,
-        .fragmentSpirv = fragment_shader_spirv,
-        .setLayouts = set_layouts,
-        .pushConstantRanges = push_constant_ranges,
-    };
-    primitiveShader_.emplace(ci);
-  }
-
-  {
-    const auto compute_shader_spirv =
-        vku::toSpirV(assetPath("shaders/prefilter_diffuse_ibl.comp"));
-
-    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        bindlessSetLayout_->get(),
-    };
-
-    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::PrefilterDiffuseIBLLayout::kPushConstantRange,
-    };
-
-    const auto ci = ComputeShaderProgramCreateInfo{
-        .device = *gpu_->device,
-        .computeSpirv = compute_shader_spirv,
-        .setLayouts = set_layouts,
-        .pushConstantRanges = push_constant_ranges,
-    };
-    prefilterDiffuseShader_.emplace(ci);
-  }
-
-  {
-    const auto compute_shader_spirv =
-        vku::toSpirV(assetPath("shaders/prefilter_specular_ibl.comp"));
-
-    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        bindlessSetLayout_->get(),
-    };
-
-    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::PrefilterSpecularIBLLayout::kPushConstantRange,
-    };
-
-    const auto ci = ComputeShaderProgramCreateInfo{
-        .device = *gpu_->device,
-        .computeSpirv = compute_shader_spirv,
-        .setLayouts = set_layouts,
-        .pushConstantRanges = push_constant_ranges,
-    };
-    prefilterSpecularShader_.emplace(ci);
-  }
-
-  {
-    const auto compute_shader_spirv =
-        vku::toSpirV(assetPath("shaders/procedural_texture.comp"));
-
-    auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        bindlessSetLayout_->get(),
-    };
-
-    auto push_constant_ranges = std::array<vk::PushConstantRange, 1>{
-        vkit::vulkan::pl::ProceduralTextureLayout::kPushConstantRange,
-    };
-
-    const auto ci = ComputeShaderProgramCreateInfo{
-        .device = *gpu_->device,
-        .computeSpirv = compute_shader_spirv,
-        .setLayouts = set_layouts,
-        .pushConstantRanges = push_constant_ranges,
-    };
-    proceduralTextureShader_.emplace(ci);
+void App::recreateSwapchain() {
+  auto width = window_->getWidth();
+  auto height = window_->getHeight();
+
+  if (width >= 0 && height >= 0) {
+    gfxDevice_->waitIdle();
+    swapchain_->recreate(glm::ivec2{width, height});
   }
 }
 
-void App::createDescriptorResources() {
-  uboBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
-                      vk::BufferUsageFlagBits::eUniformBuffer);
-  uboParamsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
-                            vk::BufferUsageFlagBits::eUniformBuffer);
-  lightsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
-                         vk::BufferUsageFlagBits::eStorageBuffer);
-  materialsBuffers_.emplace(gpu_->allocator, gpu_->queueFamilies.transfer,
-                            vk::BufferUsageFlagBits::eStorageBuffer);
-}
+auto App::create1x1Texture(std::array<uint8_t, 4> color) -> DummyTexture {
+  auto image_ci = vk::ImageCreateInfo{}
+                      .setImageType(vk::ImageType::e2D)
+                      .setFormat(vk::Format::eR8G8B8A8Unorm)
+                      .setExtent({1, 1, 1})
+                      .setMipLevels(1)
+                      .setArrayLayers(1)
+                      .setSamples(vk::SampleCountFlagBits::e1)
+                      .setTiling(vk::ImageTiling::eOptimal)
+                      .setUsage(vk::ImageUsageFlagBits::eSampled |
+                                vk::ImageUsageFlagBits::eTransferDst);
 
-void App::createDescriptorPool() {
-  static constexpr auto kPoolSizeV = std::array{
-      vk::DescriptorPoolSize{
-          vk::DescriptorType::eUniformBuffer,
-          2 * kResourceBufferingV,
-      },
-      vk::DescriptorPoolSize{
-          vk::DescriptorType::eStorageBuffer,
-          2 * kResourceBufferingV,
-      },
+  auto tex = DummyTexture{
+      .image =
+          graphics::AllocatedImage{
+              gfxDevice_->allocator,
+              image_ci,
+              graphics::allocation::kDeviceLocal,
+          },
   };
 
-  auto pool_ci = vk::DescriptorPoolCreateInfo{};
-  pool_ci.setPoolSizes(kPoolSizeV)
-      .setMaxSets(16)
-      .setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind |
-                vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet);
-  descriptorPool_ = gpu_->device->createDescriptorPoolUnique(pool_ci);
+  auto view_ci =
+      vk::ImageViewCreateInfo{}
+          .setImage(static_cast<vk::Image>(tex.image))
+          .setViewType(vk::ImageViewType::e2D)
+          .setFormat(vk::Format::eR8G8B8A8Unorm)
+          .setSubresourceRange({vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+  tex.view = gfxDevice_->get().createImageViewUnique(view_ci);
+
+  auto staging_ci = vk::BufferCreateInfo{}.setSize(4).setUsage(
+      vk::BufferUsageFlagBits::eTransferSrc);
+  auto staging = graphics::MappedBuffer{gfxDevice_->allocator, staging_ci,
+                                        graphics::allocation::kHostWrite};
+  std::memcpy(staging.data, color.data(), 4);
+
+  auto const submit_info = graphics::util::RecordAndSubmitInfo{
+      .device = gfxDevice_->get(),
+      .queue = gfxDevice_->queues.graphicsPresent,
+      .commandPool = gfxDevice_->getGraphicsPresentCommandPool()};
+
+  graphics::util::recordAndSubmit(submit_info, [&](vk::CommandBuffer cb) {
+    auto barrier =
+        vk::ImageMemoryBarrier2{}
+            .setImage(static_cast<vk::Image>(tex.image))
+            .setOldLayout(vk::ImageLayout::eUndefined)
+            .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
+            .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
+            .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite)
+            .setSubresourceRange({vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+    cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
+
+    auto region = vk::BufferImageCopy{
+        0,         0,        0, {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        {0, 0, 0}, {1, 1, 1}};
+    cb.copyBufferToImage(static_cast<vk::Buffer>(staging),
+                         static_cast<vk::Image>(tex.image),
+                         vk::ImageLayout::eTransferDstOptimal, region);
+
+    barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
+        .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
+        .setDstStageMask(vk::PipelineStageFlagBits2::eFragmentShader)
+        .setDstAccessMask(vk::AccessFlagBits2::eShaderRead);
+    cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barrier));
+  });
+
+  tex.imguiId = imguiRenderer_->registerTexture(*tex.view, *defaultSampler_);
+  return tex;
 }
 
-void App::createDescriptorSets() {
-  {
-    auto layouts = std::array<vk::DescriptorSetLayout, kResourceBufferingV>{};
-    layouts.fill(sceneSetLayout_->get());
-
-    auto alloc_info = vk::DescriptorSetAllocateInfo{};
-    alloc_info.setDescriptorPool(*descriptorPool_).setSetLayouts(layouts);
-
-    auto descriptor_sets =
-        gpu_->device->allocateDescriptorSetsUnique(alloc_info);
-    assert(descriptor_sets.size() == kResourceBufferingV);
-
-    for (auto&& [idx, set] : std::ranges::views::enumerate(descriptor_sets)) {
-      sceneSets_[idx] = std::move(set);
-    }
-  }
-
-  {
-    auto layouts = std::array<vk::DescriptorSetLayout, kResourceBufferingV>{};
-    layouts.fill(materialSetLayout_->get());
-
-    auto alloc_info = vk::DescriptorSetAllocateInfo{};
-    alloc_info.setDescriptorPool(*descriptorPool_).setSetLayouts(layouts);
-
-    auto descriptor_sets =
-        gpu_->device->allocateDescriptorSetsUnique(alloc_info);
-    assert(descriptor_sets.size() == kResourceBufferingV);
-
-    for (auto&& [idx, set] : std::ranges::views::enumerate(descriptor_sets)) {
-      materialsSets_[idx] = std::move(set);
-    }
-  }
-}
-
-void App::createBindlessSetManager() {
-  bindlessSetManager_.emplace(*gpu_, *bindlessSetLayout_);
-}
-
-void App::createCommandPools() {
-  computeCommandPool_ = gpu_->createCommandPool(
-      gpu_->queueFamilies.compute, vk::CommandPoolCreateFlagBits::eTransient);
-
-  graphicsCommandPool_ =
-      gpu_->createCommandPool(gpu_->queueFamilies.graphicsPresent,
-                              vk::CommandPoolCreateFlagBits::eTransient);
-}
-
-void App::createRenderCommandPool() {
-  renderCommandPool_ = gpu_->createCommandPool(
-      gpu_->queueFamilies.graphicsPresent,
-      vk::CommandPoolCreateFlagBits::eResetCommandBuffer);
-}
-
-void App::createRenderSync() {
-  auto cb_ai = vk::CommandBufferAllocateInfo{};
-  cb_ai.setCommandPool(*renderCommandPool_)
-      .setCommandBufferCount(static_cast<std::uint32_t>(kResourceBufferingV))
-      .setLevel(vk::CommandBufferLevel::ePrimary);
-
-  const auto cbs = gpu_->device->allocateCommandBuffers(cb_ai);
-  assert(cbs.size() == renderSync_.size());
-
-  static constexpr auto kFenceCreateInfoV =
-      vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled};
-
-  for (auto [sync, command_buffer] :
-       std::ranges::views::zip(renderSync_, cbs)) {
-    sync.cb = command_buffer;
-    sync.draw = gpu_->device->createSemaphoreUnique({});
-    sync.drawn = gpu_->device->createFenceUnique(kFenceCreateInfoV);
-  }
-}
-
-void App::createUI() {
-  auto const imgui_ci = DearImGui::CreateInfo{
-      .window = window_.getGlfwWindow(),
-      .apiVersion = kVkVersionV,
-      .instance = *instance_,
-      .physicalDevice = gpu_->physicalDevice,
-      .queueFamily = gpu_->queueFamilies.graphicsPresent,
-      .device = *gpu_->device,
-      .queue = gpu_->queues.graphicsPresent,
-      .colorFormat = swapchain_->getFormat(),
-      .samples = kSampleCount,
-  };
-
-  ui_.emplace(imgui_ci);
-}
-
-void App::createWindow() { window_.open({.size = vk::Extent2D{1200, 800}}); }
-
-void App::createInstance() {
-  VULKAN_HPP_DEFAULT_DISPATCHER.init();
-
-  auto const loader_version = vk::enumerateInstanceVersion();
-  if (loader_version < kVkVersionV) {
-    throw std::runtime_error{
-        std::format("loader does not support vulkan {}.{}.{}", kVkMajor,
-                    kVkMinor, kVkPatch),
-    };
-  }
-
-  auto app_info =
-      vk::ApplicationInfo{}.setPApplicationName("vkit").setApiVersion(
-          kVkVersionV);
-
-  auto debug_create_info =
-      vk::DebugUtilsMessengerCreateInfoEXT{}
-          .setMessageSeverity(
-              vk::DebugUtilsMessageSeverityFlagBitsEXT::eError |
-              vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-              vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo)
-          .setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                          vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation |
-                          vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance)
-          .setPfnUserCallback(&debugCallback);
-
-  auto glfw_extensions = window::Window::getVulkanExtensions();
-  auto extensions =
-      std::vector<const char*>(glfw_extensions.begin(), glfw_extensions.end());
-
-  extensions.push_back(vk::EXTDebugUtilsExtensionName);
-
-  static constexpr auto kLayersV = std::array{"VK_LAYER_KHRONOS_validation"};
-  auto const layers = getLayers(kLayersV);
-
-  auto instance_ci = vk::InstanceCreateInfo{}
-                         .setPApplicationInfo(&app_info)
-                         .setPEnabledLayerNames(layers)
-                         .setPEnabledExtensionNames(extensions)
-                         .setPNext(&debug_create_info);
-
-  instance_ = vk::createInstanceUnique(instance_ci);
-
-  VULKAN_HPP_DEFAULT_DISPATCHER.init(*instance_);
-
-  debugMessanger_ = instance_->createDebugUtilsMessengerEXTUnique(
-      debug_create_info, nullptr, VULKAN_HPP_DEFAULT_DISPATCHER);
-}
-
-void App::createSurface() { surface_ = window_.createSurface(*instance_); }
-
-void App::createDevice() {
-  gpu_.emplace(*instance_, *surface_);
-  deviceWaiter_ = *gpu_->device;
-}
-
-void App::createSwapchain() {
-  const auto size = glm::ivec2{window_.getHeight(), window_.getWidth()};
-  swapchain_.emplace(*gpu_->device, gpu_->physicalDevice,
-                     gpu_->queueFamilies.graphicsPresent, gpu_->allocator,
-                     *surface_, size);
-}
-
-};  // namespace vkit
+}  // namespace vkit

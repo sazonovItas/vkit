@@ -21,10 +21,11 @@ class ImguiRenderer {
                 std::uint32_t framesInFlight = 2);
   ~ImguiRenderer();
 
-  void uploadFont(vk::CommandBuffer cb);
+  auto uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer;
 
   [[nodiscard]] auto registerTexture(vk::ImageView imageView,
-                                     vk::Sampler sampler) -> ImTextureID;
+                                     vk::Sampler sampler = nullptr)
+      -> ImTextureID;
   void unregisterTexture(ImTextureID textureId);
 
   void renderDrawData(vk::CommandBuffer cb, ImDrawData* drawData,

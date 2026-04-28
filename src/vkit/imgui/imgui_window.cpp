@@ -1,6 +1,7 @@
 #include "vkit/imgui/imgui_window.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 namespace vkit::imgui {
 
@@ -40,37 +41,50 @@ auto ImguiWindow::getFlags() -> ImGuiWindowFlags {
 void ImguiWindow::render() {
   if (!isVisible_) return;
 
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2{5.0F, 5.0F});
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 5.0F);
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0F);
+  ImGuiWindowClass window_class;
+  window_class.ClassId = ImGui::GetID("vkit_windows");
+  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_HiddenTabBar;
+  ImGui::SetNextWindowClass(&window_class);
 
-  const ImVec4 focused_color = ImVec4{0.26F, 0.59F, 0.98F, 1.0F};
-  const ImVec4 default_color = ImVec4{0.15F, 0.15F, 0.15F, 1.0F};
-  ImGui::PushStyleColor(ImGuiCol_Border,
-                        isFocused_ ? focused_color : default_color);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3.0F, 3.0F));
 
-  onBegin();
+  ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0F, 0.0F, 0.0F, 0.0F));
+  ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0F, 0.0F, 0.0F, 0.0F));
 
-  ImGui::SetNextWindowSizeConstraints(ImVec2{minSize_[0], minSize_[1]},
-                                      ImVec2{maxSize_[0], maxSize_[1]});
+  const auto not_collapsed = ImGui::Begin(
+      title_.c_str(), &isVisible_, getFlags() | ImGuiWindowFlags_NoTitleBar);
 
-  const auto not_collapsed =
-      ImGui::Begin(title_.c_str(), &isVisible_, getFlags());
+  ImGui::PopStyleColor(2);
+  ImGui::PopStyleVar(1);
 
   if (not_collapsed) {
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0F);
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0F);
+
+    ImGui::PushStyleColor(ImGuiCol_ChildBg,
+                          ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
+    ImGui::PushStyleColor(ImGuiCol_Border,
+                          ImGui::GetStyle().Colors[ImGuiCol_Border]);
+
+    ImGui::BeginChild("##inner_panel", ImGui::GetContentRegionAvail(), 1,
+                      ImGuiWindowFlags_NoTitleBar);
+
+    onBegin();
     onDraw();
+    onEnd();
+
+    ImGui::EndChild();
+
+    ImGui::PopStyleColor(2);
+    ImGui::PopStyleVar(2);
   }
 
-  onEnd();
-
   isHovered_ =
-      ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-  isFocused_ = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows);
+      ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows |
+                             ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+  isFocused_ = ImGui::IsWindowFocused(ImGuiHoveredFlags_RootAndChildWindows);
 
   ImGui::End();
-
-  ImGui::PopStyleColor(1);
-  ImGui::PopStyleVar(3);
 }
 
 }  // namespace vkit::imgui

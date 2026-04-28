@@ -1,166 +1,75 @@
 #pragma once
 
-#include <filesystem>
-#include <optional>
+#include <array>
+#include <memory>
+#include <vector>
+#include <vk_mem_alloc.hpp>
+#include <vulkan/vulkan.hpp>
 
-#include "app_types.hpp"
-#include "bindless_set_manager.hpp"
-#include "compute_shader_program.hpp"
-#include "descriptor_buffer.hpp"
-#include "fastgltf/types.hpp"
-#include "gltf/asset.hpp"
-#include "resource_buffering.hpp"
-#include "shader_program.hpp"
-#include "swapchain.hpp"
-#include "transform.hpp"
-#include "ui.hpp"
-#include "vk_mem_alloc.hpp"
+#include "vkit/graphics/device.hpp"
+#include "vkit/graphics/image.hpp"
+#include "vkit/graphics/instance.hpp"
+#include "vkit/graphics/surface.hpp"
+#include "vkit/graphics/swapchain.hpp"
+#include "vkit/imgui/imgui_renderer.hpp"
+#include "vkit/imgui/imgui_window_manager.hpp"
+#include "vkit/imgui/window_imgui_host.hpp"
+#include "vkit/imgui/windows/viewport.hpp"
 #include "vkit/window/window.hpp"
-#include "vku/scoped/device_waiter.hpp"
-#include "vulkan/descriptor_set_layout/material.hpp"
-#include "vulkan/descriptor_set_layout/scene.hpp"
-#include "vulkan/gpu.hpp"
-#include "vulkan/pipeline_layout/prefilter_diffuse_ibl.hpp"
-#include "vulkan/pipeline_layout/prefilter_specular_ibl.hpp"
-#include "vulkan/pipeline_layout/primitive.hpp"
-#include "vulkan/pipeline_layout/procedural_texture.hpp"
-#include "vulkan/pipeline_layout/skybox.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit {
 
 class App {
  public:
+  App();
+  ~App();
+
   void run();
 
  private:
-  struct RenderSync {
-    vk::UniqueSemaphore draw;
-    vk::UniqueFence drawn;
-    vk::CommandBuffer cb;
-  };
+  void initWindow();
+  void initVulkan();
+  void initImgui();
+  void createDummyTextures();
 
   void mainLoop();
+  void recreateSwapchain();
 
-  auto acquireRenderTarget() -> bool;
-  auto beginFrame() -> vk::CommandBuffer;
-  void transitionForRender(vk::CommandBuffer cb) const;
-  void render(vk::CommandBuffer cb);
-  void transitionForPresent(vk::CommandBuffer cb) const;
-  void submitAndPresent();
+  static constexpr int kMaxFramesInFlight = 3;
+  std::uint32_t currentFrame_{0};
 
-  [[nodiscard]] auto assetPath(std::string_view uri) const
-      -> std::filesystem::path;
+  std::unique_ptr<window::Context> glfwContext_;
+  std::unique_ptr<window::Window> window_;
 
-  void update();
+  std::unique_ptr<graphics::Instance> instance_;
+  std::unique_ptr<graphics::Surface> surface_;
+  std::shared_ptr<graphics::GfxDevice> gfxDevice_;
+  std::unique_ptr<graphics::Swapchain> swapchain_;
 
-  void updateDescriptorSets() const;
-  void bindSkyboxDescriptorSets(vk::CommandBuffer cb) const;
-  void bindPrimitiveDescriptorSets(vk::CommandBuffer cb) const;
+  std::unique_ptr<imgui::ImguiRenderer> imguiRenderer_;
+  std::unique_ptr<imgui::WindowImguiHost> imguiHost_;
+  std::unique_ptr<imgui::ImguiWindowManager> windowManager_;
 
-  void drawSkybox(vk::CommandBuffer cb) const;
-  void draw(vk::CommandBuffer cb) const;
-  void drawNode(vk::CommandBuffer cb, const fastgltf::Node& node,
-                const fastgltf::math::fmat4x4& transform,
-                bool isTransparentPass) const;
+  std::shared_ptr<imgui::windows::ViewportWindow> viewportRed_;
+  std::shared_ptr<imgui::windows::ViewportWindow> viewportGreen_;
+  std::shared_ptr<imgui::windows::ViewportWindow> viewportBlue_;
 
-  void drawUI();
+  vk::UniqueCommandPool commandPool_;
+  std::vector<vk::UniqueCommandBuffer> commandBuffers_;
+  std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
+  std::vector<vk::UniqueSemaphore> renderFinishedSemaphores_;
+  std::vector<vk::UniqueFence> inFlightFences_;
 
-  void loadGLTF(const std::filesystem::path& path);
-  void loadEnvironmentMap(const std::filesystem::path& path);
-  void generateProceduralTexture();
+  struct DummyTexture {
+    graphics::AllocatedImage image;
+    vk::UniqueImageView view;
+    ImTextureID imguiId{0};
+  };
 
-  void createWindow();
-  void createInstance();
-  void createSurface();
-  void createDevice();
-  void createSwapchain();
+  std::vector<DummyTexture> dummyTextures_;
+  vk::UniqueSampler defaultSampler_;
 
-  void createRenderCommandPool();
-  void createRenderSync();
-
-  void createDescriptorLayouts();
-  void createPipelineLayouts();
-  void createShaders();
-
-  void createDescriptorResources();
-  void createDescriptorPool();
-  void createDescriptorSets();
-  void createBindlessSetManager();
-
-  void createCommandPools();
-  void createUI();
-
-  std::filesystem::path assetDir_;
-
-  Camera camera_;
-  Transform transform_;
-
-  vkit::window::Context context_;
-  vkit::window::Window window_;
-
-  glm::ivec2 frameBufferSize_;
-
-  vk::UniqueInstance instance_;
-  vk::UniqueDebugUtilsMessengerEXT debugMessanger_;
-  vk::UniqueSurfaceKHR surface_;
-
-  std::optional<vulkan::Gpu> gpu_;
-  std::optional<Swapchain> swapchain_;
-
-  vk::UniqueCommandPool renderCommandPool_;
-  vk::UniqueCommandPool computeCommandPool_;
-  vk::UniqueCommandPool graphicsCommandPool_;
-
-  std::size_t frameIndex_{};
-  Buffered<RenderSync> renderSync_{};
-
-  std::optional<UI> ui_;
-  vk::UniqueDescriptorPool descriptorPool_;
-
-  std::optional<vulkan::dsl::SceneLayout> sceneSetLayout_;
-  std::optional<vulkan::dsl::MaterialLayout> materialSetLayout_;
-  std::optional<vulkan::dsl::BindlessLayout> bindlessSetLayout_;
-
-  std::optional<vulkan::pl::SkyboxLayout> skyboxLayout_;
-  std::optional<vulkan::pl::PrimitiveLayout> primitiveLayout_;
-  std::optional<vulkan::pl::PrefilterDiffuseIBLLayout> prefilterDiffuseLayout_;
-  std::optional<vulkan::pl::PrefilterSpecularIBLLayout>
-      prefilterSpecularLayout_;
-  std::optional<vulkan::pl::ProceduralTextureLayout> proceduralTextureLayout_;
-
-  std::optional<ShaderProgram> skyboxShader_;
-  std::optional<ShaderProgram> primitiveShader_;
-  std::optional<ComputeShaderProgram> prefilterDiffuseShader_;
-  std::optional<ComputeShaderProgram> prefilterSpecularShader_;
-  std::optional<ComputeShaderProgram> proceduralTextureShader_;
-
-  UBO ubo_;
-  UBOParams uboParams_;
-  ProceduralTextureParams procTexParams_;
-  std::vector<Light> lights_;
-  std::vector<Material> materials_;
-
-  std::optional<DescriptorBuffer<kResourceBufferingV>> uboBuffers_;
-  std::optional<DescriptorBuffer<kResourceBufferingV>> uboParamsBuffers_;
-  std::optional<DescriptorBuffer<kResourceBufferingV>> lightsBuffers_;
-  std::optional<DescriptorBuffer<kResourceBufferingV>> materialsBuffers_;
-
-  Buffered<vk::UniqueDescriptorSet> sceneSets_;
-  Buffered<vk::UniqueDescriptorSet> materialsSets_;
-  std::optional<BindlessSetManager> bindlessSetManager_;
-
-  std::optional<RenderTarget> renderTarget_;
-  std::optional<gltf::Asset> gltfAsset_;
-
-  glm::vec4 envBaseColor_{0.2F, 0.2F, 0.2F, 1.0F};
-  std::optional<std::uint32_t> currEnvMapIdx_;
-
-  std::vector<vku::Texture2D> environmentMaps_;
-  std::vector<vku::Texture2D> environmentDiffuseMaps_;
-  std::vector<vku::Texture2D> environmentSpecularMaps_;
-
-  vku::DeviceWaiter deviceWaiter_;
+  auto create1x1Texture(std::array<uint8_t, 4> color) -> DummyTexture;
 };
 
 }  // namespace vkit

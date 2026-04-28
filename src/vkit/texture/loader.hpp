@@ -7,18 +7,18 @@
 #include "vkit/graphics/mapped_buffer.hpp"
 #include "vkit/graphics/texture.hpp"
 
-namespace vkit::graphics::texture {
+namespace vkit::texture {
 
 struct LoadOptions {
   bool useMipmaps{true};
   bool isSrgb{true};
   bool isHdr{false};
-  TextureType type{TextureType::k2D};
+  graphics::TextureType type{graphics::TextureType::k2D};
 };
 
 struct LoadedTexture {
-  std::shared_ptr<Texture> texture;
-  MappedBuffer stagingBuffer;
+  std::shared_ptr<graphics::Texture> texture;
+  graphics::MappedBuffer stagingBuffer;
 };
 
 [[nodiscard]] auto loadFromFile(vk::Device device, vma::Allocator allocator,
@@ -38,4 +38,4 @@ struct LoadedTexture {
                                      const LoadOptions& options = {})
     -> LoadedTexture;
 
-};  // namespace vkit::graphics::texture
+};  // namespace vkit::texture

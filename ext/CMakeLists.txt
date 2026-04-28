@@ -101,11 +101,22 @@ target_include_directories(imgui_node_editor SYSTEM PUBLIC imgui-node-editor)
 
 target_link_libraries(imgui_node_editor PUBLIC imgui::imgui)
 
+target_compile_options(imgui_node_editor PRIVATE -Wno-deprecated-declarations)
+
 target_sources(imgui_node_editor PRIVATE
-    imgui-node-editor/imgui_node_editor.cpp
-    imgui-node-editor/imgui_node_editor_api.cpp
-    imgui-node-editor/imgui_canvas.cpp
     imgui-node-editor/crude_json.cpp
+    imgui-node-editor/crude_json.h
+    imgui-node-editor/imgui_bezier_math.h
+    imgui-node-editor/imgui_bezier_math.inl
+    imgui-node-editor/imgui_canvas.cpp
+    imgui-node-editor/imgui_canvas.h
+    imgui-node-editor/imgui_extra_math.h
+    imgui-node-editor/imgui_extra_math.inl
+    imgui-node-editor/imgui_node_editor.cpp
+    imgui-node-editor/imgui_node_editor.h
+    imgui-node-editor/imgui_node_editor_api.cpp
+    imgui-node-editor/imgui_node_editor_internal.h
+    imgui-node-editor/imgui_node_editor_internal.inl
 )
 
 message(STATUS "[vma]")

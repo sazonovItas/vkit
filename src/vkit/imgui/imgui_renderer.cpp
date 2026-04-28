@@ -4,6 +4,7 @@
 
 #include "vkit/asset/shaders.hpp"
 #include "vkit/asset/util.hpp"
+#include "vkit/graphics/mapped_buffer.hpp"
 #include "vkit/graphics/shader_module.hpp"
 
 namespace vkit::imgui {
@@ -78,11 +79,23 @@ ImguiRenderer::ImguiRenderer(vk::Device device, vma::Allocator allocator,
   auto builder =
       graphics::pipeline::GraphicsPipelineBuilder{pipelineLayout_->get()};
 
+  const auto binding_desc = vk::VertexInputBindingDescription{
+      0, sizeof(ImDrawVert), vk::VertexInputRate::eVertex};
+
+  const auto attr_desc = std::array{
+      vk::VertexInputAttributeDescription{0, 0, vk::Format::eR32G32Sfloat,
+                                          offsetof(ImDrawVert, pos)},
+      vk::VertexInputAttributeDescription{1, 0, vk::Format::eR32G32Sfloat,
+                                          offsetof(ImDrawVert, uv)},
+      vk::VertexInputAttributeDescription{2, 0, vk::Format::eR8G8B8A8Unorm,
+                                          offsetof(ImDrawVert, col)}};
+
   builder
       .addShaderStage(
           vert_module.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
       .addShaderStage(
           frag_module.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput(binding_desc, attr_desc)
       .setRenderingFormats({colorFormat}, vk::Format::eUndefined)
       .setMultisampling(samples)
       .setDepthState(vk::False, vk::False)
@@ -96,6 +109,10 @@ ImguiRenderer::~ImguiRenderer() { device_.waitIdle(); }
 
 auto ImguiRenderer::registerTexture(vk::ImageView imageView,
                                     vk::Sampler sampler) -> ImTextureID {
+  if (sampler == nullptr) {
+    sampler = *this->linearSampler_;
+  }
+
   const auto alloc_info = vk::DescriptorSetAllocateInfo{
       *descriptorPool_,
       1,
@@ -126,7 +143,7 @@ void ImguiRenderer::unregisterTexture(ImTextureID textureId) {
   }
 }
 
-void ImguiRenderer::uploadFont(vk::CommandBuffer cb) {
+auto ImguiRenderer::uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer {
   auto& io = ImGui::GetIO();
   auto* pixels = static_cast<unsigned char*>(nullptr);
   auto width = 0;
@@ -189,10 +206,14 @@ void ImguiRenderer::uploadFont(vk::CommandBuffer cb) {
       vk::DependencyInfo{}.setImageMemoryBarriers(shader_barrier));
 
   io.Fonts->SetTexID(registerTexture(*fontView_, *linearSampler_));
+
+  return staging_buffer;
 }
 
 void ImguiRenderer::renderDrawData(vk::CommandBuffer cb, ImDrawData* drawData,
                                    std::size_t frameIndex) {
+  assert(frameIndex < frames_.size() &&
+         "Frame index is greater than frame in flight");
   if (!drawData || drawData->TotalVtxCount == 0) return;
 
   auto& frame = frames_[frameIndex];

@@ -23,15 +23,9 @@ auto ViewportWindow::toContent(glm::vec2 positionInRoot) const -> glm::vec2 {
   return glm::vec2{content_x, content_y};
 }
 
-void ViewportWindow::onBegin() {
-  const ImVec4 focused_color = ImVec4{0.26F, 0.59F, 0.98F, 1.0F};
-  const ImVec4 default_color = ImVec4{0.15F, 0.15F, 0.15F, 1.0F};
+void ViewportWindow::onBegin() {}
 
-  ImGui::PushStyleColor(ImGuiCol_Border,
-                        isFocused() ? focused_color : default_color);
-}
-
-void ViewportWindow::onEnd() { ImGui::PopStyleVar(1); }
+void ViewportWindow::onEnd() {}
 
 void ViewportWindow::onDraw() {
   const ImVec2 size = ImGui::GetContentRegionAvail();

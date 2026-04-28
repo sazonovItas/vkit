@@ -30,6 +30,7 @@ class ImguiWindow {
 
   void setMinSize(float minWidth, float minHeight);
   void setMaxSize(float maxWidth, float maxHeight);
+
   virtual auto getFlags() -> ImGuiWindowFlags;
 
   void render();
@@ -47,4 +48,4 @@ class ImguiWindow {
   bool isFocused_{false};
 };
 
-}  // namespace vkit::imgui
+};  // namespace vkit::imgui

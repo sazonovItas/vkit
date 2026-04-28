@@ -127,7 +127,7 @@ inline auto operator|=(PrincipledBSDF::Feature& lhs,
 }
 
 static_assert(sizeof(PrincipledBSDF::Params) == 160,
-              "PrincipledBSDF::Data size must be exactly 160 bytes to match "
+              "PrincipledBSDF::Params size must be exactly 160 bytes to match "
               "GLSL std430 alignment.");
 
 static_assert(sizeof(PrincipledBSDF::Textures) == 64,
@@ -135,7 +135,7 @@ static_assert(sizeof(PrincipledBSDF::Textures) == 64,
               "GLSL std430 alignment.");
 
 static_assert(sizeof(PrincipledBSDF::Data) == 224,
-              "PrincipledBSDF::GPUData size must be exactly 224 bytes to match "
+              "PrincipledBSDF::Data size must be exactly 224 bytes to match "
               "GLSL std430 alignment.");
 
 };  // namespace vkit::material

@@ -97,12 +97,6 @@ auto Swapchain::recreate(const glm::ivec2 size) -> bool {
       .setOldSwapchain(swapchain_ ? *swapchain_ : vk::SwapchainKHR{})
       .setQueueFamilyIndices(device_.queueFamilies.graphicsPresent);
 
-  // TODO: itas - it's better to remove wait idle to not block device
-  // almost forever until generation of some texture is not finished
-  // HACK: for a momemnt it's just commented but need wait in some way
-  // need to be resolved on the higher level
-  // device_.get().waitIdle();
-
   swapchain_ = device_.get().createSwapchainKHRUnique(ci_);
 
   recreateImages();

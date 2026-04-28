@@ -270,6 +270,10 @@ ImguiHost::ImguiHost(const std::string_view name,
 ImguiHost::~ImguiHost() {
   if (imguiContext_) {
     ImGui::SetCurrentContext(imguiContext_);
+
+    ImGui::GetIO().BackendPlatformUserData = nullptr;
+    ImGui::GetIO().BackendRendererUserData = nullptr;
+
     ImGui::DestroyContext(imguiContext_);
     imguiContext_ = nullptr;
   }
@@ -324,6 +328,32 @@ void ImguiHost::updateInputRequest(bool requestKeyboard, bool requestMouse) {
   requestMouse_ = requestMouse;
 }
 
+auto ImguiHost::onKeyEvent(const window::InputEvent& event) -> bool {
+  if (!imguiContext_) return false;
+  auto& io = imguiContext_->IO;
+
+  updateKeyModifiers(io, event.u.keyEvent.modifierMask);
+  io.AddKeyEvent(fromVkit(event.u.keyEvent.keycode), event.u.keyEvent.pressed);
+
+  return wantCaptureKeyboard();
+}
+
+auto ImguiHost::onTextEvent(const window::InputEvent& event) -> bool {
+  if (!imguiContext_) return false;
+  auto& io = imguiContext_->IO;
+
+  io.AddInputCharactersUTF8(event.u.textEvent.utf8Text);
+  return wantCaptureKeyboard();
+}
+
+auto ImguiHost::onCharEvent(const window::InputEvent& event) -> bool {
+  if (!imguiContext_) return false;
+  auto& io = imguiContext_->IO;
+
+  io.AddInputCharacter(event.u.charEvent.codepoint);
+  return wantCaptureKeyboard();
+}
+
 auto ImguiHost::onCursorEnterEvent(const window::InputEvent& event) -> bool {
   if (!imguiContext_) return false;
   auto& io = imguiContext_->IO;
@@ -375,30 +405,4 @@ auto ImguiHost::onMouseWheelEvent(const window::InputEvent& event) -> bool {
   return wantCaptureMouse();
 }
 
-auto ImguiHost::onKeyEvent(const window::InputEvent& event) -> bool {
-  if (!imguiContext_) return false;
-  auto& io = imguiContext_->IO;
-
-  updateKeyModifiers(io, event.u.keyEvent.modifierMask);
-  io.AddKeyEvent(fromVkit(event.u.keyEvent.keycode), event.u.keyEvent.pressed);
-
-  return wantCaptureKeyboard();
-}
-
-auto ImguiHost::onTextEvent(const window::InputEvent& event) -> bool {
-  if (!imguiContext_) return false;
-  auto& io = imguiContext_->IO;
-
-  io.AddInputCharactersUTF8(event.u.textEvent.utf8Text);
-  return wantCaptureKeyboard();
-}
-
-auto ImguiHost::onCharEvent(const window::InputEvent& event) -> bool {
-  if (!imguiContext_) return false;
-  auto& io = imguiContext_->IO;
-
-  io.AddInputCharacter(event.u.charEvent.codepoint);
-  return wantCaptureKeyboard();
-}
-
-}  // namespace vkit::imgui
+};  // namespace vkit::imgui

@@ -1,4 +1,4 @@
-#include "vkit/graphics/texture_loader.hpp"
+#include "vkit/texture/loader.hpp"
 
 #include <stb_image.h>
 
@@ -6,7 +6,7 @@
 #include <format>
 #include <stdexcept>
 
-namespace vkit::graphics::texture {
+namespace vkit::texture {
 
 auto loadFromRawPixels(vk::Device device, vma::Allocator allocator,
                        std::span<const std::byte> pixelData, int width,
@@ -23,10 +23,10 @@ auto loadFromRawPixels(vk::Device device, vma::Allocator allocator,
         "channel_size");
   }
 
-  MappedBuffer staging_buffer{allocator, std::from_range, pixelData,
-                              vk::BufferUsageFlagBits::eTransferSrc};
+  graphics::MappedBuffer staging_buffer{allocator, std::from_range, pixelData,
+                                        vk::BufferUsageFlagBits::eTransferSrc};
 
-  TextureCreateInfo create_info{};
+  graphics::TextureCreateInfo create_info{};
   create_info.type = options.type;
   create_info.width = width;
   create_info.height = height;
@@ -43,9 +43,10 @@ auto loadFromRawPixels(vk::Device device, vma::Allocator allocator,
   }
 
   create_info.levelCount =
-      options.useMipmaps ? getTextureLevelCount(width, height, 1) : 1;
+      options.useMipmaps ? graphics::getTextureLevelCount(width, height, 1) : 1;
 
-  auto texture = std::make_shared<Texture>(device, allocator, create_info);
+  auto texture =
+      std::make_shared<graphics::Texture>(device, allocator, create_info);
 
   return LoadedTexture{
       .texture = std::move(texture),
@@ -136,4 +137,4 @@ auto loadFromMemory(vk::Device device, vma::Allocator allocator,
   return result;
 }
 
-}  // namespace vkit::graphics::texture
+}  // namespace vkit::texture

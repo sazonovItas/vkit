@@ -37,7 +37,7 @@ class DiffuseSpecular : public Material {
 };
 
 static_assert(sizeof(DiffuseSpecular::Params) == 32,
-              "DiffuseSpecular::Data size must be exactly 32 bytes to match "
+              "DiffuseSpecular::Params size must be exactly 32 bytes to match "
               "GLSL std430 alignment.");
 
 static_assert(sizeof(DiffuseSpecular::Textures) == 16,
@@ -45,7 +45,7 @@ static_assert(sizeof(DiffuseSpecular::Textures) == 16,
               "match GLSL std430 alignment.");
 
 static_assert(sizeof(DiffuseSpecular::Data) == 48,
-              "DiffuseSpecular::GPUData size must be exactly 48 bytes to match "
+              "DiffuseSpecular::Data size must be exactly 48 bytes to match "
               "GLSL std430 alignment.");
 
 };  // namespace vkit::material

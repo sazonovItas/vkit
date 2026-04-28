@@ -67,6 +67,10 @@ auto Texture::getSampleCount() const -> SampleCount { return sampleCount_; }
 
 auto Texture::isLayered() const -> bool { return image_.arrayLayers > 1; }
 
+auto Texture::getSampler() const -> vk::Sampler { return sampler_; }
+
+void Texture::setSampler(vk::Sampler sampler) { sampler_ = sampler; }
+
 void Texture::recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer) {
   auto image_size_bytes = image_.getBaseMipSizeBytes();
   if (stagingBuffer.size != image_size_bytes) {
@@ -233,5 +237,4 @@ auto Texture::createAllocatedImage(vma::Allocator allocator,
 
   return AllocatedImage{allocator, image_ci};
 }
-
 };  // namespace vkit::graphics

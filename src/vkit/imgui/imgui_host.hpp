@@ -30,14 +30,14 @@ class ImguiHost : public window::InputEventHandler {
   [[nodiscard]] auto wantCaptureMouse() const -> bool;
   void updateInputRequest(bool requestKeyboard, bool requestMouse);
 
+  auto onKeyEvent(const window::InputEvent& event) -> bool override;
+  auto onTextEvent(const window::InputEvent& event) -> bool override;
+  auto onCharEvent(const window::InputEvent& event) -> bool override;
   auto onWindowFocusEvent(const window::InputEvent& event) -> bool override;
   auto onCursorEnterEvent(const window::InputEvent& event) -> bool override;
   auto onMouseMoveEvent(const window::InputEvent& event) -> bool override;
   auto onMouseButtonEvent(const window::InputEvent& event) -> bool override;
   auto onMouseWheelEvent(const window::InputEvent& event) -> bool override;
-  auto onKeyEvent(const window::InputEvent& event) -> bool override;
-  auto onTextEvent(const window::InputEvent& event) -> bool override;
-  auto onCharEvent(const window::InputEvent& event) -> bool override;
 
  protected:
   std::string name_;

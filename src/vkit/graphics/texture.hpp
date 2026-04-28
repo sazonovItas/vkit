@@ -38,6 +38,9 @@ class Texture {
   [[nodiscard]] auto getSampleCount() const -> SampleCount;
   [[nodiscard]] auto isLayered() const -> bool;
 
+  [[nodiscard]] auto getSampler() const -> vk::Sampler;
+  void setSampler(vk::Sampler);
+
   void recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer);
   void recordMipmapGeneration(vk::CommandBuffer cb);
 
@@ -47,7 +50,9 @@ class Texture {
   bool useMipmaps_{false};
 
   AllocatedImage image_;
-  vk::UniqueImageView view_;
+
+  vk::UniqueImageView view_{nullptr};
+  vk::Sampler sampler_{nullptr};
 
   static auto createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)

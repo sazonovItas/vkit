@@ -42,12 +42,13 @@ class UniqueId {
 template <class T>
 class Item {
  public:
-  explicit Item(std::string_view name);
+  explicit Item(std::string_view name) : name_{name} {}
+  virtual ~Item() = default;
 
-  [[nodiscard]] auto getId() const -> std::size_t;
-  [[nodiscard]] auto getName() const -> std::string_view;
+  [[nodiscard]] auto getId() const -> std::size_t { return id_.getId(); };
+  [[nodiscard]] auto getName() const -> std::string_view { return name_; };
 
-  void setName(std::string_view name);
+  void setName(std::string_view name) { name_ = name; };
 
  protected:
   UniqueId<T> id_;

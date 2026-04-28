@@ -33,7 +33,7 @@ class Diffuse : public Material {
 };
 
 static_assert(sizeof(Diffuse::Params) == 16,
-              "Diffuse::Data size must be exactly 16 bytes to match GLSL "
+              "Diffuse::Params size must be exactly 16 bytes to match GLSL "
               "std430 alignment.");
 
 static_assert(sizeof(Diffuse::Textures) == 16,
@@ -41,7 +41,7 @@ static_assert(sizeof(Diffuse::Textures) == 16,
               "std430 alignment.");
 
 static_assert(sizeof(Diffuse::Data) == 32,
-              "Diffuse::GPUData size must be exactly 32 bytes to match GLSL "
+              "Diffuse::Data size must be exactly 32 bytes to match GLSL "
               "std430 alignment.");
 
 };  // namespace vkit::material
