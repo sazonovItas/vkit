@@ -1,4 +1,4 @@
-#include "storage.hpp"
+#include "vkit/texture/storage.hpp"
 
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/imgui/imgui_renderer.hpp"
@@ -23,6 +23,8 @@ auto Storage::add(const std::shared_ptr<Texture>& texture) -> std::uint32_t {
   texture->setStorageId(storage_id);
   activeCount_++;
 
+  textureMap_[texture->getId()] = texture;
+
   const auto graphics_tex = texture->getGraphicsTexture();
   if (graphics_tex) {
     if (bindlessManager_) {
@@ -31,7 +33,7 @@ auto Storage::add(const std::shared_ptr<Texture>& texture) -> std::uint32_t {
     }
     if (imguiRenderer_) {
       const auto imgui_id = imguiRenderer_->registerTexture(
-          graphics_tex->getView(), graphics_tex->getSampler());
+          graphics_tex->getImageView(), graphics_tex->getSampler());
       texture->setImguiId(imgui_id);
     }
   }
@@ -39,25 +41,27 @@ auto Storage::add(const std::shared_ptr<Texture>& texture) -> std::uint32_t {
   return storage_id;
 }
 
-void Storage::remove(const std::shared_ptr<Texture>& texture) {
-  if (!texture || !texture->getStorageId().has_value()) return;
-
+void Storage::remove(std::uint32_t id) {
   const auto lock = std::scoped_lock{mutex_};
-  const auto storage_id = texture->getStorageId().value();
 
-  if (storage_id < textures_.size() && textures_[storage_id] == texture) {
+  if (id < textures_.size() && textures_[id]) {
+    auto texture = textures_[id];
+
+    textureMap_.erase(texture->getId());
+
     if ((bindlessManager_ != nullptr) && texture->getBindlessId().has_value()) {
       bindlessManager_->removeTexture(texture->getBindlessId().value());
       texture->setBindlessId(std::nullopt);
     }
+
     if ((imguiRenderer_ != nullptr) && texture->getImguiId().has_value()) {
       imguiRenderer_->unregisterTexture(texture->getImguiId().value());
       texture->setImguiId(std::nullopt);
     }
 
-    textures_[storage_id] = nullptr;
-    freeIds_.push_back(storage_id);
     texture->setStorageId(std::nullopt);
+    textures_[id] = nullptr;
+    freeIds_.push_back(id);
     activeCount_--;
   }
 }
@@ -87,7 +91,7 @@ void Storage::setImguiRenderer(imgui::ImguiRenderer* renderer) {
       if (tex && !tex->getImguiId().has_value() && tex->getGraphicsTexture()) {
         const auto graphics_tex = tex->getGraphicsTexture();
         const auto imgui_id = imguiRenderer_->registerTexture(
-            graphics_tex->getView(), graphics_tex->getSampler());
+            graphics_tex->getImageView(), graphics_tex->getSampler());
         tex->setImguiId(imgui_id);
       }
     }
@@ -101,6 +105,13 @@ auto Storage::get(std::uint32_t storageId) const -> std::shared_ptr<Texture> {
     return textures_[storageId];
   }
   return nullptr;
+}
+
+auto Storage::getTexture(std::size_t itemId) const -> std::shared_ptr<Texture> {
+  const auto lock = std::scoped_lock{mutex_};
+
+  auto it = textureMap_.find(itemId);
+  return it != textureMap_.end() ? it->second : nullptr;
 }
 
 auto Storage::getTextures() const -> std::vector<std::shared_ptr<Texture>> {

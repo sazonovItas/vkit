@@ -4,6 +4,7 @@
 
 #include "vkit/graphics/instance.hpp"
 #include "vkit/graphics/surface.hpp"
+#include "vkit/util/scoped.hpp"
 
 namespace vkit::graphics {
 
@@ -64,5 +65,11 @@ class GfxDevice {
   [[nodiscard]] auto createAllocator(const vk::Instance& instance) const
       -> vma::Allocator;
 };
+
+struct DeviceWaiterDeleter {
+  void operator()(vk::Device const device) const noexcept { device.waitIdle(); }
+};
+
+using DeviceWaiter = vkit::util::Scoped<vk::Device, DeviceWaiterDeleter>;
 
 };  // namespace vkit::graphics

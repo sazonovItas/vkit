@@ -6,11 +6,12 @@
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
-#include "vkit/graphics/descriptor_set_layout/dsl.hpp"
+#include "vkit/graphics/descriptor_set_layout.hpp"
 #include "vkit/graphics/image.hpp"
 #include "vkit/graphics/mapped_buffer.hpp"
 #include "vkit/graphics/pipeline/graphics.hpp"
-#include "vkit/graphics/pipeline_layout/pl.hpp"
+#include "vkit/graphics/pipeline_layout.hpp"
+#include "vkit/graphics/util.hpp"
 
 namespace vkit::imgui {
 
@@ -21,24 +22,28 @@ class ImguiRenderer {
                 std::uint32_t framesInFlight = 2);
   ~ImguiRenderer();
 
-  auto uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer;
+  void uploadFont(const graphics::util::RecordAndSubmitInfo& submitInfo);
 
   [[nodiscard]] auto registerTexture(vk::ImageView imageView,
                                      vk::Sampler sampler = nullptr)
       -> ImTextureID;
+  [[nodiscard]] auto updateOrRegisterTexture(ImTextureID existingId,
+                                             vk::ImageView imageView,
+                                             vk::Sampler sampler = nullptr)
+      -> ImTextureID;
   void unregisterTexture(ImTextureID textureId);
 
-  void renderDrawData(vk::CommandBuffer cb, ImDrawData* drawData,
-                      std::size_t frameIndex);
+  void render(std::uint32_t frameIndex, vk::CommandBuffer cb,
+              ImDrawData* drawData);
 
  private:
   vk::Device device_;
   vma::Allocator allocator_;
 
-  std::optional<graphics::dsl::DescriptorSetLayout> descriptorSetLayout_;
+  std::optional<graphics::DescriptorSetLayout> descriptorSetLayout_;
   vk::UniqueDescriptorPool descriptorPool_;
 
-  std::optional<graphics::pl::PipelineLayout> pipelineLayout_;
+  std::optional<graphics::PipelineLayout> pipelineLayout_;
   std::optional<graphics::pipeline::GraphicsPipeline> pipeline_;
 
   struct FrameData {

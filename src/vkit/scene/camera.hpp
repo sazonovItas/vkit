@@ -59,23 +59,23 @@ class Camera : public Item<Camera>, public NodeAttachment {
     updateProjection();
   }
 
-  void setPosition(glm::vec3 newPosition) {
+  void setPosition(const glm::vec3& newPosition) {
     position_ = newPosition;
     updateView();
   }
 
-  void setTarget(glm::vec3 newTarget) {
+  void setTarget(const glm::vec3& newTarget) {
     target_ = newTarget;
     updateView();
   }
 
-  void setUpVector(glm::vec3 newUp) {
+  void setUpVector(const glm::vec3& newUp) {
     up_ = newUp;
     updateView();
   }
 
-  void lookAt(glm::vec3 newPosition, glm::vec3 newTarget,
-              glm::vec3 newUp = glm::vec3(0.0F, 1.0F, 0.0F)) {
+  void lookAt(const glm::vec3& newPosition, const glm::vec3& newTarget,
+              const glm::vec3& newUp = glm::vec3(0.0F, 1.0F, 0.0F)) {
     position_ = newPosition;
     target_ = newTarget;
     up_ = newUp;
@@ -86,9 +86,22 @@ class Camera : public Item<Camera>, public NodeAttachment {
     viewTransform_ = transform;
   }
 
+  [[nodiscard]] auto getProjectionMatrix() const -> glm::mat4 {
+    return projectionTransform_.getMatrix();
+  }
+
+  [[nodiscard]] auto getViewMatrix() const -> glm::mat4 {
+    return viewTransform_.getMatrix();
+  }
+
+  [[nodiscard]] auto getViewProjectionMatrix() const -> glm::mat4 {
+    return getProjectionMatrix() * getViewMatrix();
+  }
+
   [[nodiscard]] auto getProjection() const -> const Transform& {
     return projectionTransform_;
   }
+
   [[nodiscard]] auto getView() const -> const Transform& {
     return viewTransform_;
   }
@@ -97,9 +110,11 @@ class Camera : public Item<Camera>, public NodeAttachment {
   [[nodiscard]] auto getTarget() const -> glm::vec3 { return target_; }
   [[nodiscard]] auto getUpVector() const -> glm::vec3 { return up_; }
   [[nodiscard]] auto getCameraType() const -> CameraType { return type_; }
+
   [[nodiscard]] auto getPerspectiveParams() const -> const PerspectiveParams& {
     return perspective_;
   }
+
   [[nodiscard]] auto getOrthographicParams() const
       -> const OrthographicParams& {
     return orthographic_;
@@ -121,8 +136,9 @@ class Camera : public Item<Camera>, public NodeAttachment {
 
   void updateProjection() {
     if (type_ == CameraType::kPerspective) {
-      float aspect = perspective_.aspectRatio.value_or(fallbackAspectRatio_);
-      float z_far = perspective_.zFar.value_or(10000.0F);
+      const float aspect =
+          perspective_.aspectRatio.value_or(fallbackAspectRatio_);
+      const float z_far = perspective_.zFar.value_or(10000.0F);
       projectionTransform_.setPerspective(perspective_.fovY, aspect,
                                           perspective_.zNear, z_far);
     } else {

@@ -33,7 +33,7 @@ struct AllocatedBuffer : Buffer {
         allocator.createBuffer(createInfo, allocationCreateInfo);
   }
 
-  AllocatedBuffer() = delete;
+  AllocatedBuffer() = default;
   AllocatedBuffer(const AllocatedBuffer&) = delete;
   AllocatedBuffer& operator=(const AllocatedBuffer&) = delete;
 

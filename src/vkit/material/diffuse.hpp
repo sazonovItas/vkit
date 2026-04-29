@@ -1,9 +1,10 @@
 #pragma once
 
-#include <cstdint>
-#include <string_view>
+#include <memory>
+#include <optional>
 
 #include "vkit/material/material.hpp"
+#include "vkit/texture/texture.hpp"
 
 namespace vkit::material {
 
@@ -27,9 +28,46 @@ class Diffuse : public Material {
 
   explicit Diffuse(std::string_view name) : Material(name) {}
 
-  Data data;
-
   [[nodiscard]] auto getType() const -> Type override { return Type::kDiffuse; }
+
+  Params params;
+
+  void setDiffuseTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+    diffuseTexture_ = std::move(tex);
+  }
+  void setNormalTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+    normalTexture_ = std::move(tex);
+  }
+
+  [[nodiscard]] auto getDiffuseTexture() const
+      -> std::shared_ptr<vkit::texture::Texture> {
+    return diffuseTexture_;
+  }
+  [[nodiscard]] auto getNormalTexture() const
+      -> std::shared_ptr<vkit::texture::Texture> {
+    return normalTexture_;
+  }
+
+  [[nodiscard]] auto getData() const -> Data {
+    Data d;
+    d.params = params;
+
+    d.textures.diffuseTexIdx =
+        diffuseTexture_ ? static_cast<int32_t>(
+                              diffuseTexture_->getBindlessId().value_or(-1))
+                        : -1;
+
+    d.textures.normalTexIdx =
+        normalTexture_
+            ? static_cast<int32_t>(normalTexture_->getBindlessId().value_or(-1))
+            : -1;
+
+    return d;
+  }
+
+ private:
+  std::shared_ptr<texture::Texture> diffuseTexture_;
+  std::shared_ptr<texture::Texture> normalTexture_;
 };
 
 static_assert(sizeof(Diffuse::Params) == 16,

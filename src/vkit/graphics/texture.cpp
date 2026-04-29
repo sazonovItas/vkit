@@ -39,7 +39,7 @@ auto Texture::makeImageView(vk::Device device) const -> vk::UniqueImageView {
 
 auto Texture::getImage() const -> Image { return image_; };
 
-auto Texture::getView() const -> vk::ImageView { return *view_; }
+auto Texture::getImageView() const -> vk::ImageView { return *view_; }
 
 auto Texture::getTextureType() const -> TextureType { return type_; }
 

@@ -12,6 +12,8 @@ class ImguiWindow {
   explicit ImguiWindow(std::string_view title, bool showInMenu = true);
   virtual ~ImguiWindow() = default;
 
+  virtual void prepareForFrame(std::uint32_t frameIndex) {}
+
   virtual void onDraw() = 0;
 
   virtual void onBegin() {}

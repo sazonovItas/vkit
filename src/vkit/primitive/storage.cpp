@@ -1,8 +1,15 @@
 #include "vkit/primitive/storage.hpp"
 
+#include <stdexcept>
+
 namespace vkit::primitive {
 
 auto Storage::add(const std::shared_ptr<Primitive>& prim) -> std::uint32_t {
+  if (!prim) {
+    throw std::invalid_argument{"Cannot add a null primitive"};
+  }
+
+  const auto lock = std::scoped_lock{mutex_};
   std::uint32_t index = 0;
 
   if (!freeList_.empty()) {
@@ -22,10 +29,12 @@ auto Storage::add(const std::shared_ptr<Primitive>& prim) -> std::uint32_t {
   return index;
 }
 
-void Storage::remove(const std::uint32_t index) {
+void Storage::remove(std::uint32_t index) {
+  const auto lock = std::scoped_lock{mutex_};
+
   if (index < primitives_.size() && primitives_[index]) {
     primitives_[index]->setId(std::nullopt);
-    primitives_[index].reset();
+    primitives_[index] = nullptr;
 
     primitiveData_[index] = Primitive::Data{};
 
@@ -34,6 +43,8 @@ void Storage::remove(const std::uint32_t index) {
 }
 
 void Storage::update() {
+  const auto lock = std::scoped_lock{mutex_};
+
   for (std::size_t i = 0; i < primitives_.size(); ++i) {
     if (primitives_[i]) {
       primitiveData_[i] = primitives_[i]->getData();
@@ -41,17 +52,34 @@ void Storage::update() {
   }
 }
 
-auto Storage::getPrimitives() const
-    -> const std::vector<std::shared_ptr<Primitive>>& {
-  return primitives_;
+auto Storage::getPrimitives() const -> std::vector<std::shared_ptr<Primitive>> {
+  const auto lock = std::scoped_lock{mutex_};
+
+  std::vector<std::shared_ptr<Primitive>> result;
+  result.reserve(primitives_.size() - freeList_.size());
+
+  for (const auto& prim : primitives_) {
+    if (prim) {
+      result.push_back(prim);
+    }
+  }
+
+  return result;
 }
 
 auto Storage::getPrimitive(std::uint32_t index) const
-    -> const std::shared_ptr<Primitive>& {
-  return primitives_.at(index);
+    -> std::shared_ptr<Primitive> {
+  const auto lock = std::scoped_lock{mutex_};
+
+  if (index < primitives_.size()) {
+    return primitives_[index];
+  }
+
+  return nullptr;
 }
 
 auto Storage::getData() const -> std::span<const std::byte> {
+  const auto lock = std::scoped_lock{mutex_};
   return std::as_bytes(std::span{primitiveData_});
 }
 

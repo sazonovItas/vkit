@@ -158,7 +158,7 @@ struct AllocatedImage : Image {
         allocator.createImage(createInfo, allocationCreateInfo);
   }
 
-  AllocatedImage() = delete;
+  AllocatedImage() = default;
   AllocatedImage(const AllocatedImage&) = delete;
   AllocatedImage& operator=(const AllocatedImage&) = delete;
 

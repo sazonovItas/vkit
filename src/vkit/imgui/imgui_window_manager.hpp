@@ -15,7 +15,7 @@ class ImguiWindowManager {
   void addWindow(std::shared_ptr<ImguiWindow> window);
   void removeWindow(const std::string& title);
 
-  void drawWindows();
+  void drawWindows(std::uint32_t frameIndex);
 
   void drawWindowMenu();
 

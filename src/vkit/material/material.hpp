@@ -38,7 +38,7 @@ class Material : public Item<Material>, public primitive::Attachment {
   [[nodiscard]] auto isDoubleSided() const -> bool { return doubleSided_; }
   void setDoubleSided(bool doubleSided) { doubleSided_ = doubleSided; }
 
-  virtual ~Material();
+  ~Material() override;
 
  private:
   bool isDirty_{true};

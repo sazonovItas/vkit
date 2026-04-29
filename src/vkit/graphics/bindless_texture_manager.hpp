@@ -18,15 +18,24 @@ class BindlessTextureManager {
   static constexpr std::uint32_t kNearestSamplerId = 1;
 
   BindlessTextureManager(vk::Device device, vk::DescriptorSet bindlessSet,
-                         std::uint32_t maxSamplers, std::uint32_t maxTextures)
+                         std::uint32_t maxSamplers, std::uint32_t maxTextures,
+                         std::shared_ptr<Texture> dummyTexture)
       : device_(device),
         bindlessSet_(bindlessSet),
         maxSamplers_(maxSamplers),
-        maxTextures_(maxTextures) {
+        maxTextures_(maxTextures),
+        dummyTexture_(std::move(dummyTexture)) {
+    if (!dummyTexture_) {
+      throw std::invalid_argument(
+          "Dummy texture must be provided to BindlessTextureManager.");
+    }
+
     textures_.resize(maxTextures_);
     freeTextureIndices_.reserve(maxTextures_);
-    for (std::uint32_t i = maxTextures_; i > 0; --i) {
-      freeTextureIndices_.push_back(i - 1);
+
+    for (std::uint32_t i = 0; i < maxTextures_; ++i) {
+      freeTextureIndices_.push_back(maxTextures_ - 1 - i);
+      updateTextureDescriptor(i, dummyTexture_);
     }
 
     samplers_.resize(maxSamplers_);
@@ -60,6 +69,8 @@ class BindlessTextureManager {
   void removeTexture(std::uint32_t index) {
     if (index >= maxTextures_ || !textures_[index]) return;
 
+    updateTextureDescriptor(index, dummyTexture_);
+
     textures_[index].reset();
     freeTextureIndices_.push_back(index);
   }
@@ -92,6 +103,8 @@ class BindlessTextureManager {
 
   std::uint32_t maxSamplers_;
   std::uint32_t maxTextures_;
+
+  std::shared_ptr<Texture> dummyTexture_;
 
   std::vector<std::shared_ptr<Texture>> textures_;
   std::vector<std::uint32_t> freeTextureIndices_;
@@ -133,7 +146,7 @@ class BindlessTextureManager {
     auto image_info =
         vk::DescriptorImageInfo{}
             .setImageLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setImageView(texture->getView());
+            .setImageView(texture->getImageView());
 
     auto write = vk::WriteDescriptorSet{}
                      .setDstSet(bindlessSet_)

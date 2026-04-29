@@ -13,8 +13,9 @@ void ImguiWindowManager::removeWindow(const std::string& title) {
       windows_, [&title](const auto& win) { return win->title() == title; });
 }
 
-void ImguiWindowManager::drawWindows() {
+void ImguiWindowManager::drawWindows(std::uint32_t frameIndex) {
   for (auto& window : windows_) {
+    window->prepareForFrame(frameIndex);
     window->render();
   }
 }

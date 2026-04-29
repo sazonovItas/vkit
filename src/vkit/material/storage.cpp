@@ -9,6 +9,8 @@ auto Storage::add(const std::shared_ptr<Material>& mat) -> std::uint32_t {
     throw std::invalid_argument{"Cannot add a null material"};
   }
 
+  const auto lock = std::scoped_lock{mutex_};
+
   std::uint32_t index = 0;
   Type type = mat->getType();
 
@@ -60,42 +62,51 @@ auto Storage::add(const std::shared_ptr<Material>& mat) -> std::uint32_t {
   return index;
 }
 
-void Storage::remove(std::size_t id) {
-  auto it = materialMap_.find(id);
+void Storage::remove(std::size_t storageId) {
+  const auto lock = std::scoped_lock{mutex_};
+
+  auto it = materialMap_.find(storageId);
   if (it != materialMap_.end() && it->second->getStorageId().has_value()) {
     removeByType(it->second->getType(), it->second->getStorageId().value());
   }
 }
 
-auto Storage::getMaterial(std::size_t id) const -> std::shared_ptr<Material> {
-  auto it = materialMap_.find(id);
+auto Storage::getMaterial(std::size_t itemId) const
+    -> std::shared_ptr<Material> {
+  const auto lock = std::scoped_lock{mutex_};
+
+  auto it = materialMap_.find(itemId);
   return it != materialMap_.end() ? it->second : nullptr;
 }
 
 void Storage::update() {
+  const auto lock = std::scoped_lock{mutex_};
+
   for (std::size_t i = 0; i < diffuse_.size(); ++i) {
     if (diffuse_[i] && diffuse_[i]->isDirty()) {
-      diffuseData_[i] = diffuse_[i]->data;
+      diffuseData_[i] = diffuse_[i]->getData();
       diffuse_[i]->setDirty(false);
     }
   }
 
   for (std::size_t i = 0; i < diffuseSpecular_.size(); ++i) {
     if (diffuseSpecular_[i] && diffuseSpecular_[i]->isDirty()) {
-      diffuseSpecularData_[i] = diffuseSpecular_[i]->data;
+      diffuseSpecularData_[i] = diffuseSpecular_[i]->getData();
       diffuseSpecular_[i]->setDirty(false);
     }
   }
 
   for (std::size_t i = 0; i < principledBSDF_.size(); ++i) {
     if (principledBSDF_[i] && principledBSDF_[i]->isDirty()) {
-      principledBSDFData_[i] = principledBSDF_[i]->data;
+      principledBSDFData_[i] = principledBSDF_[i]->getData();
       principledBSDF_[i]->setDirty(false);
     }
   }
 }
 
 auto Storage::getData(Type type) const -> std::span<const std::byte> {
+  const auto lock = std::scoped_lock{mutex_};
+
   switch (type) {
     case Type::kDiffuse:
       return std::as_bytes(std::span{diffuseData_});

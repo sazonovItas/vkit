@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <unordered_map>
 #include <vector>
@@ -18,15 +19,19 @@ class Storage {
  public:
   Storage() = default;
 
-  auto add(const std::shared_ptr<Material>& mat) -> std::uint32_t;
-  void remove(std::size_t id);
+  Storage(const Storage&) = delete;
+  auto operator=(const Storage&) -> Storage& = delete;
 
-  [[nodiscard]] auto getMaterial(std::size_t id) const
+  auto add(const std::shared_ptr<Material>& mat) -> std::uint32_t;
+  void remove(std::size_t storageId);
+
+  [[nodiscard]] auto getMaterial(std::size_t itemId) const
       -> std::shared_ptr<Material>;
 
   template <typename T>
-  [[nodiscard]] auto getMaterialAs(std::size_t id) const -> std::shared_ptr<T> {
-    return std::dynamic_pointer_cast<T>(getMaterial(id));
+  [[nodiscard]] auto getMaterialAs(std::size_t itemId) const
+      -> std::shared_ptr<T> {
+    return std::dynamic_pointer_cast<T>(getMaterial(itemId));
   }
 
   void update();
@@ -34,6 +39,8 @@ class Storage {
   [[nodiscard]] auto getData(Type type) const -> std::span<const std::byte>;
 
  private:
+  mutable std::mutex mutex_;
+
   std::vector<std::shared_ptr<Diffuse>> diffuse_;
   std::vector<std::shared_ptr<DiffuseSpecular>> diffuseSpecular_;
   std::vector<std::shared_ptr<PrincipledBSDF>> principledBSDF_;

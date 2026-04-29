@@ -1,9 +1,10 @@
 #pragma once
 
-#include <cstdint>
-#include <string_view>
+#include <memory>
+#include <optional>
 
 #include "vkit/material/material.hpp"
+#include "vkit/texture/texture.hpp"
 
 namespace vkit::material {
 
@@ -29,11 +30,51 @@ class DiffuseSpecular : public Material {
 
   explicit DiffuseSpecular(std::string_view name) : Material(name) {}
 
-  Data data;
+  Params params;
 
   [[nodiscard]] auto getType() const -> Type override {
     return Type::kDiffuseSpecular;
   }
+
+  void setDiffuseTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+    diffuseTexture_ = std::move(tex);
+  }
+  void setSpecularGlossinessTexture(
+      std::shared_ptr<vkit::texture::Texture> tex) {
+    specularGlossinessTexture_ = std::move(tex);
+  }
+  void setNormalTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+    normalTexture_ = std::move(tex);
+  }
+
+  [[nodiscard]] auto getDiffuseTexture() const { return diffuseTexture_; }
+  [[nodiscard]] auto getSpecularGlossinessTexture() const {
+    return specularGlossinessTexture_;
+  }
+  [[nodiscard]] auto getNormalTexture() const { return normalTexture_; }
+
+  [[nodiscard]] auto getData() const -> Data {
+    Data d;
+    d.params = params;
+
+    auto resolve =
+        [](const std::shared_ptr<vkit::texture::Texture>& tex) -> std::int32_t {
+      return tex ? static_cast<std::int32_t>(tex->getBindlessId().value_or(-1))
+                 : -1;
+    };
+
+    d.textures.diffuseTexIdx = resolve(diffuseTexture_);
+    d.textures.specularGlossinessTexIdx = resolve(specularGlossinessTexture_);
+    d.textures.normalTexIdx = resolve(normalTexture_);
+    d.textures.padding0 = 0;
+
+    return d;
+  }
+
+ private:
+  std::shared_ptr<vkit::texture::Texture> diffuseTexture_;
+  std::shared_ptr<vkit::texture::Texture> specularGlossinessTexture_;
+  std::shared_ptr<vkit::texture::Texture> normalTexture_;
 };
 
 static_assert(sizeof(DiffuseSpecular::Params) == 32,

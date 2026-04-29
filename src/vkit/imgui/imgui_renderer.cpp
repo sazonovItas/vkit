@@ -135,6 +135,37 @@ auto ImguiRenderer::registerTexture(vk::ImageView imageView,
   return reinterpret_cast<ImTextureID>(raw_set);
 }
 
+auto ImguiRenderer::updateOrRegisterTexture(ImTextureID existingId,
+                                            vk::ImageView imageView,
+                                            vk::Sampler sampler)
+    -> ImTextureID {
+  if (sampler == nullptr) {
+    sampler = *this->linearSampler_;
+  }
+
+  if (existingId == 0) {
+    return registerTexture(imageView, sampler);
+  }
+
+  auto* const raw_set = reinterpret_cast<VkDescriptorSet>(existingId);
+  const auto descriptor_set = vk::DescriptorSet{raw_set};
+
+  const auto image_info = vk::DescriptorImageInfo{
+      sampler,
+      imageView,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+  };
+
+  const auto write = vk::WriteDescriptorSet{
+      descriptor_set, 0, 0, 1, vk::DescriptorType::eCombinedImageSampler,
+      &image_info,
+  };
+
+  device_.updateDescriptorSets(write, nullptr);
+
+  return existingId;
+}
+
 void ImguiRenderer::unregisterTexture(ImTextureID textureId) {
   if (textureId) {
     auto* const raw_set = reinterpret_cast<VkDescriptorSet>(textureId);
@@ -143,7 +174,8 @@ void ImguiRenderer::unregisterTexture(ImTextureID textureId) {
   }
 }
 
-auto ImguiRenderer::uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer {
+void ImguiRenderer::uploadFont(
+    const graphics::util::RecordAndSubmitInfo& submitInfo) {
   auto& io = ImGui::GetIO();
   auto* pixels = static_cast<unsigned char*>(nullptr);
   auto width = 0;
@@ -158,6 +190,7 @@ auto ImguiRenderer::uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer {
       upload_size,
       vk::BufferUsageFlagBits::eTransferSrc,
   };
+
   auto staging_buffer = graphics::MappedBuffer{
       allocator_, staging_ci, graphics::allocation::kHostWrite};
   std::memcpy(staging_buffer.data, pixels, upload_size);
@@ -176,45 +209,48 @@ auto ImguiRenderer::uploadFont(vk::CommandBuffer cb) -> graphics::MappedBuffer {
   fontImage_.emplace(allocator_, image_ci, graphics::allocation::kDeviceLocal);
   fontView_ = device_.createImageViewUnique(fontImage_->getViewCreateInfo());
 
-  auto transfer_barrier = vk::ImageMemoryBarrier2{};
-  transfer_barrier.setImage(static_cast<vk::Image>(*fontImage_))
-      .setOldLayout(vk::ImageLayout::eUndefined)
-      .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
-      .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
-      .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite)
-      .setSubresourceRange(fontImage_->subresourceRange());
-  cb.pipelineBarrier2(
-      vk::DependencyInfo{}.setImageMemoryBarriers(transfer_barrier));
+  graphics::util::recordAndSubmit(submitInfo, [&](vk::CommandBuffer cb) {
+    auto transfer_barrier = vk::ImageMemoryBarrier2{};
+    transfer_barrier.setImage(static_cast<vk::Image>(*fontImage_))
+        .setOldLayout(vk::ImageLayout::eUndefined)
+        .setNewLayout(vk::ImageLayout::eTransferDstOptimal)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eTopOfPipe)
+        .setDstStageMask(vk::PipelineStageFlagBits2::eTransfer)
+        .setDstAccessMask(vk::AccessFlagBits2::eTransferWrite)
+        .setSubresourceRange(fontImage_->subresourceRange());
+    cb.pipelineBarrier2(
+        vk::DependencyInfo{}.setImageMemoryBarriers(transfer_barrier));
 
-  const auto copy_region =
-      vk::BufferImageCopy{0,         0,
-                          0,         {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
-                          {0, 0, 0}, image_ci.extent};
-  cb.copyBufferToImage(static_cast<vk::Buffer>(staging_buffer),
-                       static_cast<vk::Image>(*fontImage_),
-                       vk::ImageLayout::eTransferDstOptimal, copy_region);
+    const auto copy_region = vk::BufferImageCopy{
+        0,         0,
+        0,         {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        {0, 0, 0}, image_ci.extent};
+    cb.copyBufferToImage(static_cast<vk::Buffer>(staging_buffer),
+                         static_cast<vk::Image>(*fontImage_),
+                         vk::ImageLayout::eTransferDstOptimal, copy_region);
 
-  auto shader_barrier = transfer_barrier;
-  shader_barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
-      .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-      .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
-      .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
-      .setDstStageMask(vk::PipelineStageFlagBits2::eFragmentShader)
-      .setDstAccessMask(vk::AccessFlagBits2::eShaderRead);
-  cb.pipelineBarrier2(
-      vk::DependencyInfo{}.setImageMemoryBarriers(shader_barrier));
+    auto shader_barrier = transfer_barrier;
+    shader_barrier.setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eTransfer)
+        .setSrcAccessMask(vk::AccessFlagBits2::eTransferWrite)
+        .setDstStageMask(vk::PipelineStageFlagBits2::eFragmentShader)
+        .setDstAccessMask(vk::AccessFlagBits2::eShaderRead);
+    cb.pipelineBarrier2(
+        vk::DependencyInfo{}.setImageMemoryBarriers(shader_barrier));
+  });
 
   io.Fonts->SetTexID(registerTexture(*fontView_, *linearSampler_));
-
-  return staging_buffer;
 }
 
-void ImguiRenderer::renderDrawData(vk::CommandBuffer cb, ImDrawData* drawData,
-                                   std::size_t frameIndex) {
+void ImguiRenderer::render(std::uint32_t frameIndex, vk::CommandBuffer cb,
+                           ImDrawData* drawData) {
   assert(frameIndex < frames_.size() &&
-         "Frame index is greater than frame in flight");
-  if (!drawData || drawData->TotalVtxCount == 0) return;
+         "ImguiRenderer: frameIndex out of bounds!");
+
+  if (!drawData || drawData->TotalVtxCount == 0) {
+    return;
+  }
 
   auto& frame = frames_[frameIndex];
   const auto req_vtx_size =
@@ -314,6 +350,8 @@ void ImguiRenderer::renderDrawData(vk::CommandBuffer cb, ImDrawData* drawData,
     global_vtx_offset += cmd_list->VtxBuffer.Size;
     global_idx_offset += cmd_list->IdxBuffer.Size;
   }
+
+  // Removed the automatic frame increment here
 }
 
 };  // namespace vkit::imgui

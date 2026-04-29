@@ -27,7 +27,8 @@ class Texture {
           const TextureCreateInfo& createInfo);
 
   [[nodiscard]] auto getImage() const -> Image;
-  [[nodiscard]] auto getView() const -> vk::ImageView;
+  [[nodiscard]] auto getImageView() const -> vk::ImageView;
+  [[nodiscard]] auto getSampler() const -> vk::Sampler;
   [[nodiscard]] auto getTextureType() const -> TextureType;
   [[nodiscard]] auto getPixelFormat() const -> dataformat::Format;
   [[nodiscard]] auto getWidth(std::uint32_t level = 0) const -> int;
@@ -38,7 +39,6 @@ class Texture {
   [[nodiscard]] auto getSampleCount() const -> SampleCount;
   [[nodiscard]] auto isLayered() const -> bool;
 
-  [[nodiscard]] auto getSampler() const -> vk::Sampler;
   void setSampler(vk::Sampler);
 
   void recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer);
