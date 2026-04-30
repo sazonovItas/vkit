@@ -63,11 +63,18 @@ void ImguiWindow::render() {
 
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
+
+    ImVec4 active_border = ImVec4(0.2F, 0.5F, 0.9F, 1.0F);
+    ImVec4 inactive_border = ImGui::GetStyle().Colors[ImGuiCol_Border];
     ImGui::PushStyleColor(ImGuiCol_Border,
-                          ImGui::GetStyle().Colors[ImGuiCol_Border]);
+                          isFocused_ ? active_border : inactive_border);
+
+    const auto child_flags = ImGuiWindowFlags_NoTitleBar |
+                             ImGuiWindowFlags_NoScrollWithMouse |
+                             ImGuiWindowFlags_NoScrollbar;
 
     ImGui::BeginChild("##inner_panel", ImGui::GetContentRegionAvail(), 1,
-                      ImGuiWindowFlags_NoTitleBar);
+                      child_flags);
 
     onBegin();
     onDraw();

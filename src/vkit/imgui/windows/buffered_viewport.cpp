@@ -7,25 +7,20 @@ namespace vkit::imgui::windows {
 BufferedViewport::BufferedViewport(std::string_view name, vk::Device device,
                                    vma::Allocator allocator,
                                    imgui::ImguiRenderer& imguiRenderer,
+                                   const renderer::ViewportInfo& viewportInfo,
                                    std::uint32_t framesInFlight,
-                                   const std::vector<vk::Format>& colorFormats,
-                                   vk::Format depthFormat)
+                                   std::uint32_t displayTargetIndex)
     : ViewportWindow(name, [](std::uint32_t, std::uint32_t) {}),
       device_{device},
       allocator_{allocator},
-      imguiRenderer_{imguiRenderer} {
-  viewports_.resize(framesInFlight);
-  textureIds_.resize(framesInFlight, 0);
-
-  for (auto& vp : viewports_) {
-    for (const auto& format : colorFormats) {
-      vp.addColorTarget(format);
-    }
-
-    if (depthFormat != vk::Format::eUndefined) {
-      vp.setDepthTarget(depthFormat);
-    }
+      imguiRenderer_{imguiRenderer},
+      displayTargetIndex_{displayTargetIndex} {
+  viewports_.reserve(framesInFlight);
+  for (std::uint32_t i = 0; i < framesInFlight; ++i) {
+    viewports_.emplace_back(viewportInfo);
   }
+
+  textureIds_.resize(framesInFlight, 0);
 }
 
 BufferedViewport::~BufferedViewport() {
@@ -44,10 +39,11 @@ void BufferedViewport::prepareForFrame(std::uint32_t frameIndex) {
 
   current_viewport.ensureSize(device_, allocator_, target_width, target_height);
 
-  if (!current_viewport.colorTargets.empty() &&
-      current_viewport.colorTargets[0].view) {
+  if (current_viewport.colorTargets.size() > displayTargetIndex_ &&
+      current_viewport.colorTargets[displayTargetIndex_].view) {
     textureIds_[frameIndex] = imguiRenderer_.updateOrRegisterTexture(
-        textureIds_[frameIndex], *current_viewport.colorTargets[0].view);
+        textureIds_[frameIndex],
+        *current_viewport.colorTargets[displayTargetIndex_].view);
 
     setCurrentTexture(textureIds_[frameIndex]);
   }

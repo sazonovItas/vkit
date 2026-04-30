@@ -26,10 +26,8 @@ struct SceneSetLayout final : public graphics::DescriptorSetLayout {
 
   static constexpr auto kBindingFlags =
       std::array<vk::DescriptorBindingFlags, 2>{
-          vk::DescriptorBindingFlagBits::eUpdateAfterBind |
-              vk::DescriptorBindingFlagBits::ePartiallyBound,
-          vk::DescriptorBindingFlagBits::eUpdateAfterBind |
-              vk::DescriptorBindingFlagBits::ePartiallyBound,
+          vk::DescriptorBindingFlagBits::ePartiallyBound,
+          vk::DescriptorBindingFlagBits::ePartiallyBound,
       };
 
   explicit SceneSetLayout(vk::Device device)
@@ -37,7 +35,7 @@ struct SceneSetLayout final : public graphics::DescriptorSetLayout {
             device,
             vk::StructureChain{
                 vk::DescriptorSetLayoutCreateInfo{
-                    vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool,
+                    {},
                     kBindings,
                 },
                 vk::DescriptorSetLayoutBindingFlagsCreateInfo{

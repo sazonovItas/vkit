@@ -7,7 +7,9 @@ glslc:
 
 	glslc ./shaders/primitive.vert -o ./assets/shaders/primitive.vert
 	glslc ./shaders/primitive_material.frag -o ./assets/shaders/primitive_material.frag
+
 	glslc ./shaders/ray_sphere.vert -o ./assets/shaders/ray_sphere.vert
+	glslc ./shaders/ray_sphere_debug.frag -o ./assets/shaders/ray_sphere_debug.frag
 	glslc ./shaders/ray_sphere_material.frag -o ./assets/shaders/ray_sphere_material.frag
 
 	glslc ./shaders/skybox.vert -o ./assets/shaders/skybox.vert

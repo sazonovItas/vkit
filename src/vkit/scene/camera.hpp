@@ -87,7 +87,9 @@ class Camera : public Item<Camera>, public NodeAttachment {
   }
 
   [[nodiscard]] auto getProjectionMatrix() const -> glm::mat4 {
-    return projectionTransform_.getMatrix();
+    auto proj = projectionTransform_.getMatrix();
+    proj[1][1] *= -1.0F;
+    return proj;
   }
 
   [[nodiscard]] auto getViewMatrix() const -> glm::mat4 {

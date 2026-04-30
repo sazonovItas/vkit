@@ -22,7 +22,6 @@ class ViewportWindow : public ImguiWindow {
 
   [[nodiscard]] auto getWidth() const -> std::uint32_t;
   [[nodiscard]] auto getHeight() const -> std::uint32_t;
-  [[nodiscard]] auto isHovered() const -> bool;
   [[nodiscard]] auto toContent(glm::vec2 positionInRoot) const -> glm::vec2;
 
  protected:

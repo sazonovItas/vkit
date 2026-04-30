@@ -12,7 +12,7 @@
 
 namespace vkit::renderer::pl {
 
-struct PrimitivePipelineLayout final : graphics::PipelineLayout {
+struct PrimitiveMaterialPipelineLayout final : graphics::PipelineLayout {
   struct PushConstants {
     glm::mat4 model;
     std::uint32_t primIndex;
@@ -32,7 +32,8 @@ struct PrimitivePipelineLayout final : graphics::PipelineLayout {
                  const dsl::BindlessTextureSetLayout&,
                  const dsl::MaterialSetLayout&, const dsl::PrimitiveSetLayout&>;
 
-  explicit PrimitivePipelineLayout(vk::Device device, SetLayouts setLayouts)
+  explicit PrimitiveMaterialPipelineLayout(vk::Device device,
+                                           SetLayouts setLayouts)
       : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
 
  private:

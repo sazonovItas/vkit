@@ -4,6 +4,8 @@
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
+#include "vkit/controller/camera.hpp"
+#include "vkit/graphics/descriptor_buffer.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/instance.hpp"
 #include "vkit/graphics/surface.hpp"
@@ -12,7 +14,10 @@
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
 #include "vkit/imgui/windows/buffered_viewport.hpp"
+#include "vkit/renderer/descriptor_set_layout/scene.hpp"
+#include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
 #include "vkit/renderer/renderer.hpp"
+#include "vkit/scene/camera.hpp"
 
 namespace vkit {
 
@@ -26,7 +31,8 @@ class App {
   void initWindow();
   void initVulkan();
   void initImgui();
-  void initWindows();
+  void initViewports();
+  void initDebugRendering();
 
   void mainLoop();
   void recreateSwapchain();
@@ -52,6 +58,25 @@ class App {
 
   std::shared_ptr<imgui::windows::BufferedViewport> viewportScene_;
   std::shared_ptr<imgui::windows::BufferedViewport> viewportMaterial_;
+
+  std::shared_ptr<scene::Camera> sceneCamera_;
+  std::shared_ptr<scene::Camera> materialCamera_;
+  controller::OrbitalCameraController sceneController_;
+  controller::OrbitalCameraController materialController_;
+
+  std::unique_ptr<renderer::dsl::SceneSetLayout> sceneSetLayout_;
+  std::unique_ptr<renderer::pl::RaySphereDebugPipelineLayout>
+      raySpherePipelineLayout_;
+  vk::UniquePipeline raySpherePipeline_;
+
+  vk::UniqueDescriptorPool descriptorPool_;
+
+  std::vector<vk::DescriptorSet> sceneDescriptorSets_;
+  std::vector<vk::DescriptorSet> materialDescriptorSets_;
+
+  std::vector<std::unique_ptr<graphics::DescriptorBuffer>> sceneCameraBuffers_;
+  std::vector<std::unique_ptr<graphics::DescriptorBuffer>>
+      materialCameraBuffers_;
 
   graphics::DeviceWaiter waiter_;
 };

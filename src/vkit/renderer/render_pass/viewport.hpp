@@ -1,6 +1,8 @@
 #pragma once
 
 #include <array>
+#include <optional>
+#include <vector>
 
 #include "vkit/graphics/command.hpp"
 #include "vkit/renderer/viewport.hpp"
@@ -9,24 +11,31 @@ namespace vkit::renderer::rp {
 
 class BeginViewportPass : public graphics::Command {
  public:
-  explicit BeginViewportPass(const Viewport& viewport,
-                             std::array<float, 4> clearColor = {0.05F, 0.05F,
-                                                                0.05F, 1.0F})
-      : viewport_{viewport}, clearColor_{clearColor} {}
+  explicit BeginViewportPass(
+      const Viewport& viewport, std::uint32_t colorTargetIndex = 0,
+      std::optional<std::uint32_t> resolveTargetIndex = std::nullopt,
+      std::array<float, 4> clearColor = {0.00F, 0.00F, 0.00F, 1.0F})
+      : viewport_{viewport},
+        colorIdx_{colorTargetIndex},
+        resolveIdx_{resolveTargetIndex},
+        clearColor_{clearColor} {}
 
   void record(vk::CommandBuffer cb) const override {
-    vk::ImageMemoryBarrier2 color_barrier{};
-    color_barrier
-        .setImage(static_cast<vk::Image>(viewport_.colorTargets[0].image))
-        .setOldLayout(vk::ImageLayout::eUndefined)
-        .setNewLayout(vk::ImageLayout::eColorAttachmentOptimal)
-        .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-        .setSrcAccessMask(vk::AccessFlagBits2::eNone)
-        .setDstStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
-        .setDstAccessMask(vk::AccessFlagBits2::eColorAttachmentWrite)
-        .setSubresourceRange({vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+    std::vector<vk::ImageMemoryBarrier2> barriers;
 
-    std::vector<vk::ImageMemoryBarrier2> barriers = {color_barrier};
+    barriers.push_back(createBarrier(
+        static_cast<vk::Image>(viewport_.colorTargets[colorIdx_].image),
+        vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::AccessFlagBits2::eColorAttachmentWrite));
+
+    if (resolveIdx_.has_value()) {
+      barriers.push_back(createBarrier(
+          static_cast<vk::Image>(viewport_.colorTargets[*resolveIdx_].image),
+          vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal,
+          vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+          vk::AccessFlagBits2::eColorAttachmentWrite));
+    }
 
     if (viewport_.depthTarget) {
       vk::ImageMemoryBarrier2 depth_barrier{};
@@ -47,11 +56,19 @@ class BeginViewportPass : public graphics::Command {
     cb.pipelineBarrier2(vk::DependencyInfo{}.setImageMemoryBarriers(barriers));
 
     vk::RenderingAttachmentInfo color_attachment{};
-    color_attachment.setImageView(*viewport_.colorTargets[0].view)
+    color_attachment.setImageView(*viewport_.colorTargets[colorIdx_].view)
         .setImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setLoadOp(vk::AttachmentLoadOp::eClear)
-        .setStoreOp(vk::AttachmentStoreOp::eStore)
+        .setStoreOp(resolveIdx_.has_value() ? vk::AttachmentStoreOp::eDontCare
+                                            : vk::AttachmentStoreOp::eStore)
         .setClearValue(vk::ClearValue{clearColor_});
+
+    if (resolveIdx_.has_value()) {
+      color_attachment
+          .setResolveImageView(*viewport_.colorTargets[*resolveIdx_].view)
+          .setResolveImageLayout(vk::ImageLayout::eColorAttachmentOptimal)
+          .setResolveMode(vk::ResolveModeFlagBits::eAverage);
+    }
 
     auto render_info = vk::RenderingInfo{}
                            .setRenderArea(vk::Rect2D{{0, 0}, viewport_.extent})
@@ -79,19 +96,40 @@ class BeginViewportPass : public graphics::Command {
 
  private:
   const Viewport& viewport_;
+  std::uint32_t colorIdx_;
+  std::optional<std::uint32_t> resolveIdx_;
   std::array<float, 4> clearColor_;
+
+  static auto createBarrier(vk::Image image, vk::ImageLayout oldLayout,
+                            vk::ImageLayout newLayout,
+                            vk::PipelineStageFlags2 dstStage,
+                            vk::AccessFlags2 dstAccess)
+      -> vk::ImageMemoryBarrier2 {
+    return vk::ImageMemoryBarrier2{}
+        .setImage(image)
+        .setOldLayout(oldLayout)
+        .setNewLayout(newLayout)
+        .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
+        .setSrcAccessMask(vk::AccessFlagBits2::eNone)
+        .setDstStageMask(dstStage)
+        .setDstAccessMask(dstAccess)
+        .setSubresourceRange({vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1});
+  }
 };
 
 class EndViewportPass : public graphics::Command {
  public:
-  explicit EndViewportPass(const Viewport& viewport) : viewport_{viewport} {}
+  explicit EndViewportPass(const Viewport& viewport,
+                           std::uint32_t displayTargetIndex = 0)
+      : viewport_{viewport}, displayIdx_{displayTargetIndex} {}
 
   void record(vk::CommandBuffer cb) const override {
     cb.endRendering();
 
     vk::ImageMemoryBarrier2 read_barrier{};
     read_barrier
-        .setImage(static_cast<vk::Image>(viewport_.colorTargets[0].image))
+        .setImage(
+            static_cast<vk::Image>(viewport_.colorTargets[displayIdx_].image))
         .setOldLayout(vk::ImageLayout::eColorAttachmentOptimal)
         .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
         .setSrcStageMask(vk::PipelineStageFlagBits2::eColorAttachmentOutput)
@@ -106,6 +144,7 @@ class EndViewportPass : public graphics::Command {
 
  private:
   const Viewport& viewport_;
+  std::uint32_t displayIdx_;
 };
 
 };  // namespace vkit::renderer::rp
