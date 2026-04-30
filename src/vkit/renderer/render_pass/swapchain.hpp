@@ -2,11 +2,11 @@
 
 #include <array>
 
-#include "vkit/renderer/command/command.hpp"
+#include "vkit/graphics/command.hpp"
 
 namespace vkit::renderer::rp {
 
-class BeginSwapchainPass : public command::Command {
+class BeginSwapchainPass : public graphics::Command {
  public:
   BeginSwapchainPass(vk::Image swapchainImage, vk::ImageView swapchainView,
                      vk::Extent2D extent,
@@ -57,7 +57,7 @@ class BeginSwapchainPass : public command::Command {
   std::array<float, 4> clearColor_;
 };
 
-class EndSwapchainPass : public command::Command {
+class EndSwapchainPass : public graphics::Command {
  public:
   explicit EndSwapchainPass(vk::Image swapchainImage)
       : image_{swapchainImage} {}

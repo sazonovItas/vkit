@@ -2,12 +2,12 @@
 
 #include <array>
 
-#include "vkit/renderer/command/command.hpp"
+#include "vkit/graphics/command.hpp"
 #include "vkit/renderer/viewport.hpp"
 
 namespace vkit::renderer::rp {
 
-class BeginViewportPass : public command::Command {
+class BeginViewportPass : public graphics::Command {
  public:
   explicit BeginViewportPass(const Viewport& viewport,
                              std::array<float, 4> clearColor = {0.05F, 0.05F,
@@ -82,7 +82,7 @@ class BeginViewportPass : public command::Command {
   std::array<float, 4> clearColor_;
 };
 
-class EndViewportPass : public command::Command {
+class EndViewportPass : public graphics::Command {
  public:
   explicit EndViewportPass(const Viewport& viewport) : viewport_{viewport} {}
 

@@ -3,7 +3,6 @@
 #include <string_view>
 #include <vector>
 #include <vk_mem_alloc.hpp>
-#include <vulkan/vulkan.hpp>
 
 #include "vkit/imgui/imgui_renderer.hpp"
 #include "vkit/imgui/windows/viewport.hpp"

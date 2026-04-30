@@ -1,16 +1,15 @@
 #pragma once
 
 #include <cstdint>
-#include <vulkan/vulkan.hpp>
 
+#include "vkit/graphics/command.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
-#include "vkit/renderer/command/command.hpp"
 
-namespace vkit::renderer::command {
+namespace vkit::renderer::cmd {
 
-class DrawImGui : public command::Command {
+class DrawImGuiCommand : public graphics::Command {
  public:
-  DrawImGui(imgui::WindowImguiHost& imguiHost, std::uint32_t frameIndex)
+  DrawImGuiCommand(imgui::WindowImguiHost& imguiHost, std::uint32_t frameIndex)
       : imguiHost_{imguiHost}, frameIndex_{frameIndex} {}
 
   void record(vk::CommandBuffer cb) const override {
@@ -22,4 +21,4 @@ class DrawImGui : public command::Command {
   std::uint32_t frameIndex_;
 };
 
-};  // namespace vkit::renderer::command
+};  // namespace vkit::renderer::cmd

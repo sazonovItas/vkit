@@ -5,17 +5,17 @@
 #include <memory>
 #include <vector>
 
+#include "vkit/graphics/command.hpp"
 #include "vkit/graphics/device.hpp"
-#include "vkit/renderer/command/command.hpp"
 
 namespace vkit::renderer {
 
 struct RenderTask {
-  std::vector<std::unique_ptr<command::Command>> commands;
+  std::vector<std::unique_ptr<graphics::Command>> commands;
 
   template <typename T, typename... Args>
   auto add(Args&&... args) -> RenderTask& {
-    static_assert(std::is_base_of_v<command::Command, T>,
+    static_assert(std::is_base_of_v<graphics::Command, T>,
                   "T must inherit from command::Command");
 
     commands.push_back(std::make_unique<T>(std::forward<Args>(args)...));
@@ -57,6 +57,8 @@ class Renderer {
     return framesInFlight_;
   }
 
+  [[nodiscard]] auto isFrameStarted() const -> bool { return isFrameStarted_; }
+
  protected:
   vk::Device device_;
   vk::Queue graphicsQueue_;
@@ -67,7 +69,9 @@ class Renderer {
   std::vector<Frame> frames_;
 
  private:
+  bool isFrameStarted_{false};
+
   graphics::DeviceWaiter waiter_;
 };
 
-}  // namespace vkit::renderer
+};  // namespace vkit::renderer

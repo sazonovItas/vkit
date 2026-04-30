@@ -13,7 +13,7 @@ App::App() {
   initWindow();
   initVulkan();
   initImgui();
-  initViewports();
+  initWindows();
 }
 
 void App::initWindow() {
@@ -67,14 +67,19 @@ void App::initImgui() {
           ImGui::DockBuilderSetNodeSize(root_id, availableSize);
 
           ImGuiID dock_main_id = root_id;
-          ImGuiID dock_left_id = ImGui::DockBuilderSplitNode(
-              dock_main_id, ImGuiDir_Left, 0.20F, nullptr, &dock_main_id);
           ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(
               dock_main_id, ImGuiDir_Right, 0.25F, nullptr, &dock_main_id);
 
-          ImGui::DockBuilderDockWindow("Red Viewport", dock_left_id);
-          ImGui::DockBuilderDockWindow("Green Viewport", dock_right_id);
-          ImGui::DockBuilderDockWindow("Blue Viewport", dock_main_id);
+          ImGuiID dock_bottom_left_id = ImGui::DockBuilderSplitNode(
+              dock_main_id, ImGuiDir_Down, 0.25F, nullptr, &dock_main_id);
+
+          ImGuiID dock_top_right_id = ImGui::DockBuilderSplitNode(
+              dock_right_id, ImGuiDir_Up, 0.30F, nullptr, &dock_right_id);
+
+          ImGui::DockBuilderDockWindow("Scene", dock_main_id);
+          ImGui::DockBuilderDockWindow("Graph", dock_bottom_left_id);
+          ImGui::DockBuilderDockWindow("Material Preview", dock_top_right_id);
+          ImGui::DockBuilderDockWindow("Configuration", dock_right_id);
 
           ImGui::DockBuilderFinish(root_id);
         }
@@ -90,22 +95,17 @@ void App::initImgui() {
   windowManager_ = std::make_unique<imgui::ImguiWindowManager>();
 }
 
-void App::initViewports() {
-  viewportRed_ = std::make_shared<imgui::windows::BufferedViewport>(
-      "Red Viewport", gfxDevice_->get(), gfxDevice_->allocator, *imguiRenderer_,
+void App::initWindows() {
+  viewportScene_ = std::make_shared<imgui::windows::BufferedViewport>(
+      "Scene", gfxDevice_->get(), gfxDevice_->allocator, *imguiRenderer_,
       kMaxFramesInFlight);
 
-  viewportGreen_ = std::make_shared<imgui::windows::BufferedViewport>(
-      "Green Viewport", gfxDevice_->get(), gfxDevice_->allocator,
+  viewportMaterial_ = std::make_shared<imgui::windows::BufferedViewport>(
+      "Material Preview", gfxDevice_->get(), gfxDevice_->allocator,
       *imguiRenderer_, kMaxFramesInFlight);
 
-  viewportBlue_ = std::make_shared<imgui::windows::BufferedViewport>(
-      "Blue Viewport", gfxDevice_->get(), gfxDevice_->allocator,
-      *imguiRenderer_, kMaxFramesInFlight);
-
-  windowManager_->addWindow(viewportRed_);
-  windowManager_->addWindow(viewportGreen_);
-  windowManager_->addWindow(viewportBlue_);
+  windowManager_->addWindow(viewportScene_);
+  windowManager_->addWindow(viewportMaterial_);
 }
 
 void App::run() { mainLoop(); }
@@ -153,28 +153,22 @@ void App::mainLoop() {
     auto task = renderer::RenderTask{};
 
     task.add<renderer::rp::BeginViewportPass>(
-            viewportRed_->getViewport(currentFrame_),
-            std::array<float, 4>{1.0F, 0.0F, 0.0F, 1.0F})
+            viewportScene_->getViewport(currentFrame_),
+            std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
         .add<renderer::rp::EndViewportPass>(
-            viewportRed_->getViewport(currentFrame_));
+            viewportScene_->getViewport(currentFrame_));
 
     task.add<renderer::rp::BeginViewportPass>(
-            viewportGreen_->getViewport(currentFrame_),
-            std::array<float, 4>{0.0F, 1.0F, 0.0F, 1.0F})
+            viewportMaterial_->getViewport(currentFrame_),
+            std::array<float, 4>{0.15F, 0.15F, 0.15F, 1.0F})
         .add<renderer::rp::EndViewportPass>(
-            viewportGreen_->getViewport(currentFrame_));
-
-    task.add<renderer::rp::BeginViewportPass>(
-            viewportBlue_->getViewport(currentFrame_),
-            std::array<float, 4>{0.0F, 0.0F, 1.0F, 1.0F})
-        .add<renderer::rp::EndViewportPass>(
-            viewportBlue_->getViewport(currentFrame_));
+            viewportMaterial_->getViewport(currentFrame_));
 
     task.add<renderer::rp::BeginSwapchainPass>(
             swapchain_->getImage(image_index),
             swapchain_->getImageView(image_index), swapchain_->getExtent(),
             std::array<float, 4>{0.02F, 0.02F, 0.02F, 1.0F})
-        .add<renderer::command::DrawImGui>(*imguiHost_, currentFrame_)
+        .add<renderer::cmd::DrawImGuiCommand>(*imguiHost_, currentFrame_)
         .add<renderer::rp::EndSwapchainPass>(swapchain_->getImage(image_index));
 
     auto result = renderer_->submit(currentFrame_, task,

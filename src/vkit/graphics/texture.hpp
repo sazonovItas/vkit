@@ -26,6 +26,17 @@ class Texture {
   Texture(vk::Device device, vma::Allocator allocator,
           const TextureCreateInfo& createInfo);
 
+  [[nodiscard]] auto makeImageView(vk::Device device) const
+      -> vk::UniqueImageView;
+  [[nodiscard]] auto makeImageView(vk::Device device, TextureType type) const
+      -> vk::UniqueImageView;
+  [[nodiscard]] auto makeImageView(vk::Device device, TextureType type,
+                                   std::uint32_t baseLevel,
+                                   std::uint32_t levels,
+                                   std::uint32_t baseLayer,
+                                   std::uint32_t layers) const
+      -> vk::UniqueImageView;
+
   [[nodiscard]] auto getImage() const -> Image;
   [[nodiscard]] auto getImageView() const -> vk::ImageView;
   [[nodiscard]] auto getSampler() const -> vk::Sampler;
@@ -57,8 +68,6 @@ class Texture {
   static auto createAllocatedImage(vma::Allocator allocator,
                                    const TextureCreateInfo& createInfo)
       -> AllocatedImage;
-
-  auto makeImageView(vk::Device device) const -> vk::UniqueImageView;
 };
 
 };  // namespace vkit::graphics

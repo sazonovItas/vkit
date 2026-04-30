@@ -4,10 +4,10 @@
 #include <cstdint>
 #include <tuple>
 
+#include "vkit/compute/descriptor_set_layout/ibl.hpp"
 #include "vkit/graphics/pipeline_layout.hpp"
-#include "vkit/renderer/descriptor_set_layout/ibl.hpp"
 
-namespace vkit::renderer::pl {
+namespace vkit::compute::pl {
 
 struct BrdfLutPipelineLayout final : graphics::PipelineLayout {
   using SetLayouts = std::tuple<const dsl::BrdfLutSetLayout&>;
@@ -72,4 +72,4 @@ struct SpecularPipelineLayout final : graphics::PipelineLayout {
   }
 };
 
-};  // namespace vkit::renderer::pl
+};  // namespace vkit::compute::pl

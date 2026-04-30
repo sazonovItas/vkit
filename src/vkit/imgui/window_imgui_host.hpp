@@ -26,6 +26,9 @@ class WindowImguiHost : public ImguiHost {
 
   void render(std::uint32_t frameIndex, vk::CommandBuffer cb);
 
+ protected:
+  virtual void setStyle() {};
+
  private:
   ImguiRenderer& imguiRenderer_;
 

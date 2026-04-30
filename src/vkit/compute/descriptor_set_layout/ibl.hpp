@@ -2,7 +2,7 @@
 
 #include "vkit/graphics/descriptor_set_layout.hpp"
 
-namespace vkit::renderer::dsl {
+namespace vkit::compute::dsl {
 
 struct BrdfLutSetLayout final : public graphics::DescriptorSetLayout {
   static constexpr std::uint32_t kOutImageBinding = 0;
@@ -63,4 +63,4 @@ struct IblComputeSetLayout final : public graphics::DescriptorSetLayout {
         } {}
 };
 
-};  // namespace vkit::renderer::dsl
+};  // namespace vkit::compute::dsl

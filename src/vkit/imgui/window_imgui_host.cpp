@@ -15,6 +15,10 @@ WindowImguiHost::WindowImguiHost(ImguiRenderer& imguiRenderer,
   io.BackendRendererName = "vkit_vulkan_renderer";
   io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
   io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+
+  ImGui::SetCurrentContext(imguiContext_);
+
+  setStyle();
 }
 
 void WindowImguiHost::setDockLayoutCallback(DockLayoutCallback callback) {

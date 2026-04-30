@@ -35,7 +35,10 @@ Renderer::Renderer(vk::Device device, vk::Queue graphicsQueue,
 }
 
 void Renderer::beginFrame(std::uint32_t frameIndex) {
-  assert(frameIndex < framesInFlight_ && "Renderer: frameIndex out of bounds!");
+  assert(frameIndex < framesInFlight_ && "Renderer: frameIndex out of bounds");
+  assert(!isFrameStarted_ &&
+         "Renderer: Cannot call beginFrame() while a frame is already in "
+         "progress");
 
   Frame& frame = frames_[frameIndex];
 
@@ -43,16 +46,20 @@ void Renderer::beginFrame(std::uint32_t frameIndex) {
       device_.waitForFences(frame.inFlightFence.get(), vk::True,
                             std::numeric_limits<std::uint64_t>::max()),
       "Failed to wait for in-flight fence");
+
+  isFrameStarted_ = true;
 }
 
 auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
                       vk::Semaphore waitSemaphore,
                       vk::PipelineStageFlags wait_stage) -> RenderResult {
   assert(frameIndex < framesInFlight_ && "Renderer: frameIndex out of bounds!");
+  assert(isFrameStarted_ && "Must call beginFrame() before calling submit()!");
 
   Frame& frame = frames_[frameIndex];
 
   if (task.commands.empty()) {
+    isFrameStarted_ = false;
     return {
         .renderFinishedSemaphore = nullptr,
     };
@@ -82,6 +89,8 @@ auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
   }
 
   graphicsQueue_.submit(submit_info, frame.inFlightFence.get());
+
+  isFrameStarted_ = false;
 
   return RenderResult{
       .renderFinishedSemaphore = frame.renderFinished.get(),

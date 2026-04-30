@@ -1,6 +1,7 @@
 #include "vkit/imgui/windows/viewport.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 namespace vkit::imgui::windows {
 
@@ -28,7 +29,19 @@ void ViewportWindow::onBegin() {}
 void ViewportWindow::onEnd() {}
 
 void ViewportWindow::onDraw() {
-  const ImVec2 size = ImGui::GetContentRegionAvail();
+  const float border = ImGui::GetStyle().WindowBorderSize;
+  const ImVec2 padding = ImGui::GetStyle().WindowPadding;
+
+  const ImVec2 window_pos = ImGui::GetWindowPos();
+  const ImVec2 window_size = ImGui::GetWindowSize();
+  const ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+
+  const ImVec2 p_min = ImVec2(window_pos.x + border, cursor_pos.y - padding.y);
+
+  const ImVec2 p_max = ImVec2(window_pos.x + window_size.x - border,
+                              window_pos.y + window_size.y - border);
+
+  const ImVec2 size = ImVec2(p_max.x - p_min.x, p_max.y - p_min.y);
 
   if (size.x > 0 && size.y > 0 &&
       (static_cast<std::uint32_t>(size.x) != currentWidth_ ||
@@ -39,15 +52,26 @@ void ViewportWindow::onDraw() {
   }
 
   if (currentTexture_.has_value()) {
-    ImGui::Image(currentTexture_.value(), size, ImVec2(0, 0), ImVec2(1, 1));
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+
+    const float border = window->WindowBorderSize;
+    const float window_rounding = window->WindowRounding;
+
+    const float inner_rounding = std::max(0.0F, window_rounding - border);
+
+    const ImDrawFlags flags = ImDrawFlags_RoundCornersAll;
+
+    draw_list->AddImageRounded(
+        currentTexture_.value(), p_min, p_max, ImVec2(0, 0), ImVec2(1, 1),
+        IM_COL32(255, 255, 255, 255), inner_rounding, flags);
   }
 
-  const ImVec2 rect_min = ImGui::GetItemRectMin();
-  const ImVec2 rect_max = ImGui::GetItemRectMax();
-  contentRectX_ = rect_min.x;
-  contentRectY_ = rect_min.y;
-  contentRectWidth_ = rect_max.x - rect_min.x;
-  contentRectHeight_ = rect_max.y - rect_min.y;
+  contentRectX_ = p_min.x;
+  contentRectY_ = p_min.y;
+  contentRectWidth_ = size.x;
+  contentRectHeight_ = size.y;
 }
 
-}  // namespace vkit::imgui::windows
+};  // namespace vkit::imgui::windows

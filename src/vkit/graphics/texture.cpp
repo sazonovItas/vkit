@@ -4,7 +4,6 @@
 
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::graphics {
 
@@ -34,6 +33,27 @@ Texture::Texture(vk::Device device, vma::Allocator allocator,
 
 auto Texture::makeImageView(vk::Device device) const -> vk::UniqueImageView {
   auto ci = image_.getViewCreateInfo(toVkImageViewType(type_));
+  return device.createImageViewUnique(ci);
+}
+
+auto Texture::makeImageView(vk::Device device, TextureType type) const
+    -> vk::UniqueImageView {
+  auto ci = image_.getViewCreateInfo(toVkImageViewType(type));
+  return device.createImageViewUnique(ci);
+}
+
+auto Texture::makeImageView(vk::Device device, TextureType type,
+                            std::uint32_t baseLevel, std::uint32_t levels,
+                            std::uint32_t baseLayer, std::uint32_t layers) const
+    -> vk::UniqueImageView {
+  auto ci = image_.getViewCreateInfo(
+      vk::ImageSubresourceRange{}
+          .setBaseMipLevel(baseLevel)
+          .setLevelCount(levels)
+          .setBaseArrayLayer(baseLayer)
+          .setLayerCount(layers)
+          .setAspectMask(Image::inferAspectFlags(image_.format)),
+      toVkImageViewType(type));
   return device.createImageViewUnique(ci);
 }
 
@@ -237,4 +257,5 @@ auto Texture::createAllocatedImage(vma::Allocator allocator,
 
   return AllocatedImage{allocator, image_ci};
 }
+
 };  // namespace vkit::graphics

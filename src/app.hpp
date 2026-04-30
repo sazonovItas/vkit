@@ -3,7 +3,6 @@
 #include <memory>
 #include <vector>
 #include <vk_mem_alloc.hpp>
-#include <vulkan/vulkan.hpp>
 
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/instance.hpp"
@@ -27,7 +26,7 @@ class App {
   void initWindow();
   void initVulkan();
   void initImgui();
-  void initViewports();
+  void initWindows();
 
   void mainLoop();
   void recreateSwapchain();
@@ -51,9 +50,8 @@ class App {
 
   std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
 
-  std::shared_ptr<imgui::windows::BufferedViewport> viewportRed_;
-  std::shared_ptr<imgui::windows::BufferedViewport> viewportGreen_;
-  std::shared_ptr<imgui::windows::BufferedViewport> viewportBlue_;
+  std::shared_ptr<imgui::windows::BufferedViewport> viewportScene_;
+  std::shared_ptr<imgui::windows::BufferedViewport> viewportMaterial_;
 
   graphics::DeviceWaiter waiter_;
 };

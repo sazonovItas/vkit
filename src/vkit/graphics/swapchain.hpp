@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <optional>
 #include <vector>
-#include <vulkan/vulkan.hpp>
 
 #include "vkit/dataformat/dataformat.hpp"
 #include "vkit/graphics/device.hpp"

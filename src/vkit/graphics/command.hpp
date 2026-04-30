@@ -1,6 +1,6 @@
 #pragma once
 
-namespace vkit::renderer::command {
+namespace vkit::graphics {
 
 class Command {
  public:
@@ -9,11 +9,11 @@ class Command {
   virtual void record(vk::CommandBuffer cb) const = 0;
 };
 
-class Lambda : public Command {
+class LambdaCommand : public Command {
  public:
   using RecordFunction = std::function<void(vk::CommandBuffer)>;
 
-  explicit Lambda(RecordFunction func) : func_{std::move(func)} {}
+  explicit LambdaCommand(RecordFunction func) : func_{std::move(func)} {}
 
   void record(vk::CommandBuffer cb) const override {
     if (func_) {
@@ -25,4 +25,4 @@ class Lambda : public Command {
   RecordFunction func_;
 };
 
-};  // namespace vkit::renderer::command
+};  // namespace vkit::graphics
