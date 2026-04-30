@@ -11,14 +11,20 @@
 
 namespace vkit::imgui::windows {
 
-class ViewportWindow : public ImguiWindow {
+class Viewer : public ImguiWindow {
  public:
   using ResizeCallback = std::function<void(std::uint32_t, std::uint32_t)>;
+  using ManipulateCallback = std::function<void(Viewer&)>;
 
-  explicit ViewportWindow(std::string_view name, ResizeCallback onResize);
-  ~ViewportWindow() override = default;
+  explicit Viewer(std::string_view name, ResizeCallback onResize = nullptr,
+                  ManipulateCallback onManipulate = nullptr);
+
+  ~Viewer() override = default;
 
   void setCurrentTexture(std::optional<ImTextureID> id);
+
+  void setOnResize(ResizeCallback onResize);
+  void setOnManipulate(ManipulateCallback onManipulate);
 
   [[nodiscard]] auto getWidth() const -> std::uint32_t;
   [[nodiscard]] auto getHeight() const -> std::uint32_t;
@@ -33,7 +39,9 @@ class ViewportWindow : public ImguiWindow {
   std::uint32_t currentWidth_{1280};
   std::uint32_t currentHeight_{720};
   std::optional<ImTextureID> currentTexture_{std::nullopt};
+
   ResizeCallback onResize_;
+  ManipulateCallback onManipulate_;
 
   float contentRectX_{0.0F};
   float contentRectY_{0.0F};
@@ -41,4 +49,4 @@ class ViewportWindow : public ImguiWindow {
   float contentRectHeight_{0.0F};
 };
 
-}  // namespace vkit::imgui::windows
+};  // namespace vkit::imgui::windows

@@ -5,15 +5,15 @@
 #define ENV_FEATURE_USE_SPECULAR (1u << 1)
 
 struct EnvironmentParams {
-  int irradianceTexIdx;
-  int prefilterTexIdx;
-  int brdfLutTexIdx;
-  int prefilterNumLayers; 
+    int irradianceTexIdx;
+    int prefilterTexIdx;
+    int brdfLutTexIdx;
+    int prefilterNumLayers;
 
-  float intensity;
-  uint  features;
-  uint  padding0;
-  uint  padding1;
+    float intensity;
+    uint features;
+    uint padding0;
+    uint padding1;
 };
 
 #endif // ENVIRONMENT_GLSL

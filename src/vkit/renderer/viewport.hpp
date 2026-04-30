@@ -6,7 +6,6 @@
 #include <vk_mem_alloc.hpp>
 
 #include "vkit/graphics/image.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::renderer {
 

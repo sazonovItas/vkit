@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <vector>
 #include <vk_mem_alloc.hpp>
@@ -13,10 +14,11 @@
 #include "vkit/imgui/imgui_renderer.hpp"
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
-#include "vkit/imgui/windows/buffered_viewport.hpp"
+#include "vkit/imgui/windows/viewer.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
 #include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
 #include "vkit/renderer/renderer.hpp"
+#include "vkit/renderer/viewport.hpp"
 #include "vkit/scene/camera.hpp"
 
 namespace vkit {
@@ -24,6 +26,7 @@ namespace vkit {
 class App {
  public:
   App();
+  ~App();
 
   void run();
 
@@ -56,8 +59,8 @@ class App {
 
   std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
 
-  std::shared_ptr<imgui::windows::BufferedViewport> viewportScene_;
-  std::shared_ptr<imgui::windows::BufferedViewport> viewportMaterial_;
+  std::shared_ptr<imgui::windows::Viewer> sceneViewer_;
+  std::shared_ptr<imgui::windows::Viewer> materialViewer_;
 
   std::shared_ptr<scene::Camera> sceneCamera_;
   std::shared_ptr<scene::Camera> materialCamera_;
@@ -71,14 +74,25 @@ class App {
 
   vk::UniqueDescriptorPool descriptorPool_;
 
-  std::vector<vk::DescriptorSet> sceneDescriptorSets_;
-  std::vector<vk::DescriptorSet> materialDescriptorSets_;
+  struct Frame {
+    renderer::Viewport sceneViewport;
+    ImTextureID sceneTextureId{0};
 
-  std::vector<std::unique_ptr<graphics::DescriptorBuffer>> sceneCameraBuffers_;
-  std::vector<std::unique_ptr<graphics::DescriptorBuffer>>
-      materialCameraBuffers_;
+    renderer::Viewport materialViewport;
+    ImTextureID materialTextureId{0};
 
-  graphics::DeviceWaiter waiter_;
+    vk::DescriptorSet sceneDescriptorSet;
+    vk::DescriptorSet materialDescriptorSet;
+
+    std::unique_ptr<graphics::DescriptorBuffer> sceneCameraBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
+  };
+
+  std::array<Frame, kMaxFramesInFlight> frames_;
+
+  void ensureViewportSize(renderer::Viewport& viewport, ImTextureID& textureId,
+                          std::uint32_t width, std::uint32_t height,
+                          std::uint32_t displayTargetIndex);
 };
 
 };  // namespace vkit

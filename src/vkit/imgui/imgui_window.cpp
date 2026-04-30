@@ -24,6 +24,8 @@ auto ImguiWindow::showInMenu() const -> bool { return showInMenu_; }
 
 auto ImguiWindow::isHovered() const -> bool { return isHovered_; }
 
+auto ImguiWindow::isFocused() const -> bool { return isFocused_; }
+
 void ImguiWindow::setMinSize(float minWidth, float minHeight) {
   minSize_[0] = minWidth;
   minSize_[1] = minHeight;

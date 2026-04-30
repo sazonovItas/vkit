@@ -7,7 +7,7 @@ layout(location = 0) out vec4 outColor;
 
 #include "ray_sphere.glsl"
 
-#include "common/bindless.glsl" 
+#include "common/bindless.glsl"
 #include "common/environment.glsl"
 #include "common/primitive_types.glsl"
 
@@ -17,36 +17,48 @@ layout(location = 0) out vec4 outColor;
 
 #include "evaluation.glsl"
 
-layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
-layout(set = 0, binding = 1) uniform Environment { EnvironmentParams params; } env;
+layout(set = 0, binding = 0) uniform Camera {
+    mat4 view;
+    mat4 proj;
+    vec3 position;
+} camera;
+layout(set = 0, binding = 1) uniform Environment {
+    EnvironmentParams params;
+} env;
 
-layout(std430, set = 2, binding = 0) readonly buffer DiffuseBlock { DiffuseData materials[]; } diffData;
-layout(std430, set = 2, binding = 1) readonly buffer DiffuseSpecularBlock { DiffuseSpecularData materials[]; } diffSpecData;
-layout(std430, set = 2, binding = 2) readonly buffer BsdfBlock { PrincipledBSDFData materials[]; } bsdfData;
+layout(std430, set = 2, binding = 0) readonly buffer DiffuseBlock {
+    DiffuseData materials[];
+} diffData;
+layout(std430, set = 2, binding = 1) readonly buffer DiffuseSpecularBlock {
+    DiffuseSpecularData materials[];
+} diffSpecData;
+layout(std430, set = 2, binding = 2) readonly buffer BsdfBlock {
+    PrincipledBSDFData materials[];
+} bsdfData;
 
 layout(push_constant) uniform PushConstants {
-  mat4 model;
-  uint materialType;
-  uint materialIndex;
+    mat4 model;
+    uint materialType;
+    uint materialIndex;
 } pcs;
 
 void main() {
-  SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
+    SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
 
-  vec3 V = normalize(camera.position - hit.worldPos);
-  vec3 L = V; 
-  mat3 baseTBN = mat3(hit.tangent, hit.bitangent, hit.normal);
+    vec3 V = normalize(camera.position - hit.worldPos);
+    vec3 L = V;
+    mat3 baseTBN = mat3(hit.tangent, hit.bitangent, hit.normal);
 
-  if (pcs.materialType == DIFFUSE_MATERIAL) {
-    outColor = evaluateDiffuse(diffData.materials[pcs.materialIndex], hit.uv, baseTBN, L);
-  } 
-  else if (pcs.materialType == DIFFUSE_SPECULAR_MATERIAL) {
-    outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], hit.uv, baseTBN, V, L);
-  } 
-  else if (pcs.materialType == PRINCIPLED_MATERIAL) {
-    outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params);
-  } 
-  else {
-    outColor = FALLBACK_COLOR; 
-  }
+    if (pcs.materialType == DIFFUSE_MATERIAL) {
+        outColor = evaluateDiffuse(diffData.materials[pcs.materialIndex], hit.uv, baseTBN, L);
+    }
+    else if (pcs.materialType == DIFFUSE_SPECULAR_MATERIAL) {
+        outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], hit.uv, baseTBN, V, L);
+    }
+    else if (pcs.materialType == PRINCIPLED_MATERIAL) {
+        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params);
+    }
+    else {
+        outColor = FALLBACK_COLOR;
+    }
 }

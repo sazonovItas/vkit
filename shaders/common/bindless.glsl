@@ -20,11 +20,11 @@ vec4 sampleTexture2DNearest(uint texID, vec2 uv) {
 }
 
 vec4 sampleTexture2DArrayNearest(uint texID, vec3 uvw) {
-  return texture(sampler2DArray(nonuniformEXT(textureArrays[texID]), samplers[NEAREST_SAMPLER_ID]), uvw);
+    return texture(sampler2DArray(nonuniformEXT(textureArrays[texID]), samplers[NEAREST_SAMPLER_ID]), uvw);
 }
 
 vec4 sampleTexture2DArrayLinear(uint texID, vec3 uvw) {
-  return texture(sampler2DArray(nonuniformEXT(textureArrays[texID]), samplers[LINEAR_SAMPLER_ID]), uvw);
+    return texture(sampler2DArray(nonuniformEXT(textureArrays[texID]), samplers[LINEAR_SAMPLER_ID]), uvw);
 }
 
 #endif // BINDLESS_GLSL

@@ -2,7 +2,7 @@
 
 #include "math_ibl.glsl"
 
-layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform sampler2D sourceEnvMap;
 layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outIrradianceMap;
@@ -23,20 +23,20 @@ void main() {
     float sampleDelta = 0.025;
     float nrSamples = 0.0;
 
-    for(float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
-        for(float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
+    for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
+        for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
             vec3 tangentSample = vec3(sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
             vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * normal;
 
             vec2 sampleUV = directionToSphericalEnvmap(sampleVec);
             vec3 envColor = textureLod(sourceEnvMap, sampleUV, 0.0).rgb;
-            
+
             envColor = min(envColor, vec3(25.0));
             irradiance += envColor * cos(theta) * sin(theta);
             nrSamples++;
         }
     }
-    
+
     irradiance = PI * irradiance * (1.0 / nrSamples);
     imageStore(outIrradianceMap, texelCoord, vec4(irradiance, 1.0));
 }

@@ -5,7 +5,6 @@
 
 #include "vkit/dataformat/dataformat.hpp"
 #include "vkit/graphics/allocation.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::graphics {
 

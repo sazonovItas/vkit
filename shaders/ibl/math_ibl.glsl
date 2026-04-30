@@ -33,14 +33,14 @@ float RadicalInverse_VdC(uint bits) {
 }
 
 vec2 Hammersley(uint i, uint N) {
-    return vec2(float(i)/float(N), RadicalInverse_VdC(i));
+    return vec2(float(i) / float(N), RadicalInverse_VdC(i));
 }
 
 vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
     float a = roughness * roughness;
     float phi = 2.0 * PI * Xi.x;
-    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
-    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a * a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
     vec3 H = vec3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
     vec3 up = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);

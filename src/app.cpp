@@ -13,7 +13,6 @@
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/viewport.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit {
 
@@ -64,15 +63,25 @@ App::App() {
   initDebugRendering();
 }
 
+App::~App() {
+  if (gfxDevice_) {
+    gfxDevice_->waitIdle();
+  }
+
+  for (auto& frame : frames_) {
+    if (frame.sceneTextureId) {
+      imguiRenderer_->unregisterTexture(frame.sceneTextureId);
+    }
+    if (frame.materialTextureId) {
+      imguiRenderer_->unregisterTexture(frame.materialTextureId);
+    }
+  }
+}
+
 void App::initWindow() {
   glfwContext_ = std::make_unique<window::Context>();
-
   const auto config = window::WindowConfiguration{
-      .show = true,
-      .fullscreen = false,
-      .size = {1280, 720},
-      .title = "vkit",
-  };
+      .show = true, .fullscreen = false, .size = {1280, 720}, .title = "vkit"};
   window_ = std::make_unique<window::Window>(config);
 }
 
@@ -80,7 +89,6 @@ void App::initVulkan() {
   instance_ = std::make_unique<graphics::Instance>();
   surface_ = std::make_unique<graphics::Surface>(*window_, *instance_);
   gfxDevice_ = std::make_unique<graphics::GfxDevice>(*instance_, *surface_);
-
   swapchain_ = std::make_unique<graphics::Swapchain>(
       *gfxDevice_, surface_->get(), kMaxFramesInFlight, glm::ivec2{1280, 720});
 
@@ -93,8 +101,6 @@ void App::initVulkan() {
     imageAvailableSemaphores_.push_back(
         gfxDevice_->get().createSemaphoreUnique({}));
   }
-
-  waiter_ = graphics::DeviceWaiter{gfxDevice_->get()};
 }
 
 void App::initImgui() {
@@ -117,10 +123,8 @@ void App::initImgui() {
           ImGuiID dock_main_id = root_id;
           ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(
               dock_main_id, ImGuiDir_Right, 0.25F, nullptr, &dock_main_id);
-
           ImGuiID dock_bottom_left_id = ImGui::DockBuilderSplitNode(
               dock_main_id, ImGuiDir_Down, 0.25F, nullptr, &dock_main_id);
-
           ImGuiID dock_top_right_id = ImGui::DockBuilderSplitNode(
               dock_right_id, ImGuiDir_Up, 0.30F, nullptr, &dock_right_id);
 
@@ -128,7 +132,6 @@ void App::initImgui() {
           ImGui::DockBuilderDockWindow("Graph", dock_bottom_left_id);
           ImGui::DockBuilderDockWindow("Material Preview", dock_top_right_id);
           ImGui::DockBuilderDockWindow("Configuration", dock_right_id);
-
           ImGui::DockBuilderFinish(root_id);
         }
       });
@@ -147,6 +150,56 @@ void App::initViewports() {
   sceneCamera_ = std::make_shared<scene::Camera>("Scene Camera");
   sceneCamera_->setPosition(glm::vec3(0.0F, 2.0F, 5.0F));
 
+  materialCamera_ = std::make_shared<scene::Camera>("Material Camera");
+  materialController_.target = glm::vec3(0.0F, 0.0F, 0.0F);
+  materialController_.distance = 2.5F;
+
+  sceneViewer_ = std::make_shared<imgui::windows::Viewer>("Scene");
+  sceneViewer_->setOnResize([this](std::uint32_t width, std::uint32_t height) {
+    if (width > 0 && height > 0) {
+      sceneCamera_->setAspectRatio(static_cast<float>(width) /
+                                   static_cast<float>(height));
+    }
+  });
+  sceneViewer_->setOnManipulate([this](imgui::windows::Viewer& viewer) {
+    auto& io = ImGui::GetIO();
+    if (viewer.isHovered() && viewer.isFocused()) {
+      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        sceneController_.processMouseMovement(io.MouseDelta.x, io.MouseDelta.y);
+      }
+      if (io.MouseWheel != 0.0F) {
+        sceneController_.processScroll(io.MouseWheel);
+      }
+    }
+  });
+
+  materialViewer_ =
+      std::make_shared<imgui::windows::Viewer>("Material Preview");
+  materialViewer_->setOnResize(
+      [this](std::uint32_t width, std::uint32_t height) {
+        if (width > 0 && height > 0) {
+          materialCamera_->setAspectRatio(static_cast<float>(width) /
+                                          static_cast<float>(height));
+        }
+      });
+  materialViewer_->setOnManipulate([this](imgui::windows::Viewer& viewer) {
+    auto& io = ImGui::GetIO();
+    if (viewer.isHovered() && viewer.isFocused()) {
+      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        materialController_.processMouseMovement(io.MouseDelta.x,
+                                                 io.MouseDelta.y);
+      }
+      if (io.MouseWheel != 0.0F) {
+        materialController_.processScroll(io.MouseWheel);
+      }
+    }
+  });
+
+  windowManager_->addWindow(sceneViewer_);
+  windowManager_->addWindow(materialViewer_);
+
   auto viewport_info = renderer::ViewportInfo{};
   viewport_info.addColorTarget(vk::Format::eR8G8B8A8Unorm,
                                vk::ImageUsageFlagBits::eColorAttachment,
@@ -159,20 +212,10 @@ void App::initViewports() {
                                vk::ImageUsageFlagBits::eDepthStencilAttachment,
                                vk::SampleCountFlagBits::e8);
 
-  viewportScene_ = std::make_shared<imgui::windows::BufferedViewport>(
-      "Scene", gfxDevice_->get(), gfxDevice_->allocator, *imguiRenderer_,
-      viewport_info, kMaxFramesInFlight, 1);
-
-  viewportMaterial_ = std::make_shared<imgui::windows::BufferedViewport>(
-      "Material Preview", gfxDevice_->get(), gfxDevice_->allocator,
-      *imguiRenderer_, viewport_info, kMaxFramesInFlight, 1);
-
-  materialCamera_ = std::make_shared<scene::Camera>("Material Camera");
-  materialController_.target = glm::vec3(0.0F, 0.0F, 0.0F);
-  materialController_.distance = 2.5F;
-
-  windowManager_->addWindow(viewportScene_);
-  windowManager_->addWindow(viewportMaterial_);
+  for (auto& frame : frames_) {
+    frame.sceneViewport = renderer::Viewport(viewport_info);
+    frame.materialViewport = renderer::Viewport(viewport_info);
+  }
 }
 
 void App::initDebugRendering() {
@@ -211,29 +254,24 @@ void App::initDebugRendering() {
       .setPoolSizes(pool_size);
   descriptorPool_ = device.createDescriptorPoolUnique(pool_info);
 
-  sceneDescriptorSets_.resize(kMaxFramesInFlight);
-  materialDescriptorSets_.resize(kMaxFramesInFlight);
-
-  for (int i = 0; i < kMaxFramesInFlight; ++i) {
-    sceneCameraBuffers_.push_back(std::make_unique<graphics::DescriptorBuffer>(
+  for (auto& frame : frames_) {
+    frame.sceneCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
         gfxDevice_->allocator, static_cast<dataformat::BufferUsageFlags>(
-                                   vk::BufferUsageFlagBits::eUniformBuffer)));
+                                   vk::BufferUsageFlagBits::eUniformBuffer));
 
-    materialCameraBuffers_.push_back(
-        std::make_unique<graphics::DescriptorBuffer>(
-            gfxDevice_->allocator,
-            static_cast<dataformat::BufferUsageFlags>(
-                vk::BufferUsageFlagBits::eUniformBuffer)));
+    frame.materialCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        gfxDevice_->allocator, static_cast<dataformat::BufferUsageFlags>(
+                                   vk::BufferUsageFlagBits::eUniformBuffer));
 
     vk::DescriptorSetAllocateInfo alloc_info{*descriptorPool_, 1,
                                              &sceneSetLayout_->get()};
 
-    sceneDescriptorSets_[i] = device.allocateDescriptorSets(alloc_info)[0];
-    materialDescriptorSets_[i] = device.allocateDescriptorSets(alloc_info)[0];
+    frame.sceneDescriptorSet = device.allocateDescriptorSets(alloc_info)[0];
+    frame.materialDescriptorSet = device.allocateDescriptorSets(alloc_info)[0];
 
-    auto scene_buffer_info = sceneCameraBuffers_[i]->descriptorInfo();
+    auto scene_buffer_info = frame.sceneCameraBuffer->descriptorInfo();
     vk::WriteDescriptorSet scene_write{
-        sceneDescriptorSets_[i],
+        frame.sceneDescriptorSet,
         renderer::dsl::SceneSetLayout::kCameraBinding,
         0,
         1,
@@ -242,9 +280,9 @@ void App::initDebugRendering() {
         &scene_buffer_info,
         nullptr};
 
-    auto mat_buffer_info = materialCameraBuffers_[i]->descriptorInfo();
+    auto mat_buffer_info = frame.materialCameraBuffer->descriptorInfo();
     vk::WriteDescriptorSet mat_write{
-        materialDescriptorSets_[i],
+        frame.materialDescriptorSet,
         renderer::dsl::SceneSetLayout::kCameraBinding,
         0,
         1,
@@ -254,6 +292,23 @@ void App::initDebugRendering() {
         nullptr};
 
     device.updateDescriptorSets({scene_write, mat_write}, nullptr);
+  }
+}
+
+void App::ensureViewportSize(renderer::Viewport& viewport,
+                             ImTextureID& textureId, std::uint32_t width,
+                             std::uint32_t height,
+                             std::uint32_t displayTargetIndex) {
+  const auto target_width = std::max(1U, width);
+  const auto target_height = std::max(1U, height);
+
+  viewport.ensureSize(gfxDevice_->get(), gfxDevice_->allocator, target_width,
+                      target_height);
+
+  if (viewport.colorTargets.size() > displayTargetIndex &&
+      viewport.colorTargets[displayTargetIndex].view) {
+    textureId = imguiRenderer_->updateOrRegisterTexture(
+        textureId, *viewport.colorTargets[displayTargetIndex].view);
   }
 }
 
@@ -295,42 +350,16 @@ void App::mainLoop() {
     }
     const auto image_index = image_index_opt.value();
 
-    imguiHost_->beginFrame(window_->getWidth(), window_->getHeight(), dt);
+    auto& frame = frames_[currentFrame_];
 
-    auto& io = ImGui::GetIO();
+    ensureViewportSize(frame.sceneViewport, frame.sceneTextureId,
+                       sceneViewer_->getWidth(), sceneViewer_->getHeight(), 1);
+    sceneViewer_->setCurrentTexture(frame.sceneTextureId);
 
-    if (viewportScene_->isHovered()) {
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
-          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-        sceneController_.processMouseMovement(io.MouseDelta.x, io.MouseDelta.y);
-      }
-      if (io.MouseWheel != 0.0F) {
-        sceneController_.processScroll(io.MouseWheel);
-      }
-    }
-
-    if (viewportMaterial_->isHovered()) {
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
-          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-        materialController_.processMouseMovement(io.MouseDelta.x,
-                                                 io.MouseDelta.y);
-      }
-      if (io.MouseWheel != 0.0F) {
-        materialController_.processScroll(io.MouseWheel);
-      }
-    }
-
-    if (viewportScene_->getWidth() > 0 && viewportScene_->getHeight() > 0) {
-      sceneCamera_->setAspectRatio(
-          static_cast<float>(viewportScene_->getWidth()) /
-          static_cast<float>(viewportScene_->getHeight()));
-    }
-    if (viewportMaterial_->getWidth() > 0 &&
-        viewportMaterial_->getHeight() > 0) {
-      materialCamera_->setAspectRatio(
-          static_cast<float>(viewportMaterial_->getWidth()) /
-          static_cast<float>(viewportMaterial_->getHeight()));
-    }
+    ensureViewportSize(frame.materialViewport, frame.materialTextureId,
+                       materialViewer_->getWidth(),
+                       materialViewer_->getHeight(), 1);
+    materialViewer_->setCurrentTexture(frame.materialTextureId);
 
     sceneController_.update(*sceneCamera_);
     materialController_.update(*materialCamera_);
@@ -340,16 +369,16 @@ void App::mainLoop() {
         .proj = sceneCamera_->getProjectionMatrix(),
         .position = sceneCamera_->getPosition(),
     };
-    sceneCameraBuffers_[currentFrame_]->writeAt(
-        std::as_bytes(std::span{&scene_ubo, 1}));
+    frame.sceneCameraBuffer->writeAt(std::as_bytes(std::span{&scene_ubo, 1}));
 
     CameraUBO mat_ubo{
         .view = materialCamera_->getViewMatrix(),
         .proj = materialCamera_->getProjectionMatrix(),
         .position = materialCamera_->getPosition(),
     };
-    materialCameraBuffers_[currentFrame_]->writeAt(
-        std::as_bytes(std::span{&mat_ubo, 1}));
+    frame.materialCameraBuffer->writeAt(std::as_bytes(std::span{&mat_ubo, 1}));
+
+    imguiHost_->beginFrame(window_->getWidth(), window_->getHeight(), dt);
 
     ImGui::Begin("Graph");
     ImGui::Text("Node Graph");
@@ -364,24 +393,25 @@ void App::mainLoop() {
     auto task = renderer::RenderTask{};
 
     task.add<renderer::rp::BeginViewportPass>(
-            viewportScene_->getViewport(currentFrame_), 0, 1)
-        .add<DrawRaySphereCommand>(
-            *raySpherePipeline_, raySpherePipelineLayout_->get(),
-            sceneDescriptorSets_[currentFrame_], glm::mat4(1.0F))
-        .add<renderer::rp::EndViewportPass>(
-            viewportScene_->getViewport(currentFrame_), 1);
+            frame.sceneViewport, 0, 1,
+            std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
+        .add<DrawRaySphereCommand>(*raySpherePipeline_,
+                                   raySpherePipelineLayout_->get(),
+                                   frame.sceneDescriptorSet, glm::mat4(1.0F))
+        .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
 
     task.add<renderer::rp::BeginViewportPass>(
-            viewportMaterial_->getViewport(currentFrame_), 0, 1)
-        .add<DrawRaySphereCommand>(
-            *raySpherePipeline_, raySpherePipelineLayout_->get(),
-            materialDescriptorSets_[currentFrame_], glm::mat4(1.0F))
-        .add<renderer::rp::EndViewportPass>(
-            viewportMaterial_->getViewport(currentFrame_), 1);
+            frame.materialViewport, 0, 1,
+            std::array<float, 4>{0.15F, 0.15F, 0.15F, 1.0F})
+        .add<DrawRaySphereCommand>(*raySpherePipeline_,
+                                   raySpherePipelineLayout_->get(),
+                                   frame.materialDescriptorSet, glm::mat4(1.0F))
+        .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
 
     task.add<renderer::rp::BeginSwapchainPass>(
             swapchain_->getImage(image_index),
-            swapchain_->getImageView(image_index), swapchain_->getExtent())
+            swapchain_->getImageView(image_index), swapchain_->getExtent(),
+            std::array<float, 4>{0.02F, 0.02F, 0.02F, 1.0F})
         .add<renderer::cmd::DrawImGuiCommand>(*imguiHost_, currentFrame_)
         .add<renderer::rp::EndSwapchainPass>(swapchain_->getImage(image_index));
 

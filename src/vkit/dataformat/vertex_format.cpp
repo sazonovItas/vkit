@@ -1,7 +1,5 @@
 #include "vkit/dataformat/vertex_format.hpp"
 
-#include "vulkan/vulkan.hpp"
-
 namespace vkit::dataformat {
 
 auto c_str(const AttributeUsage usage) -> const char* {

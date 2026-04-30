@@ -9,65 +9,69 @@ layout(location = 4) out vec3 outBitangent;
 #include "common/primitive_types.glsl"
 #include "common/primitive_vertex_pulling.glsl"
 
-layout(set = 0, binding = 0) uniform Camera { mat4 view; mat4 proj; vec3 position; } camera;
+layout(set = 0, binding = 0) uniform Camera {
+    mat4 view;
+    mat4 proj;
+    vec3 position;
+} camera;
 
-layout(std430, set = 3, binding = 0) readonly buffer PrimitiveBlock { 
-  Primitive primitives[]; 
+layout(std430, set = 3, binding = 0) readonly buffer PrimitiveBlock {
+    Primitive primitives[];
 } primData;
 
 layout(std430, set = 3, binding = 1) readonly buffer JointBlock {
-  mat4 joints[];
+    mat4 joints[];
 } jointData;
 
 layout(push_constant) uniform PushConstants {
-  mat4 model;
-  uint primIndex;
-  uint materialIndex;
-  uint skinOffset;
+    mat4 model;
+    uint primIndex;
+    uint materialIndex;
+    uint skinOffset;
 } pcs;
 
 void main() {
-  Primitive prim = primData.primitives[pcs.primIndex];
+    Primitive prim = primData.primitives[pcs.primIndex];
 
-  vec3 pos    = getPosition(prim, gl_VertexIndex);
-  vec3 normal = getNormal(prim, gl_VertexIndex);
+    vec3 pos = getPosition(prim, gl_VertexIndex);
+    vec3 normal = getNormal(prim, gl_VertexIndex);
 
-  vec2 uv = vec2(0.0);
-  if (isAttributeExists(prim.texcoords[0])) {
-    uv = getTexcoord(prim, 0, gl_VertexIndex);
-  }
-
-  mat4 skinMatrix = mat4(1.0);
-  if (isAttributeExists(prim.jointIndices) && isAttributeExists(prim.jointWeights)) {
-    uvec4 j = getJoints(prim, gl_VertexIndex);
-    vec4 w  = getWeights(prim, gl_VertexIndex);
-
-    skinMatrix = 
-        w.x * jointData.joints[pcs.skinOffset + j.x] +
-        w.y * jointData.joints[pcs.skinOffset + j.y] +
-        w.z * jointData.joints[pcs.skinOffset + j.z] +
-        w.w * jointData.joints[pcs.skinOffset + j.w];
-  }
-
-  vec4 worldPos = pcs.model * skinMatrix * vec4(pos, 1.0);
-  mat3 normalMatrix = transpose(inverse(mat3(pcs.model * skinMatrix)));
-
-  outWorldPos = worldPos.xyz;
-  outUV = uv;
-  outNormal = normalize(normalMatrix * normal);
-
-  outTangent = vec3(0.0);
-  outBitangent = vec3(0.0);
-  if (isAttributeExists(prim.tangent)) {
-    vec4 tangent = getTangent(prim, gl_VertexIndex);
-    outTangent = normalize(normalMatrix * tangent.xyz);
-    
-    if (isAttributeExists(prim.bitangent)) {
-        outBitangent = normalize(normalMatrix * getBitangent(prim, gl_VertexIndex));
-    } else {
-        outBitangent = normalize(cross(outNormal, outTangent) * (tangent.w != 0.0 ? tangent.w : 1.0));
+    vec2 uv = vec2(0.0);
+    if (isAttributeExists(prim.texcoords[0])) {
+        uv = getTexcoord(prim, 0, gl_VertexIndex);
     }
-  }
 
-  gl_Position = camera.proj * camera.view * worldPos;
+    mat4 skinMatrix = mat4(1.0);
+    if (isAttributeExists(prim.jointIndices) && isAttributeExists(prim.jointWeights)) {
+        uvec4 j = getJoints(prim, gl_VertexIndex);
+        vec4 w = getWeights(prim, gl_VertexIndex);
+
+        skinMatrix =
+            w.x * jointData.joints[pcs.skinOffset + j.x] +
+                w.y * jointData.joints[pcs.skinOffset + j.y] +
+                w.z * jointData.joints[pcs.skinOffset + j.z] +
+                w.w * jointData.joints[pcs.skinOffset + j.w];
+    }
+
+    vec4 worldPos = pcs.model * skinMatrix * vec4(pos, 1.0);
+    mat3 normalMatrix = transpose(inverse(mat3(pcs.model * skinMatrix)));
+
+    outWorldPos = worldPos.xyz;
+    outUV = uv;
+    outNormal = normalize(normalMatrix * normal);
+
+    outTangent = vec3(0.0);
+    outBitangent = vec3(0.0);
+    if (isAttributeExists(prim.tangent)) {
+        vec4 tangent = getTangent(prim, gl_VertexIndex);
+        outTangent = normalize(normalMatrix * tangent.xyz);
+
+        if (isAttributeExists(prim.bitangent)) {
+            outBitangent = normalize(normalMatrix * getBitangent(prim, gl_VertexIndex));
+        } else {
+            outBitangent = normalize(cross(outNormal, outTangent) * (tangent.w != 0.0 ? tangent.w : 1.0));
+        }
+    }
+
+    gl_Position = camera.proj * camera.view * worldPos;
 }
