@@ -230,7 +230,8 @@ void Window::handleKeyEvent(int64_t ts, int key, int, int action, int mods) {
                   KeyEvent{
                       .keycode = key,
                       .modifierMask = getModifierMask(),
-                      .pressed = (action == GLFW_PRESS),
+                      .pressed =
+                          (action == GLFW_PRESS || action == GLFW_REPEAT),
                   },
           },
   });

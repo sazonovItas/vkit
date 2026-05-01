@@ -67,7 +67,7 @@ class App {
 
   std::shared_ptr<scene::Camera> sceneCamera_;
   std::shared_ptr<scene::Camera> materialCamera_;
-  controller::OrbitalCameraController sceneController_;
+  controller::FreeCameraController sceneController_;
   controller::OrbitalCameraController materialController_;
 
   std::unique_ptr<renderer::dsl::SceneSetLayout> sceneSetLayout_;

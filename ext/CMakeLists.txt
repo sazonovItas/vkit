@@ -146,6 +146,7 @@ target_sources(vma PRIVATE
 target_compile_options(vma PRIVATE -w)
 
 message(STATUS "[fastgltf]")
+set(FASTGLTF_ENABLE_DEPRECATED_EXT ON)
 add_subdirectory(fastgltf)
 
 message(STATUS "[meshoptimizer]")

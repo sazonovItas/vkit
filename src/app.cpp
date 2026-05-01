@@ -1,10 +1,10 @@
 #include "app.hpp"
 
+#include <imgui.h>
 #include <imgui_internal.h>
 
 #include <algorithm>
 #include <filesystem>
-#include <print>
 #include <tuple>
 
 #include "vkit/asset/gltf/importer.hpp"
@@ -19,7 +19,6 @@
 #include "vkit/renderer/viewport.hpp"
 
 namespace vkit {
-using glm::quat;
 
 namespace {
 
@@ -233,16 +232,40 @@ void App::initViewports() {
                                    static_cast<float>(height));
     }
   });
-  sceneViewer_->setOnManipulate([this](imgui::windows::Viewer& viewer) {
+  sceneViewer_->setOnManipulate([this, is_controlling = false](
+                                    imgui::windows::Viewer& viewer) mutable {
     auto& io = ImGui::GetIO();
-    if (viewer.isHovered() && viewer.isFocused()) {
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
-          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-        sceneController_.processMouseMovement(io.MouseDelta.x, io.MouseDelta.y);
+
+    if (viewer.isHovered()) {
+      glm::vec3 local_dir{0.0F, 0.0F, 0.0F};
+
+      if (ImGui::IsKeyDown(ImGuiKey_W)) local_dir.z += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_S)) local_dir.z -= 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_D)) local_dir.x += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_A)) local_dir.x -= 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_E)) local_dir.y += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_Q)) local_dir.y -= 1.0F;
+
+      if (glm::length(local_dir) > 0.0F) {
+        local_dir = glm::normalize(local_dir);
+
+        float speed_mult = 1.0F;
+        if (ImGui::IsKeyDown(ImGuiKey_LeftShift) ||
+            ImGui::IsKeyDown(ImGuiKey_RightShift)) {
+          speed_mult = 3.0F;
+        }
+
+        sceneController_.move(local_dir, io.DeltaTime * speed_mult);
       }
-      if (io.MouseWheel != 0.0F) {
-        sceneController_.processScroll(io.MouseWheel);
-      }
+    }
+
+    if (viewer.isHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+      sceneController_.processMouseMovement(io.MouseDelta.x, io.MouseDelta.y);
+    }
+
+    if (viewer.isHovered() && io.MouseWheel != 0.0F) {
+      float new_speed = sceneController_.movementSpeed + (io.MouseWheel * 2.0F);
+      sceneController_.setMovementSpeed(std::max(0.1F, new_speed));
     }
   });
 
@@ -293,7 +316,7 @@ void App::initViewports() {
 void App::initDebugRendering() {
   vk::Device device = gfxDevice_->get();
 
-  std::filesystem::path asset_path = "assets/models/exosuit/scene.gltf";
+  std::filesystem::path asset_path = "assets/models/mechdrone/scene.gltf";
 
   asset::gltf::Importer importer(*gfxDevice_);
   if (!std::filesystem::exists(asset_path)) {
@@ -405,7 +428,8 @@ void App::initDebugRendering() {
         vk::DescriptorType::eUniformBuffer,
         nullptr,
         &scene_buffer_info,
-        nullptr};
+        nullptr,
+    };
 
     vk::WriteDescriptorSet mat_write{
         frame.materialDescriptorSet,
@@ -415,7 +439,8 @@ void App::initDebugRendering() {
         vk::DescriptorType::eUniformBuffer,
         nullptr,
         &mat_buffer_info,
-        nullptr};
+        nullptr,
+    };
 
     vk::DescriptorSetAllocateInfo prim_alloc_info{*descriptorPool_, 1,
                                                   &primitiveSetLayout_->get()};
@@ -433,7 +458,8 @@ void App::initDebugRendering() {
         vk::DescriptorType::eStorageBuffer,
         nullptr,
         &prim_info,
-        nullptr};
+        nullptr,
+    };
 
     vk::WriteDescriptorSet joint_write{
         frame.primitiveDescriptorSet,
@@ -443,7 +469,8 @@ void App::initDebugRendering() {
         vk::DescriptorType::eStorageBuffer,
         nullptr,
         &joint_info,
-        nullptr};
+        nullptr,
+    };
 
     device.updateDescriptorSets(
         {scene_write, mat_write, prim_write, joint_write}, nullptr);
@@ -519,28 +546,27 @@ void App::mainLoop() {
     sceneController_.update(*sceneCamera_);
     materialController_.update(*materialCamera_);
 
-    // static float time = 0.0F;
-    // time += dt;
+    static float time = 0.0F;
+    time += dt;
 
-    // for (const auto& skin : loadedAsset_->skins.getItems()) {
-    //   if (!skin) continue;
+    for (const auto& skin : loadedAsset_->skins.getItems()) {
+      if (!skin) continue;
 
-    //   std::size_t joints_to_wiggle =
-    //       std::min<std::size_t>(3, skin->joints.size());
+      std::size_t joints_to_wiggle =
+          std::min<std::size_t>(3, skin->joints.size());
 
-    //   for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
-    //     if (auto joint = skin->joints[i]) {
-    //       auto local = joint->getLocalTransform();
+      for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
+        if (auto joint = skin->joints[i]) {
+          auto local = joint->getLocalTransform();
 
-    //       float angle = std::sin(time * 2.0F) * 0.5F;
-    //       glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F,
-    //       0.0F));
+          float angle = std::sin(time * 2.0F) * 0.5F;
+          glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F, 0.0F));
 
-    //       local.setRotation(spin);
-    //       joint->setLocalTransform(local);
-    //     }
-    //   }
-    // }
+          local.setRotation(spin);
+          joint->setLocalTransform(local);
+        }
+      }
+    }
 
     loadedAsset_->update();
 
@@ -551,10 +577,7 @@ void App::mainLoop() {
 
     auto joint_data = loadedAsset_->skins.getData();
     if (!joint_data.empty()) {
-      std::vector<glm::mat4> identity_joints(joint_data.size(),
-                                             glm::mat4(1.0F));
-      frame.jointSSBO->writeAt(std::as_bytes(std::span{identity_joints}));
-      // frame.jointSSBO->writeAt(std::as_bytes(joint_data));
+      frame.jointSSBO->writeAt(std::as_bytes(joint_data));
     }
 
     CameraUBO scene_ubo{
@@ -631,5 +654,4 @@ void App::recreateSwapchain() {
     swapchain_->recreate(glm::ivec2{width, height});
   }
 }
-
 };  // namespace vkit

@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 
+#include "fastgltf/core.hpp"
 #include "vkit/dataformat/vertex_format.hpp"
 
 #define LOG_TRACE(msg) std::cout << "[glTF Importer] " << msg << std::endl
@@ -62,7 +63,8 @@ auto Importer::load(const std::filesystem::path& filepath)
   asset_ = std::make_shared<Asset>(filepath.stem().string());
 
   auto parser = fastgltf::Parser{
-      fastgltf::Extensions::KHR_mesh_quantization,
+      fastgltf::Extensions::KHR_mesh_quantization |
+          fastgltf::Extensions::KHR_materials_pbrSpecularGlossiness,
   };
 
   auto options = fastgltf::Options::GenerateMeshIndices |
@@ -407,7 +409,7 @@ void Importer::loadSkins(const fastgltf::Asset& asset) {
             skin->inverseBindMatrices[idx] = mat;
           });
     } else {
-      skin->inverseBindMatrices.resize(skin->joints.size(), glm::mat4(1.0f));
+      skin->inverseBindMatrices.resize(skin->joints.size(), glm::mat4(1.0F));
     }
 
     asset_->skins.add(skin);
