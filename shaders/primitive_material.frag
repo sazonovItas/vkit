@@ -41,6 +41,7 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint primIndex;
     uint skinOffset;
+    uint enableSkinning;
     uint materialType;
     uint materialIndex;
 } pcs;

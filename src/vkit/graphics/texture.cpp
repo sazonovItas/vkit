@@ -4,6 +4,7 @@
 
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit::graphics {
 
@@ -26,7 +27,7 @@ auto getTextureLevelCount(int width, int height, int depth) -> int {
 Texture::Texture(vk::Device device, vma::Allocator allocator,
                  const TextureCreateInfo& createInfo)
     : type_{createInfo.type},
-      sampleCount_{createInfo.sampleCount},
+      samples_{createInfo.samples},
       useMipmaps_{createInfo.useMipmaps},
       image_{createAllocatedImage(allocator, createInfo)},
       view_{makeImageView(device)} {}
@@ -63,7 +64,7 @@ auto Texture::getImageView() const -> vk::ImageView { return *view_; }
 
 auto Texture::getTextureType() const -> TextureType { return type_; }
 
-auto Texture::getPixelFormat() const -> dataformat::Format {
+auto Texture::getPixelFormat() const -> vk::Format {
   return image_.format;
 }
 
@@ -83,7 +84,7 @@ auto Texture::getArrayLayerCount() const -> int { return image_.arrayLayers; }
 
 auto Texture::getLevelCount() const -> int { return image_.mipLevels; }
 
-auto Texture::getSampleCount() const -> SampleCount { return sampleCount_; }
+auto Texture::getSamples() const -> vk::SampleCountFlagBits { return samples_; }
 
 auto Texture::isLayered() const -> bool { return image_.arrayLayers > 1; }
 
@@ -251,7 +252,7 @@ auto Texture::createAllocatedImage(vma::Allocator allocator,
       .setFormat(createInfo.pixelFormat)
       .setExtent(
           getExtent3D(createInfo.width, createInfo.height, createInfo.depth))
-      .setSamples(getSampleCountFlagBits(createInfo.sampleCount))
+      .setSamples(createInfo.samples)
       .setMipLevels(mip_levels)
       .setArrayLayers(createInfo.arrayLayerCount);
 

@@ -39,6 +39,10 @@ class UniqueId {
   IdType id_{kNullId};
 };
 
+
+static constexpr std::uint32_t kItemInvalidId =
+    std::numeric_limits<std::uint32_t>::max();
+
 template <class T>
 class Item {
  public:

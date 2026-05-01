@@ -40,22 +40,4 @@ auto toVkImageViewType(TextureType type) -> vk::ImageViewType {
   }
 }
 
-auto getSampleCountFlagBits(SampleCount sampleCount)
-    -> vk::SampleCountFlagBits {
-  switch (sampleCount) {
-    case SampleCount::k1:
-      return vk::SampleCountFlagBits::e1;
-    case SampleCount::k4:
-      return vk::SampleCountFlagBits::e4;
-    case SampleCount::k8:
-      return vk::SampleCountFlagBits::e8;
-    case SampleCount::k16:
-      return vk::SampleCountFlagBits::e16;
-    case SampleCount::k32:
-      return vk::SampleCountFlagBits::e32;
-    default:
-      throw std::runtime_error{"unknown count of the samples"};
-  }
-}
-
 };  // namespace vkit::graphics

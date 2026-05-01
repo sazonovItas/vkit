@@ -4,24 +4,6 @@ namespace vkit::scene {
 
 Node::Node(std::string_view name) : Item(name) {}
 
-void Node::attach(const std::shared_ptr<NodeAttachment>& attachment) {
-  if (attachment) {
-    attachment->setNode(this);
-    attachments_.push_back(attachment);
-  }
-}
-
-void Node::detach(NodeAttachment* attachment) {
-  std::erase_if(attachments_,
-                [attachment](const std::shared_ptr<NodeAttachment>& a) {
-                  if (a.get() == attachment) {
-                    a->setNode(nullptr);
-                    return true;
-                  }
-                  return false;
-                });
-}
-
 void Node::setParent(const std::shared_ptr<Node>& newParent) {
   parent_ = newParent;
   invalidateTransform();
@@ -32,6 +14,10 @@ void Node::addChild(const std::shared_ptr<Node>& child) {
     child->setParent(shared_from_this());
     children_.push_back(child);
   }
+}
+
+auto Node::getChildren() const -> const std::vector<std::shared_ptr<Node>>& {
+  return children_;
 }
 
 void Node::setLocalTransform(const TrsTransform& transform) {
@@ -46,6 +32,10 @@ void Node::invalidateTransform() const {
   for (const auto& child : children_) {
     child->invalidateTransform();
   }
+}
+
+auto Node::getLocalTransform() const -> const TrsTransform& {
+  return localTransform_;
 }
 
 auto Node::getGlobalTransform() const -> const TrsTransform& {

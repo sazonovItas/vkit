@@ -12,7 +12,7 @@ struct Image {
   vk::Image image{nullptr};
   vk::ImageType imageType{vk::ImageType::e2D};
   vk::Extent3D extent{};
-  dataformat::Format format{dataformat::Format::eUndefined};
+ vk::Format format{vk::Format::eUndefined};
   vk::SampleCountFlagBits samples{vk::SampleCountFlagBits::e1};
   std::uint32_t mipLevels{0};
   std::uint32_t arrayLayers{0};
@@ -76,19 +76,19 @@ struct Image {
   }
 
   [[nodiscard]] static constexpr auto inferAspectFlags(
-      dataformat::Format format) -> vk::ImageAspectFlags {
+      vk::Format format) -> vk::ImageAspectFlags {
     switch (format) {
-      case dataformat::Format::eUndefined:
+      case vk::Format::eUndefined:
         std::unreachable();
-      case dataformat::Format::eD16Unorm:
-      case dataformat::Format::eD32Sfloat:
+      case vk::Format::eD16Unorm:
+      case vk::Format::eD32Sfloat:
         return vk::ImageAspectFlagBits::eDepth;
-      case dataformat::Format::eD16UnormS8Uint:
-      case dataformat::Format::eD24UnormS8Uint:
-      case dataformat::Format::eD32SfloatS8Uint:
+      case vk::Format::eD16UnormS8Uint:
+      case vk::Format::eD24UnormS8Uint:
+      case vk::Format::eD32SfloatS8Uint:
         return vk::ImageAspectFlagBits::eDepth |
                vk::ImageAspectFlagBits::eStencil;
-      case dataformat::Format::eS8Uint:
+      case vk::Format::eS8Uint:
         return vk::ImageAspectFlagBits::eStencil;
       default:
         return vk::ImageAspectFlagBits::eColor;

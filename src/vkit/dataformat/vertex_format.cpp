@@ -6,6 +6,8 @@ auto c_str(const AttributeUsage usage) -> const char* {
   switch (usage) {
     case AttributeUsage::kNone:
       return "none";
+    case AttributeUsage::kIndex:
+      return "index";
     case AttributeUsage::kPosition:
       return "position";
     case AttributeUsage::kTangent:
@@ -41,6 +43,8 @@ auto getBufferUsage(AttributeUsage usage) -> BufferUsageFlags {
     case AttributeUsage::kBitangent:
     case AttributeUsage::kColor:
     case AttributeUsage::kTexCoord:
+      return vk::BufferUsageFlagBits::eVertexBuffer |
+             vk::BufferUsageFlagBits::eTransferDst;
     case AttributeUsage::kJointIndices:
     case AttributeUsage::kJointWeights:
     case AttributeUsage::kCustom:
@@ -175,6 +179,21 @@ auto getBufferUsage(AttributeUsage usage) -> BufferUsageFlags {
 
     default:
       return 0;
+  }
+}
+
+auto getIndexType(AttributeFormat format) -> vk::IndexType {
+  switch (format) {
+    case AttributeFormat::kScalarUInt32:
+      return vk::IndexType::eUint32;
+    case AttributeFormat::kScalarUInt16:
+      return vk::IndexType::eUint16;
+    case AttributeFormat::kScalarUInt8:
+      return vk::IndexType::eUint8EXT;
+    default:
+      throw std::runtime_error{
+          "Invalid AttributeFormat provided for Vulkan IndexType. "
+          "Indices must be UInt32, UInt16, or UInt8."};
   }
 }
 

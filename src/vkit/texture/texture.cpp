@@ -31,4 +31,4 @@ void Texture::setBindlessId(std::optional<std::uint32_t> id) {
 
 void Texture::setImguiId(std::optional<ImTextureID> id) { imguiId_ = id; }
 
-}  // namespace vkit::texture
+};  // namespace vkit::texture

@@ -4,7 +4,6 @@
 #include <optional>
 #include <vector>
 
-#include "vkit/dataformat/dataformat.hpp"
 #include "vkit/graphics/device.hpp"
 
 namespace vkit::graphics {
@@ -17,7 +16,7 @@ class Swapchain {
   auto recreate(glm::ivec2 size) -> bool;
 
   [[nodiscard]] auto getExtent() const -> vk::Extent2D;
-  [[nodiscard]] auto getFormat() const -> dataformat::Format;
+  [[nodiscard]] auto getFormat() const -> vk::Format;
 
   [[nodiscard]] auto acquireNextImage(vk::Semaphore signal)
       -> std::optional<std::uint32_t>;

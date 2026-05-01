@@ -1,8 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <vector>
 
+#include "vkit/dataformat/vertex_format.hpp"
+#include "vkit/item/storage_item.hpp"
 #include "vkit/primitive/buffers.hpp"
+#include "vkit/primitive/device_buffers.hpp"
 #include "vkit/primitive/enums.hpp"
 #include "vkit/primitive/primitive_attachment.hpp"
 #include "vkit/primitive/vertex_attribute.hpp"
@@ -14,11 +19,11 @@ struct PrimitiveAttributes {
   Attribute position;
   Attribute color;
   Attribute normal;
-  Attribute texcoords[4];
+  std::array<Attribute, 4> texcoords;
   Attribute tangent;
   Attribute bitangent;
-  Attribute jointIndices;
-  Attribute jointWeights;
+  std::array<Attribute, 2> jointIndices{};
+  std::array<Attribute, 2> jointWeights{};
 };
 
 struct DevicePrimitiveAttributes {
@@ -26,28 +31,28 @@ struct DevicePrimitiveAttributes {
   DeviceAttribute position;
   DeviceAttribute color;
   DeviceAttribute normal;
-  DeviceAttribute texcoords[4];
+  std::array<DeviceAttribute, 4> texcoords;
   DeviceAttribute tangent;
   DeviceAttribute bitangent;
-  DeviceAttribute jointIndices;
-  DeviceAttribute jointWeights;
+  std::array<DeviceAttribute, 2> jointIndices{};
+  std::array<DeviceAttribute, 2> jointWeights{};
 };
 
 struct PrimitiveData {
   AttributeData position;
   AttributeData color;
   AttributeData normal;
-  AttributeData texcoords[4];
+  std::array<AttributeData, 4> texcoords;
   AttributeData tangent;
   AttributeData bitangent;
-  AttributeData jointIndices;
-  AttributeData jointWeights;
+  std::array<AttributeData, 2> jointIndices{};
+  std::array<AttributeData, 2> jointWeights{};
 };
 
-static_assert(sizeof(PrimitiveData) == 264,
-              "PrimitiveData must be exactly 264 bytes for std430 alignment.");
+static_assert(sizeof(PrimitiveData) == 312,
+              "PrimitiveData must be exactly 312 bytes for std430 alignment.");
 
-class Primitive {
+class Primitive : public StorageItem {
  public:
   using Data = PrimitiveData;
   using VertexMode = PrimitiveVertexMode;
@@ -63,13 +68,18 @@ class Primitive {
   void attach(const std::shared_ptr<Attachment>& attachment);
   void detach(Attachment* attachment);
 
+  template <typename T>
+  [[nodiscard]] auto getAttachmentAs() const -> std::shared_ptr<T> {
+    for (const auto& attachment : attachments_) {
+      if (auto casted = std::dynamic_pointer_cast<T>(attachment)) {
+        return casted;
+      }
+    }
+    return nullptr;
+  }
+
   void setVertexMode(const VertexMode mode) { vertexMode = mode; }
   void setPolygonMode(const PolygonMode mode) { polygonMode = mode; }
-
-  [[nodiscard]] auto getId() const -> std::optional<std::uint32_t> {
-    return id_;
-  }
-  void setId(std::optional<std::uint32_t> id) { id_ = id; }
 
   [[nodiscard]] auto getData() const -> PrimitiveData {
     return PrimitiveData{
@@ -85,55 +95,31 @@ class Primitive {
             },
         .tangent = attrs.tangent.getData(),
         .bitangent = attrs.bitangent.getData(),
-        .jointIndices = attrs.jointIndices.getData(),
-        .jointWeights = attrs.jointWeights.getData(),
+        .jointIndices =
+            {
+                attrs.jointIndices[0].getData(),
+                attrs.jointIndices[1].getData(),
+            },
+        .jointWeights =
+            {
+                attrs.jointWeights[0].getData(),
+                attrs.jointWeights[1].getData(),
+            },
     };
   }
 
   [[nodiscard]] auto getIndexBuffer() const
       -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.index.bufferViewIdx);
+    return buffers_->getBuffer(attrs.index.bufferViewIdx);
   }
 
-  [[nodiscard]] auto getPositionBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.position.bufferViewIdx);
+  [[nodiscard]] auto getIndexBufferOffset() const -> std::size_t {
+    return buffers_->getViewOffset(attrs.index.bufferViewIdx) +
+           attrs.index.info.offset;
   }
 
-  [[nodiscard]] auto getColorBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.color.bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getNormalBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.normal.bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getTexCoordBuffer(const std::size_t idx) const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    assert(idx > 4 && "Only 4 texture coordinates are supported");
-    return (*buffers_)(attrs.texcoords[idx].bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getTangentBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.tangent.bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getBitngentBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.bitangent.bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getJointIndicesBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.jointIndices.bufferViewIdx);
-  }
-
-  [[nodiscard]] auto getJointWeightsBuffer() const
-      -> const std::shared_ptr<graphics::DeviceBuffer>& {
-    return (*buffers_)(attrs.jointWeights.bufferViewIdx);
+  [[nodiscard]] auto getIndexType() const -> vk::IndexType {
+    return dataformat::getIndexType(attrs.index.info.format);
   }
 
  private:
@@ -141,8 +127,9 @@ class Primitive {
   std::shared_ptr<DeviceBuffers> buffers_;
   std::vector<std::shared_ptr<Attachment>> attachments_;
 
-  auto createDeviceAttributes(const PrimitiveAttributes& attrs) const
-      -> DevicePrimitiveAttributes;
+  [[nodiscard]] static auto createDeviceAttributes(
+      const std::shared_ptr<DeviceBuffers>& buffers,
+      const PrimitiveAttributes& attrs) -> DevicePrimitiveAttributes;
 };
 
 };  // namespace vkit::primitive

@@ -5,6 +5,7 @@
 #include <string_view>
 
 #include "vkit/item/item.hpp"
+#include "vkit/item/storage_item.hpp"
 #include "vkit/primitive/primitive_attachment.hpp"
 
 namespace vkit::material {
@@ -18,7 +19,9 @@ enum class Type : std::uint32_t {
 
 enum class AlphaMode : std::uint32_t { kOpaque = 0, kMask = 1, kBlend = 2 };
 
-class Material : public Item<Material>, public primitive::Attachment {
+class Material : public Item<Material>,
+                 public StorageItem,
+                 public primitive::Attachment {
  public:
   explicit Material(std::string_view name) : Item{name} {}
 

@@ -4,216 +4,216 @@
 
 namespace vkit::dataformat {
 
-auto getComponentCount(const Format format) -> std::size_t {
+auto getComponentCount(const vk::Format format) -> std::size_t {
   switch (format) {
-    case Format::eR8Uint:
-    case Format::eR8Sint:
-    case Format::eR8Unorm:
-    case Format::eR8Snorm:
-    case Format::eR8Uscaled:
-    case Format::eR8Sscaled:
-    case Format::eR8Srgb:
+    case vk::Format::eR8Uint:
+    case vk::Format::eR8Sint:
+    case vk::Format::eR8Unorm:
+    case vk::Format::eR8Snorm:
+    case vk::Format::eR8Uscaled:
+    case vk::Format::eR8Sscaled:
+    case vk::Format::eR8Srgb:
 
-    case Format::eR16Uint:
-    case Format::eR16Sint:
-    case Format::eR16Sfloat:
-    case Format::eR16Unorm:
-    case Format::eR16Snorm:
-    case Format::eR16Uscaled:
-    case Format::eR16Sscaled:
+    case vk::Format::eR16Uint:
+    case vk::Format::eR16Sint:
+    case vk::Format::eR16Sfloat:
+    case vk::Format::eR16Unorm:
+    case vk::Format::eR16Snorm:
+    case vk::Format::eR16Uscaled:
+    case vk::Format::eR16Sscaled:
 
-    case Format::eR32Uint:
-    case Format::eR32Sint:
-    case Format::eR32Sfloat:
+    case vk::Format::eR32Uint:
+    case vk::Format::eR32Sint:
+    case vk::Format::eR32Sfloat:
 
-    case Format::eD16Unorm:
-    case Format::eD32Sfloat:
-    case Format::eS8Uint:
+    case vk::Format::eD16Unorm:
+    case vk::Format::eD32Sfloat:
+    case vk::Format::eS8Uint:
       return 1;
 
-    case Format::eR8G8Uint:
-    case Format::eR8G8Sint:
-    case Format::eR8G8Unorm:
-    case Format::eR8G8Snorm:
-    case Format::eR8G8Uscaled:
-    case Format::eR8G8Sscaled:
-    case Format::eR8G8Srgb:
+    case vk::Format::eR8G8Uint:
+    case vk::Format::eR8G8Sint:
+    case vk::Format::eR8G8Unorm:
+    case vk::Format::eR8G8Snorm:
+    case vk::Format::eR8G8Uscaled:
+    case vk::Format::eR8G8Sscaled:
+    case vk::Format::eR8G8Srgb:
 
-    case Format::eR16G16Uint:
-    case Format::eR16G16Sint:
-    case Format::eR16G16Sfloat:
-    case Format::eR16G16Unorm:
-    case Format::eR16G16Snorm:
-    case Format::eR16G16Uscaled:
-    case Format::eR16G16Sscaled:
+    case vk::Format::eR16G16Uint:
+    case vk::Format::eR16G16Sint:
+    case vk::Format::eR16G16Sfloat:
+    case vk::Format::eR16G16Unorm:
+    case vk::Format::eR16G16Snorm:
+    case vk::Format::eR16G16Uscaled:
+    case vk::Format::eR16G16Sscaled:
 
-    case Format::eR32G32Uint:
-    case Format::eR32G32Sint:
-    case Format::eR32G32Sfloat:
+    case vk::Format::eR32G32Uint:
+    case vk::Format::eR32G32Sint:
+    case vk::Format::eR32G32Sfloat:
 
-    case Format::eD16UnormS8Uint:
-    case Format::eD24UnormS8Uint:
-    case Format::eD32SfloatS8Uint:
+    case vk::Format::eD16UnormS8Uint:
+    case vk::Format::eD24UnormS8Uint:
+    case vk::Format::eD32SfloatS8Uint:
       return 2;
 
-    case Format::eR8G8B8Uint:
-    case Format::eR8G8B8Sint:
-    case Format::eR8G8B8Unorm:
-    case Format::eR8G8B8Snorm:
-    case Format::eR8G8B8Uscaled:
-    case Format::eR8G8B8Sscaled:
-    case Format::eR8G8B8Srgb:
+    case vk::Format::eR8G8B8Uint:
+    case vk::Format::eR8G8B8Sint:
+    case vk::Format::eR8G8B8Unorm:
+    case vk::Format::eR8G8B8Snorm:
+    case vk::Format::eR8G8B8Uscaled:
+    case vk::Format::eR8G8B8Sscaled:
+    case vk::Format::eR8G8B8Srgb:
 
-    case Format::eR16G16B16Uint:
-    case Format::eR16G16B16Sint:
-    case Format::eR16G16B16Sfloat:
-    case Format::eR16G16B16Unorm:
-    case Format::eR16G16B16Snorm:
-    case Format::eR16G16B16Uscaled:
-    case Format::eR16G16B16Sscaled:
+    case vk::Format::eR16G16B16Uint:
+    case vk::Format::eR16G16B16Sint:
+    case vk::Format::eR16G16B16Sfloat:
+    case vk::Format::eR16G16B16Unorm:
+    case vk::Format::eR16G16B16Snorm:
+    case vk::Format::eR16G16B16Uscaled:
+    case vk::Format::eR16G16B16Sscaled:
 
-    case Format::eR32G32B32Uint:
-    case Format::eR32G32B32Sint:
-    case Format::eR32G32B32Sfloat:
+    case vk::Format::eR32G32B32Uint:
+    case vk::Format::eR32G32B32Sint:
+    case vk::Format::eR32G32B32Sfloat:
       return 3;
 
-    case Format::eR8G8B8A8Uint:
-    case Format::eR8G8B8A8Sint:
-    case Format::eR8G8B8A8Unorm:
-    case Format::eR8G8B8A8Snorm:
-    case Format::eR8G8B8A8Uscaled:
-    case Format::eR8G8B8A8Sscaled:
-    case Format::eR8G8B8A8Srgb:
+    case vk::Format::eR8G8B8A8Uint:
+    case vk::Format::eR8G8B8A8Sint:
+    case vk::Format::eR8G8B8A8Unorm:
+    case vk::Format::eR8G8B8A8Snorm:
+    case vk::Format::eR8G8B8A8Uscaled:
+    case vk::Format::eR8G8B8A8Sscaled:
+    case vk::Format::eR8G8B8A8Srgb:
 
-    case Format::eR16G16B16A16Uint:
-    case Format::eR16G16B16A16Sint:
-    case Format::eR16G16B16A16Sfloat:
-    case Format::eR16G16B16A16Unorm:
-    case Format::eR16G16B16A16Snorm:
-    case Format::eR16G16B16A16Uscaled:
-    case Format::eR16G16B16A16Sscaled:
+    case vk::Format::eR16G16B16A16Uint:
+    case vk::Format::eR16G16B16A16Sint:
+    case vk::Format::eR16G16B16A16Sfloat:
+    case vk::Format::eR16G16B16A16Unorm:
+    case vk::Format::eR16G16B16A16Snorm:
+    case vk::Format::eR16G16B16A16Uscaled:
+    case vk::Format::eR16G16B16A16Sscaled:
 
-    case Format::eR32G32B32A32Uint:
-    case Format::eR32G32B32A32Sint:
-    case Format::eR32G32B32A32Sfloat:
+    case vk::Format::eR32G32B32A32Uint:
+    case vk::Format::eR32G32B32A32Sint:
+    case vk::Format::eR32G32B32A32Sfloat:
       return 4;
 
     default:
-      throw std::runtime_error{"Unsupported format in getComponentCount"};
+      throw std::runtime_error{"Unsupported vk::Format in getComponentCount"};
   }
 }
 
-auto getComponentByteSize(Format format) -> std::size_t {
+auto getComponentByteSize(vk::Format format) -> std::size_t {
   switch (format) {
-    case Format::eR8Uint:
-    case Format::eR8Sint:
-    case Format::eR8Unorm:
-    case Format::eR8Snorm:
-    case Format::eR8Uscaled:
-    case Format::eR8Sscaled:
-    case Format::eR8Srgb:
-    case Format::eR8G8Uint:
-    case Format::eR8G8Sint:
-    case Format::eR8G8Unorm:
-    case Format::eR8G8Snorm:
-    case Format::eR8G8Uscaled:
-    case Format::eR8G8Sscaled:
-    case Format::eR8G8Srgb:
-    case Format::eR8G8B8Uint:
-    case Format::eR8G8B8Sint:
-    case Format::eR8G8B8Unorm:
-    case Format::eR8G8B8Snorm:
-    case Format::eR8G8B8Uscaled:
-    case Format::eR8G8B8Sscaled:
-    case Format::eR8G8B8Srgb:
-    case Format::eR8G8B8A8Uint:
-    case Format::eR8G8B8A8Sint:
-    case Format::eR8G8B8A8Unorm:
-    case Format::eR8G8B8A8Snorm:
-    case Format::eR8G8B8A8Uscaled:
-    case Format::eR8G8B8A8Sscaled:
-    case Format::eR8G8B8A8Srgb:
-    case Format::eS8Uint:
+    case vk::Format::eR8Uint:
+    case vk::Format::eR8Sint:
+    case vk::Format::eR8Unorm:
+    case vk::Format::eR8Snorm:
+    case vk::Format::eR8Uscaled:
+    case vk::Format::eR8Sscaled:
+    case vk::Format::eR8Srgb:
+    case vk::Format::eR8G8Uint:
+    case vk::Format::eR8G8Sint:
+    case vk::Format::eR8G8Unorm:
+    case vk::Format::eR8G8Snorm:
+    case vk::Format::eR8G8Uscaled:
+    case vk::Format::eR8G8Sscaled:
+    case vk::Format::eR8G8Srgb:
+    case vk::Format::eR8G8B8Uint:
+    case vk::Format::eR8G8B8Sint:
+    case vk::Format::eR8G8B8Unorm:
+    case vk::Format::eR8G8B8Snorm:
+    case vk::Format::eR8G8B8Uscaled:
+    case vk::Format::eR8G8B8Sscaled:
+    case vk::Format::eR8G8B8Srgb:
+    case vk::Format::eR8G8B8A8Uint:
+    case vk::Format::eR8G8B8A8Sint:
+    case vk::Format::eR8G8B8A8Unorm:
+    case vk::Format::eR8G8B8A8Snorm:
+    case vk::Format::eR8G8B8A8Uscaled:
+    case vk::Format::eR8G8B8A8Sscaled:
+    case vk::Format::eR8G8B8A8Srgb:
+    case vk::Format::eS8Uint:
       return 1;
 
-    case Format::eR16Uint:
-    case Format::eR16Sint:
-    case Format::eR16Sfloat:
-    case Format::eR16Unorm:
-    case Format::eR16Snorm:
-    case Format::eR16Uscaled:
-    case Format::eR16Sscaled:
-    case Format::eR16G16Uint:
-    case Format::eR16G16Sint:
-    case Format::eR16G16Sfloat:
-    case Format::eR16G16Unorm:
-    case Format::eR16G16Snorm:
-    case Format::eR16G16Uscaled:
-    case Format::eR16G16Sscaled:
-    case Format::eR16G16B16Uint:
-    case Format::eR16G16B16Sint:
-    case Format::eR16G16B16Sfloat:
-    case Format::eR16G16B16Unorm:
-    case Format::eR16G16B16Snorm:
-    case Format::eR16G16B16Uscaled:
-    case Format::eR16G16B16Sscaled:
-    case Format::eR16G16B16A16Uint:
-    case Format::eR16G16B16A16Sint:
-    case Format::eR16G16B16A16Sfloat:
-    case Format::eR16G16B16A16Unorm:
-    case Format::eR16G16B16A16Snorm:
-    case Format::eR16G16B16A16Uscaled:
-    case Format::eR16G16B16A16Sscaled:
-    case Format::eD16Unorm:
+    case vk::Format::eR16Uint:
+    case vk::Format::eR16Sint:
+    case vk::Format::eR16Sfloat:
+    case vk::Format::eR16Unorm:
+    case vk::Format::eR16Snorm:
+    case vk::Format::eR16Uscaled:
+    case vk::Format::eR16Sscaled:
+    case vk::Format::eR16G16Uint:
+    case vk::Format::eR16G16Sint:
+    case vk::Format::eR16G16Sfloat:
+    case vk::Format::eR16G16Unorm:
+    case vk::Format::eR16G16Snorm:
+    case vk::Format::eR16G16Uscaled:
+    case vk::Format::eR16G16Sscaled:
+    case vk::Format::eR16G16B16Uint:
+    case vk::Format::eR16G16B16Sint:
+    case vk::Format::eR16G16B16Sfloat:
+    case vk::Format::eR16G16B16Unorm:
+    case vk::Format::eR16G16B16Snorm:
+    case vk::Format::eR16G16B16Uscaled:
+    case vk::Format::eR16G16B16Sscaled:
+    case vk::Format::eR16G16B16A16Uint:
+    case vk::Format::eR16G16B16A16Sint:
+    case vk::Format::eR16G16B16A16Sfloat:
+    case vk::Format::eR16G16B16A16Unorm:
+    case vk::Format::eR16G16B16A16Snorm:
+    case vk::Format::eR16G16B16A16Uscaled:
+    case vk::Format::eR16G16B16A16Sscaled:
+    case vk::Format::eD16Unorm:
       return 2;
 
-    case Format::eR32Uint:
-    case Format::eR32Sint:
-    case Format::eR32Sfloat:
-    case Format::eR32G32Uint:
-    case Format::eR32G32Sint:
-    case Format::eR32G32Sfloat:
-    case Format::eR32G32B32Uint:
-    case Format::eR32G32B32Sint:
-    case Format::eR32G32B32Sfloat:
-    case Format::eR32G32B32A32Uint:
-    case Format::eR32G32B32A32Sint:
-    case Format::eR32G32B32A32Sfloat:
-    case Format::eD32Sfloat:
+    case vk::Format::eR32Uint:
+    case vk::Format::eR32Sint:
+    case vk::Format::eR32Sfloat:
+    case vk::Format::eR32G32Uint:
+    case vk::Format::eR32G32Sint:
+    case vk::Format::eR32G32Sfloat:
+    case vk::Format::eR32G32B32Uint:
+    case vk::Format::eR32G32B32Sint:
+    case vk::Format::eR32G32B32Sfloat:
+    case vk::Format::eR32G32B32A32Uint:
+    case vk::Format::eR32G32B32A32Sint:
+    case vk::Format::eR32G32B32A32Sfloat:
+    case vk::Format::eD32Sfloat:
       return 4;
 
     default:
-      throw std::runtime_error{"Unsupported format in getComponentByteSize"};
+      throw std::runtime_error{"Unsupported vk::Format in getComponentByteSize"};
   }
 }
 
-auto getPixelByteSize(Format format) -> std::size_t {
+auto getPixelByteSize(vk::Format format) -> std::size_t {
   switch (format) {
-    case Format::eR8Unorm:
-    case Format::eR8Srgb:
+    case vk::Format::eR8Unorm:
+    case vk::Format::eR8Srgb:
       return 1;
 
-    case Format::eR8G8Unorm:
+    case vk::Format::eR8G8Unorm:
       return 2;
 
-    case Format::eR8G8B8Unorm:
+    case vk::Format::eR8G8B8Unorm:
       return 3;
 
-    case Format::eR8G8B8A8Unorm:
-    case Format::eR8G8B8A8Srgb:
+    case vk::Format::eR8G8B8A8Unorm:
+    case vk::Format::eR8G8B8A8Srgb:
       return 4;
 
-    case Format::eR16G16B16A16Sfloat:
+    case vk::Format::eR16G16B16A16Sfloat:
       return 8;
 
-    case Format::eR32G32B32A32Sfloat:
+    case vk::Format::eR32G32B32A32Sfloat:
       return 16;
 
-    case Format::eD16Unorm:
+    case vk::Format::eD16Unorm:
       return 2;
 
-    case Format::eD32Sfloat:
-    case Format::eD24UnormS8Uint:
+    case vk::Format::eD32Sfloat:
+    case vk::Format::eD24UnormS8Uint:
       return 4;
 
     default:
@@ -221,4 +221,4 @@ auto getPixelByteSize(Format format) -> std::size_t {
   }
 }
 
-};  // namespace vkit::dataformat
+};  // namespace vkit::dataforamt

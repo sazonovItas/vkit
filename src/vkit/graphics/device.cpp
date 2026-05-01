@@ -32,10 +32,7 @@ constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
   std::unreachable();
 }
 
-constexpr auto kRequiredExtensions = std::array{
-    vk::KHRSwapchainExtensionName,
-    vk::EXTShaderObjectExtensionName,
-};
+constexpr auto kRequiredExtensions = std::array{ vk::KHRSwapchainExtensionName };
 
 constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
                                        .setFillModeNonSolid(vk::True)

@@ -5,57 +5,98 @@
 #include <memory>
 #include <mutex>
 #include <span>
-#include <unordered_map>
+#include <stdexcept>
 #include <vector>
 
+#include "vkit/item/item.hpp"
+#include "vkit/item/storage.hpp"
 #include "vkit/material/diffuse.hpp"
 #include "vkit/material/diffuse_specular.hpp"
-#include "vkit/material/material.hpp"
 #include "vkit/material/principled_bsdf.hpp"
 
 namespace vkit::material {
 
-class Storage {
+template <typename T>
+class TypedMaterialStorage : public vkit::Storage<T> {
  public:
-  Storage() = default;
+  TypedMaterialStorage() = default;
 
-  Storage(const Storage&) = delete;
-  auto operator=(const Storage&) -> Storage& = delete;
+  void update() {
+    std::lock_guard<std::mutex> lock{this->mutex_};
 
-  auto add(const std::shared_ptr<Material>& mat) -> std::uint32_t;
-  void remove(std::size_t storageId);
+    if (data_.size() < this->items_.size()) {
+      data_.resize(this->items_.size());
+    }
 
-  [[nodiscard]] auto getMaterial(std::size_t itemId) const
-      -> std::shared_ptr<Material>;
-
-  template <typename T>
-  [[nodiscard]] auto getMaterialAs(std::size_t itemId) const
-      -> std::shared_ptr<T> {
-    return std::dynamic_pointer_cast<T>(getMaterial(itemId));
+    for (std::size_t i = 0; i < this->items_.size(); ++i) {
+      if (this->items_[i] && this->items_[i]->isDirty()) {
+        data_[i] = this->items_[i]->getData();
+        this->items_[i]->setDirty(false);
+      }
+    }
   }
 
-  void update();
-
-  [[nodiscard]] auto getData(Type type) const -> std::span<const std::byte>;
+  [[nodiscard]] auto getData() const -> std::span<const typename T::Data> {
+    std::lock_guard<std::mutex> lock{this->mutex_};
+    return data_;
+  }
 
  private:
-  mutable std::mutex mutex_;
+  std::vector<typename T::Data> data_;
+};
 
-  std::vector<std::shared_ptr<Diffuse>> diffuse_;
-  std::vector<std::shared_ptr<DiffuseSpecular>> diffuseSpecular_;
-  std::vector<std::shared_ptr<PrincipledBSDF>> principledBSDF_;
+class MaterialStorage {
+ public:
+  MaterialStorage() = default;
 
-  std::vector<Diffuse::Data> diffuseData_;
-  std::vector<DiffuseSpecular::Data> diffuseSpecularData_;
-  std::vector<PrincipledBSDF::Data> principledBSDFData_;
+  TypedMaterialStorage<Diffuse> diffuse;
+  TypedMaterialStorage<DiffuseSpecular> diffuseSpecular;
+  TypedMaterialStorage<PrincipledBSDF> principledBSDF;
 
-  std::vector<std::uint32_t> diffuseFreeList_;
-  std::vector<std::uint32_t> diffuseSpecularFreeList_;
-  std::vector<std::uint32_t> principledBSDFFreeList_;
+  void update() {
+    diffuse.update();
+    diffuseSpecular.update();
+    principledBSDF.update();
+  }
 
-  std::unordered_map<std::size_t, std::shared_ptr<Material>> materialMap_;
+  auto add(const std::shared_ptr<Material>& mat) -> std::uint32_t {
+    if (!mat) return kItemInvalidId;
 
-  void removeByType(Type type, std::uint32_t index);
+    switch (mat->getType()) {
+      case Type::kDiffuse:
+        return diffuse.add(std::static_pointer_cast<Diffuse>(mat));
+      case Type::kDiffuseSpecular:
+        return diffuseSpecular.add(
+            std::static_pointer_cast<DiffuseSpecular>(mat));
+      case Type::kPrincipledBSDF:
+        return principledBSDF.add(
+            std::static_pointer_cast<PrincipledBSDF>(mat));
+      default:
+        throw std::runtime_error{
+            "Unknown material type passed to MaterialStorage::add"};
+    }
+  }
+
+  void remove(const std::shared_ptr<Material>& mat) {
+    if (!mat || !mat->hasStorageId()) return;
+
+    const std::uint32_t id = mat->getStorageId().value();
+
+    switch (mat->getType()) {
+      case Type::kDiffuse:
+        diffuse.remove(id);
+        break;
+      case Type::kDiffuseSpecular:
+        diffuseSpecular.remove(id);
+        break;
+      case Type::kPrincipledBSDF:
+        principledBSDF.remove(id);
+        break;
+      default:
+        throw std::runtime_error{
+            "Unknown material type passed to MaterialStorage::remove"};
+    }
+  }
 };
 
 };  // namespace vkit::material

@@ -6,7 +6,7 @@
 #include <string_view>
 
 #include "vkit/item/item.hpp"
-#include "vkit/scene/node_attachment.hpp"
+#include "vkit/item/storage_item.hpp"
 #include "vkit/scene/transform.hpp"
 
 namespace vkit::scene {
@@ -27,7 +27,7 @@ struct OrthographicParams {
   float zFar{100.0F};
 };
 
-class Camera : public Item<Camera>, public NodeAttachment {
+class Camera : public Item<Camera>, public StorageItem {
  public:
   explicit Camera(std::string_view name = "Camera") : Item{name} {
     updateProjection();

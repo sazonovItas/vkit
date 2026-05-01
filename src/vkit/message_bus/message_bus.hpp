@@ -46,7 +46,7 @@ class MessageBus {
     return Subscription<MessageType>{std::move(detail)};
   }
 
-  void send_message(MessageType message)
+  void sendMessage(MessageType message)
     requires(Policy == DispatchPolicy::kSyncOnly || Policy == DispatchPolicy::kBoth)
   {
     std::lock_guard<std::mutex> lock{receiversMutex_};
@@ -60,11 +60,11 @@ class MessageBus {
       detail->invoke(message);
     }
     if (has_expired) {
-      prune_expired();
+      pruneExpired();
     }
   }
 
-  void queue_message(MessageType message)
+  void queueMessage(MessageType message)
     requires(Policy == DispatchPolicy::kQueueOnly || Policy == DispatchPolicy::kBoth)
   {
     std::lock_guard<std::mutex> lock{queuedMessagesMutex_};
@@ -74,33 +74,35 @@ class MessageBus {
   void update()
     requires(Policy == DispatchPolicy::kQueueOnly || Policy == DispatchPolicy::kBoth)
   {
-    std::lock_guard<std::mutex> lock_1{receiversMutex_};
     {
-      std::lock_guard<std::mutex> lock_2{messagesMutex_};
-      bool has_expired = false;
-      while (!messages_.empty()) {
-        for (auto& weak_detail : receivers_) {
-          auto detail = weak_detail.lock();
-          if (!detail) {
-            has_expired = true;
-            continue;
-          }
-          detail->invoke(messages_.front());
+      std::lock_guard<std::mutex> lock_q{queuedMessagesMutex_};
+      std::swap(messages_, queuedMessages_);
+    }
+
+    if (messages_.empty()) return;
+
+    std::lock_guard<std::mutex> lock_r{receiversMutex_};
+    bool has_expired = false;
+
+    while (!messages_.empty()) {
+      for (auto& weak_detail : receivers_) {
+        auto detail = weak_detail.lock();
+        if (!detail) {
+          has_expired = true;
+          continue;
         }
-        messages_.pop();
+        detail->invoke(messages_.front());
       }
-      if (has_expired) {
-        prune_expired();
-      }
-      {
-        std::lock_guard<std::mutex> lock_3{queuedMessagesMutex_};
-        messages_ = std::move(queuedMessages_);
-      }
+      messages_.pop();
+    }
+
+    if (has_expired) {
+      pruneExpired();
     }
   }
 
  private:
-  void prune_expired() {
+  void pruneExpired() {
     receivers_.erase(std::remove_if(receivers_.begin(), receivers_.end(),
                                     [](const auto& w) { return w.expired(); }),
                      receivers_.end());
@@ -109,11 +111,10 @@ class MessageBus {
   std::mutex receiversMutex_;
   std::vector<std::weak_ptr<typename Subscription<MessageType>::Detail>> receivers_;
 
-  std::mutex messagesMutex_;
   std::queue<MessageType> messages_;
 
   std::mutex queuedMessagesMutex_;
   std::queue<MessageType> queuedMessages_;
 };
 
-}  // namespace vkit::message_bus
+};  // namespace vkit::message_bus

@@ -35,11 +35,10 @@ auto loadFromRawPixels(vk::Device device, vma::Allocator allocator,
   create_info.useMipmaps = options.useMipmaps;
 
   if (options.isHdr) {
-    create_info.pixelFormat = dataformat::Format::eR32G32B32A32Sfloat;
+    create_info.pixelFormat = vk::Format::eR32G32B32A32Sfloat;
   } else {
-    create_info.pixelFormat = options.isSrgb
-                                  ? dataformat::Format::eR8G8B8A8Srgb
-                                  : dataformat::Format::eR8G8B8A8Unorm;
+    create_info.pixelFormat =
+        options.isSrgb ? vk::Format::eR8G8B8A8Srgb : vk::Format::eR8G8B8A8Unorm;
   }
 
   create_info.levelCount =
@@ -137,4 +136,4 @@ auto loadFromMemory(vk::Device device, vma::Allocator allocator,
   return result;
 }
 
-}  // namespace vkit::texture
+};  // namespace vkit::texture

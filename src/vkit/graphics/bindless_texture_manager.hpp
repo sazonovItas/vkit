@@ -174,4 +174,4 @@ class BindlessTextureManager {
   }
 };
 
-}  // namespace vkit::graphics
+};  // namespace vkit::graphics

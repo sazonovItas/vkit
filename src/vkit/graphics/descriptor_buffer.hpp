@@ -9,15 +9,14 @@ namespace vkit::graphics {
 
 class DescriptorBuffer {
  public:
-  static constexpr std::uint32_t kBufferDefaultSize = 256;
-
   explicit DescriptorBuffer(vma::Allocator allocator,
-                            dataformat::BufferUsageFlags usage)
+                            dataformat::BufferUsageFlags usage,
+                            std::uint32_t bufferSize = 256)
       : allocator_{allocator},
         usage_{usage},
         buffer_{
             allocator,
-            vk::BufferCreateInfo{}.setUsage(usage).setSize(kBufferDefaultSize),
+            vk::BufferCreateInfo{}.setUsage(usage).setSize(bufferSize),
             allocation::kHostWrite,
         } {}
 

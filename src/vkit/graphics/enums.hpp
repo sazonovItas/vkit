@@ -16,8 +16,4 @@ auto toVkImageType(TextureType type) -> vk::ImageType;
 
 auto toVkImageViewType(TextureType type) -> vk::ImageViewType;
 
-enum class SampleCount { k1, k4, k8, k16, k32 };
-
-auto getSampleCountFlagBits(SampleCount sampleCount) -> vk::SampleCountFlagBits;
-
 };  // namespace vkit::graphics

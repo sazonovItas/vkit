@@ -114,22 +114,6 @@ vec3 load_vec3(Attribute a, uvec2 addr) {
     return vec3(0.0);
 }
 
-vec4 load_vec4(Attribute a, uvec2 addr) {
-    switch (a.format)
-    {
-        case ATTR_FORMAT_VEC4_FLOAT32:
-        return Vec4Ref(addr).data;
-
-        case ATTR_FORMAT_VEC4_UINT8:
-        return unpackUnorm4x8(UIntRef(addr).data);
-
-        case ATTR_FORMAT_VEC4_INT8:
-        return unpackSnorm4x8(UIntRef(addr).data);
-    }
-
-    return vec4(0.0);
-}
-
 uvec4 load_uvec4(Attribute a, uvec2 addr) {
     switch (a.format)
     {
@@ -138,10 +122,11 @@ uvec4 load_uvec4(Attribute a, uvec2 addr) {
 
         case ATTR_FORMAT_VEC4_UINT16:
         {
-            uvec2 raw = UVec2Ref(addr).data;
+            uint raw0 = UIntRef(addr).data;
+            uint raw1 = UIntRef(add64(addr, 4u)).data;
             return uvec4(
-                raw.x & 0xFFFFu, raw.x >> 16u,
-                raw.y & 0xFFFFu, raw.y >> 16u
+                raw0 & 0xFFFFu, raw0 >> 16u,
+                raw1 & 0xFFFFu, raw1 >> 16u
             );
         }
 
@@ -156,8 +141,34 @@ uvec4 load_uvec4(Attribute a, uvec2 addr) {
             );
         }
     }
-
     return uvec4(0);
+}
+
+vec4 load_vec4(Attribute a, uvec2 addr) {
+    switch (a.format)
+    {
+        case ATTR_FORMAT_VEC4_FLOAT32:
+        return Vec4Ref(addr).data;
+
+        case ATTR_FORMAT_VEC4_UINT16:
+        {
+            uint raw0 = UIntRef(addr).data;
+            uint raw1 = UIntRef(add64(addr, 4u)).data;
+            return vec4(
+                float(raw0 & 0xFFFFu) / 65535.0,
+                float(raw0 >> 16u) / 65535.0,
+                float(raw1 & 0xFFFFu) / 65535.0,
+                float(raw1 >> 16u) / 65535.0
+            );
+        }
+
+        case ATTR_FORMAT_VEC4_UINT8:
+        return unpackUnorm4x8(UIntRef(addr).data);
+
+        case ATTR_FORMAT_VEC4_INT8:
+        return unpackSnorm4x8(UIntRef(addr).data);
+    }
+    return vec4(0.0);
 }
 
 vec3 getPosition(Primitive prim, uint idx) {
@@ -190,13 +201,13 @@ vec4 getColor(Primitive prim, uint idx) {
     return load_vec4(a, getFetchAddress(a, idx));
 }
 
-uvec4 getJoints(Primitive prim, uint idx) {
-    Attribute a = prim.jointIndices;
+uvec4 getJoints(Primitive prim, uint jointIdx, uint idx) {
+    Attribute a = prim.jointIndices[jointIdx];
     return load_uvec4(a, getFetchAddress(a, idx));
 }
 
-vec4 getWeights(Primitive prim, uint idx) {
-    Attribute a = prim.jointWeights;
+vec4 getWeights(Primitive prim, uint weightIdx, uint idx) {
+    Attribute a = prim.jointWeights[weightIdx];
     return load_vec4(a, getFetchAddress(a, idx));
 }
 

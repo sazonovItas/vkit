@@ -5,6 +5,7 @@
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
+#include "vkit/asset/asset.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/graphics/descriptor_buffer.hpp"
 #include "vkit/graphics/device.hpp"
@@ -15,7 +16,9 @@
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
 #include "vkit/imgui/windows/viewer.hpp"
+#include "vkit/renderer/descriptor_set_layout/primitive.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
+#include "vkit/renderer/pipeline_layout/primitive_debug.hpp"
 #include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
 #include "vkit/renderer/renderer.hpp"
 #include "vkit/renderer/viewport.hpp"
@@ -72,6 +75,12 @@ class App {
       raySpherePipelineLayout_;
   vk::UniquePipeline raySpherePipeline_;
 
+  std::shared_ptr<asset::Asset> loadedAsset_;
+  std::unique_ptr<renderer::dsl::PrimitiveSetLayout> primitiveSetLayout_;
+  std::unique_ptr<renderer::pl::PrimitiveMaterialPipelineLayout>
+      primitivePipelineLayout_;
+  vk::UniquePipeline primitivePipeline_;
+
   vk::UniqueDescriptorPool descriptorPool_;
 
   struct Frame {
@@ -83,9 +92,12 @@ class App {
 
     vk::DescriptorSet sceneDescriptorSet;
     vk::DescriptorSet materialDescriptorSet;
+    vk::DescriptorSet primitiveDescriptorSet;
 
     std::unique_ptr<graphics::DescriptorBuffer> sceneCameraBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> primitiveSSBO;
+    std::unique_ptr<graphics::DescriptorBuffer> jointSSBO;
   };
 
   std::array<Frame, kMaxFramesInFlight> frames_;

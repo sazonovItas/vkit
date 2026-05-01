@@ -1,20 +1,19 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <memory>
 #include <span>
 #include <string_view>
 #include <vector>
 
 #include "vkit/item/item.hpp"
-#include "vkit/scene/node.hpp"
-#include "vkit/scene/node_attachment.hpp"
-#include "vkit/scene/trs_transform.hpp"
+#include "vkit/item/storage_item.hpp"
 
 namespace vkit::scene {
 
 class Node;
 
-class Skin : public Item<Skin>, public NodeAttachment {
+class Skin : public Item<Skin>, public StorageItem {
  public:
   explicit Skin(std::string_view name = "Skin") : Item{name} {}
 
@@ -22,26 +21,7 @@ class Skin : public Item<Skin>, public NodeAttachment {
   std::vector<std::shared_ptr<Node>> joints;
   std::vector<glm::mat4> inverseBindMatrices;
 
-  std::span<glm::mat4> jointMatrices;
-  std::uint32_t dataOffset{0};
-
-  void setJointData(std::span<glm::mat4> span, std::uint32_t offset) {
-    jointMatrices = span;
-    dataOffset = offset;
-  }
-
-  void update(const TrsTransform& meshTransform) {
-    if (jointMatrices.empty() || joints.size() != jointMatrices.size()) {
-      return;
-    }
-
-    for (std::size_t i = 0; i < joints.size(); ++i) {
-      auto joint_global = joints[i]->getGlobalTransform();
-
-      jointMatrices[i] = meshTransform.getInverseMatrix() *
-                         joint_global.getMatrix() * inverseBindMatrices[i];
-    }
-  }
+  void computeJointMatrices(std::span<glm::mat4> outMatrices) const;
 };
 
 };  // namespace vkit::scene

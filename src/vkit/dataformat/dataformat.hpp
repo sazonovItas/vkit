@@ -2,12 +2,10 @@
 
 namespace vkit::dataformat {
 
-using Format = vk::Format;
+[[nodiscard]] auto getComponentCount(vk::Format format) -> std::size_t;
 
-[[nodiscard]] auto getComponentCount(Format format) -> std::size_t;
+[[nodiscard]] auto getComponentByteSize(vk::Format format) -> std::size_t;
 
-[[nodiscard]] auto getComponentByteSize(Format format) -> std::size_t;
-
-[[nodiscard]] auto getPixelByteSize(Format format) -> std::size_t;
+[[nodiscard]] auto getPixelByteSize(vk::Format format) -> std::size_t;
 
 };  // namespace vkit::dataformat

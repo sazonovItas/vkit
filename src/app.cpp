@@ -2,8 +2,12 @@
 
 #include <imgui_internal.h>
 
+#include <algorithm>
+#include <filesystem>
+#include <print>
 #include <tuple>
 
+#include "vkit/asset/gltf/importer.hpp"
 #include "vkit/asset/shaders.hpp"
 #include "vkit/asset/util.hpp"
 #include "vkit/graphics/device.hpp"
@@ -15,6 +19,7 @@
 #include "vkit/renderer/viewport.hpp"
 
 namespace vkit {
+using glm::quat;
 
 namespace {
 
@@ -45,6 +50,73 @@ class DrawRaySphereCommand final : public graphics::Command {
   vk::PipelineLayout layout_;
   vk::DescriptorSet set_;
   glm::mat4 model_;
+};
+
+class DrawAssetCommand final : public graphics::Command {
+ public:
+  DrawAssetCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+                   vk::DescriptorSet sceneSet, vk::DescriptorSet primSet,
+                   const asset::Asset& asset)
+      : pipeline_{pipeline},
+        layout_{layout},
+        sceneSet_{sceneSet},
+        primSet_{primSet},
+        asset_{asset} {}
+
+  void record(vk::CommandBuffer cb) const override {
+    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+
+    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, primSet_};
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
+                          nullptr);
+
+    if (asset_.scenes.empty()) return;
+    auto active_scene = asset_.getActiveScene();
+    if (!active_scene) return;
+
+    for (std::uint32_t root_id : active_scene->rootNodes) {
+      if (auto node = asset_.nodes.get(root_id)) {
+        drawNode(cb, node.get());
+      }
+    }
+  }
+
+ private:
+  void drawNode(vk::CommandBuffer cb, const scene::Node* node) const {
+    if (node->mesh) {
+      for (const auto& prim : node->mesh->getPrimitives()) {
+        if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
+          continue;
+
+        cb.bindIndexBuffer(prim->getIndexBuffer()->buffer,
+                           prim->getIndexBufferOffset(), prim->getIndexType());
+
+        renderer::pl::PrimitiveMaterialPipelineLayout::PushConstants pcs{
+            .model = node->getGlobalTransform().getMatrix(),
+            .primIndex = prim->getStorageId().value(),
+            .skinOffset = asset_.skins.getOffsetForNode(node),
+            .enableSkinning = (node->skin != nullptr) ? 1U : 0U,
+        };
+
+        cb.pushConstants(layout_,
+                         vk::ShaderStageFlagBits::eVertex |
+                             vk::ShaderStageFlagBits::eFragment,
+                         0, sizeof(pcs), &pcs);
+
+        cb.drawIndexed(prim->attrs.index.info.count, 1, 0, 0, 0);
+      }
+    }
+
+    for (const auto& child : node->getChildren()) {
+      drawNode(cb, child.get());
+    }
+  }
+
+  vk::Pipeline pipeline_;
+  vk::PipelineLayout layout_;
+  vk::DescriptorSet sceneSet_;
+  vk::DescriptorSet primSet_;
+  const asset::Asset& asset_;
 };
 
 struct alignas(16) CameraUBO {
@@ -221,10 +293,27 @@ void App::initViewports() {
 void App::initDebugRendering() {
   vk::Device device = gfxDevice_->get();
 
+  std::filesystem::path asset_path = "assets/models/exosuit/scene.gltf";
+
+  asset::gltf::Importer importer(*gfxDevice_);
+  if (!std::filesystem::exists(asset_path)) {
+    throw std::runtime_error{"Asset file isn't existing"};
+  }
+
+  loadedAsset_ = importer.load(asset_path);
+  loadedAsset_->update();
+
   sceneSetLayout_ = std::make_unique<renderer::dsl::SceneSetLayout>(device);
+  primitiveSetLayout_ =
+      std::make_unique<renderer::dsl::PrimitiveSetLayout>(device);
+
   raySpherePipelineLayout_ =
       std::make_unique<renderer::pl::RaySphereDebugPipelineLayout>(
           device, std::forward_as_tuple(*sceneSetLayout_));
+  primitivePipelineLayout_ =
+      std::make_unique<renderer::pl::PrimitiveMaterialPipelineLayout>(
+          device,
+          std::forward_as_tuple(*sceneSetLayout_, *primitiveSetLayout_));
 
   auto vert_module = graphics::SpirVShaderModule{
       device, asset::assetPath(asset::kRaySphereVertShaderPath)};
@@ -246,12 +335,34 @@ void App::initDebugRendering() {
 
   raySpherePipeline_ = builder.build(device);
 
-  vk::DescriptorPoolSize pool_size{vk::DescriptorType::eUniformBuffer,
-                                   kMaxFramesInFlight * 2};
+  auto prim_vert = graphics::SpirVShaderModule{
+      device, asset::assetPath(asset::kPrimitiveDebugVertShaderPath)};
+  auto prim_frag = graphics::SpirVShaderModule{
+      device, asset::assetPath(asset::kPrimitiveDebugFragShaderPath)};
+
+  auto prim_builder = graphics::pipeline::GraphicsPipelineBuilder{
+      primitivePipelineLayout_->get()};
+  prim_builder
+      .addShaderStage(
+          prim_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          prim_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::True, vk::True)
+      .setCullMode(vk::CullModeFlagBits::eBack)
+      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+
+  primitivePipeline_ = prim_builder.build(device);
+
+  vk::DescriptorPoolSize pool_sizes[] = {
+      {vk::DescriptorType::eUniformBuffer, kMaxFramesInFlight * 2},
+      {vk::DescriptorType::eStorageBuffer, kMaxFramesInFlight * 2}};
+
   vk::DescriptorPoolCreateInfo pool_info{};
   pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
-      .setMaxSets(kMaxFramesInFlight * 2)
-      .setPoolSizes(pool_size);
+      .setMaxSets(kMaxFramesInFlight * 4)
+      .setPoolSizes(pool_sizes);
   descriptorPool_ = device.createDescriptorPoolUnique(pool_info);
 
   for (auto& frame : frames_) {
@@ -263,13 +374,29 @@ void App::initDebugRendering() {
         gfxDevice_->allocator, static_cast<dataformat::BufferUsageFlags>(
                                    vk::BufferUsageFlagBits::eUniformBuffer));
 
-    vk::DescriptorSetAllocateInfo alloc_info{*descriptorPool_, 1,
-                                             &sceneSetLayout_->get()};
+    frame.primitiveSSBO = std::make_unique<graphics::DescriptorBuffer>(
+        gfxDevice_->allocator,
+        static_cast<dataformat::BufferUsageFlags>(
+            vk::BufferUsageFlagBits::eStorageBuffer),
+        sizeof(primitive::PrimitiveData) *
+            std::max<std::size_t>(1000,
+                                  loadedAsset_->primitives.getItems().size()));
 
-    frame.sceneDescriptorSet = device.allocateDescriptorSets(alloc_info)[0];
-    frame.materialDescriptorSet = device.allocateDescriptorSets(alloc_info)[0];
+    frame.jointSSBO = std::make_unique<graphics::DescriptorBuffer>(
+        gfxDevice_->allocator,
+        static_cast<dataformat::BufferUsageFlags>(
+            vk::BufferUsageFlagBits::eStorageBuffer),
+        sizeof(glm::mat4) * std::max<std::size_t>(1000, 1000));
+
+    vk::DescriptorSetAllocateInfo cam_alloc_info{*descriptorPool_, 1,
+                                                 &sceneSetLayout_->get()};
+    frame.sceneDescriptorSet = device.allocateDescriptorSets(cam_alloc_info)[0];
+    frame.materialDescriptorSet =
+        device.allocateDescriptorSets(cam_alloc_info)[0];
 
     auto scene_buffer_info = frame.sceneCameraBuffer->descriptorInfo();
+    auto mat_buffer_info = frame.materialCameraBuffer->descriptorInfo();
+
     vk::WriteDescriptorSet scene_write{
         frame.sceneDescriptorSet,
         renderer::dsl::SceneSetLayout::kCameraBinding,
@@ -280,7 +407,6 @@ void App::initDebugRendering() {
         &scene_buffer_info,
         nullptr};
 
-    auto mat_buffer_info = frame.materialCameraBuffer->descriptorInfo();
     vk::WriteDescriptorSet mat_write{
         frame.materialDescriptorSet,
         renderer::dsl::SceneSetLayout::kCameraBinding,
@@ -291,7 +417,36 @@ void App::initDebugRendering() {
         &mat_buffer_info,
         nullptr};
 
-    device.updateDescriptorSets({scene_write, mat_write}, nullptr);
+    vk::DescriptorSetAllocateInfo prim_alloc_info{*descriptorPool_, 1,
+                                                  &primitiveSetLayout_->get()};
+    frame.primitiveDescriptorSet =
+        device.allocateDescriptorSets(prim_alloc_info)[0];
+
+    auto prim_info = frame.primitiveSSBO->descriptorInfo();
+    auto joint_info = frame.jointSSBO->descriptorInfo();
+
+    vk::WriteDescriptorSet prim_write{
+        frame.primitiveDescriptorSet,
+        renderer::dsl::PrimitiveSetLayout::kPrimitiveBinding,
+        0,
+        1,
+        vk::DescriptorType::eStorageBuffer,
+        nullptr,
+        &prim_info,
+        nullptr};
+
+    vk::WriteDescriptorSet joint_write{
+        frame.primitiveDescriptorSet,
+        renderer::dsl::PrimitiveSetLayout::kJointBinding,
+        0,
+        1,
+        vk::DescriptorType::eStorageBuffer,
+        nullptr,
+        &joint_info,
+        nullptr};
+
+    device.updateDescriptorSets(
+        {scene_write, mat_write, prim_write, joint_write}, nullptr);
   }
 }
 
@@ -364,6 +519,44 @@ void App::mainLoop() {
     sceneController_.update(*sceneCamera_);
     materialController_.update(*materialCamera_);
 
+    // static float time = 0.0F;
+    // time += dt;
+
+    // for (const auto& skin : loadedAsset_->skins.getItems()) {
+    //   if (!skin) continue;
+
+    //   std::size_t joints_to_wiggle =
+    //       std::min<std::size_t>(3, skin->joints.size());
+
+    //   for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
+    //     if (auto joint = skin->joints[i]) {
+    //       auto local = joint->getLocalTransform();
+
+    //       float angle = std::sin(time * 2.0F) * 0.5F;
+    //       glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F,
+    //       0.0F));
+
+    //       local.setRotation(spin);
+    //       joint->setLocalTransform(local);
+    //     }
+    //   }
+    // }
+
+    loadedAsset_->update();
+
+    auto prim_data = loadedAsset_->primitives.getData();
+    if (!prim_data.empty()) {
+      frame.primitiveSSBO->writeAt(std::as_bytes(prim_data));
+    }
+
+    auto joint_data = loadedAsset_->skins.getData();
+    if (!joint_data.empty()) {
+      std::vector<glm::mat4> identity_joints(joint_data.size(),
+                                             glm::mat4(1.0F));
+      frame.jointSSBO->writeAt(std::as_bytes(std::span{identity_joints}));
+      // frame.jointSSBO->writeAt(std::as_bytes(joint_data));
+    }
+
     CameraUBO scene_ubo{
         .view = sceneCamera_->getViewMatrix(),
         .proj = sceneCamera_->getProjectionMatrix(),
@@ -395,9 +588,10 @@ void App::mainLoop() {
     task.add<renderer::rp::BeginViewportPass>(
             frame.sceneViewport, 0, 1,
             std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
-        .add<DrawRaySphereCommand>(*raySpherePipeline_,
-                                   raySpherePipelineLayout_->get(),
-                                   frame.sceneDescriptorSet, glm::mat4(1.0F))
+        .add<DrawAssetCommand>(*primitivePipeline_,
+                               primitivePipelineLayout_->get(),
+                               frame.sceneDescriptorSet,
+                               frame.primitiveDescriptorSet, *loadedAsset_)
         .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
 
     task.add<renderer::rp::BeginViewportPass>(

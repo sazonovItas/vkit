@@ -5,6 +5,7 @@
 
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/util.hpp"
+#include "vkit/material/storage.hpp"
 #include "vkit/texture/loader.hpp"
 #include "vkit/texture/storage.hpp"
 #include "vkit/texture/texture.hpp"
@@ -14,8 +15,11 @@ namespace vkit::asset {
 class AssetManager {
  public:
   AssetManager(const graphics::GfxDevice& gfxDevice,
-               texture::Storage& textureStorage)
-      : gfxDevice_{gfxDevice}, textureStorage_{textureStorage} {}
+               std::shared_ptr<texture::TextureStorage> textureStorage,
+               std::shared_ptr<material::MaterialStorage> materialStorage)
+      : gfxDevice_{gfxDevice},
+        textureStorage_{std::move(textureStorage)},
+        materialStorage_{std::move(materialStorage)} {}
 
   AssetManager(const AssetManager&) = delete;
   auto operator=(const AssetManager&) -> AssetManager& = delete;
@@ -44,14 +48,26 @@ class AssetManager {
     auto logical_texture =
         std::make_shared<texture::Texture>(name, loaded.texture);
 
-    textureStorage_.add(logical_texture);
+    if (textureStorage_) {
+      textureStorage_->add(logical_texture);
+    }
 
     return logical_texture;
   }
 
+  [[nodiscard]] auto getTextureStorage() const
+      -> std::shared_ptr<texture::TextureStorage> {
+    return textureStorage_;
+  }
+  [[nodiscard]] auto getMaterialStorage() const
+      -> std::shared_ptr<material::MaterialStorage> {
+    return materialStorage_;
+  }
+
  private:
   const graphics::GfxDevice& gfxDevice_;
-  texture::Storage& textureStorage_;
+  std::shared_ptr<texture::TextureStorage> textureStorage_;
+  std::shared_ptr<material::MaterialStorage> materialStorage_;
 };
 
 }  // namespace vkit::asset

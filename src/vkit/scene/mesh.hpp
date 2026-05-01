@@ -6,12 +6,12 @@
 #include <vector>
 
 #include "vkit/item/item.hpp"
+#include "vkit/item/storage_item.hpp"
 #include "vkit/primitive/primitive.hpp"
-#include "vkit/scene/node_attachment.hpp"
 
 namespace vkit::scene {
 
-class Mesh : public Item<Mesh>, public NodeAttachment {
+class Mesh : public Item<Mesh>, public StorageItem {
  public:
   explicit Mesh(
       std::string_view name = "Mesh",

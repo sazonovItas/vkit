@@ -1,10 +1,12 @@
 #include "vkit/primitive/primitive.hpp"
 
+#include <ranges>
+
 namespace vkit::primitive {
 
 Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
                      const PrimitiveAttributes& attrs)
-    : buffers_{buffers}, attrs{createDeviceAttributes(attrs)} {}
+    : attrs{createDeviceAttributes(buffers, attrs)}, buffers_{buffers} {}
 
 void Primitive::attach(const std::shared_ptr<Attachment>& attachment) {
   if (attachment) {
@@ -15,41 +17,36 @@ void Primitive::attach(const std::shared_ptr<Attachment>& attachment) {
 
 void Primitive::detach(Attachment* attachment) {
   std::erase_if(attachments_,
-                [attachment](const std::shared_ptr<Attachment>& a) {
-                  if (a.get() == attachment) {
-                    a->setPrimitive(nullptr);
-                    return true;
-                  }
-                  return false;
-                });
+                [attachment](const auto& a) { return a.get() == attachment; });
 }
 
-auto Primitive::createDeviceAttributes(const PrimitiveAttributes& attrs) const
-    -> DevicePrimitiveAttributes {
-  DevicePrimitiveAttributes out{};
+auto Primitive::createDeviceAttributes(
+    const std::shared_ptr<DeviceBuffers>& buffers,
+    const PrimitiveAttributes& attrs) -> DevicePrimitiveAttributes {
+  DevicePrimitiveAttributes device_attrs{};
 
-  auto convert = [&](const Attribute& src) -> DeviceAttribute {
-    if (!src.isValid()) return {};
-    return DeviceAttribute{
-        src,
-        buffers_->getBufferAddress(src.bufferViewIdx),
-    };
+  auto resolve = [&buffers](const Attribute& attr) -> DeviceAttribute {
+    if (!attr.isValid()) {
+      return DeviceAttribute{};
+    }
+    return DeviceAttribute{attr, buffers->getBufferAddress(attr.bufferViewIdx)};
   };
 
-  out.index = convert(attrs.index);
-  out.position = convert(attrs.position);
-  out.color = convert(attrs.color);
-  out.normal = convert(attrs.normal);
-  out.tangent = convert(attrs.tangent);
-  out.bitangent = convert(attrs.bitangent);
-  out.jointIndices = convert(attrs.jointIndices);
-  out.jointWeights = convert(attrs.jointWeights);
+  device_attrs.index = resolve(attrs.index);
+  device_attrs.position = resolve(attrs.position);
+  device_attrs.color = resolve(attrs.color);
+  device_attrs.normal = resolve(attrs.normal);
+  device_attrs.tangent = resolve(attrs.tangent);
+  device_attrs.bitangent = resolve(attrs.bitangent);
 
-  for (int i = 0; i < 4; ++i) {
-    out.texcoords[i] = convert(attrs.texcoords[i]);
-  }
+  std::ranges::transform(attrs.texcoords, device_attrs.texcoords.begin(),
+                         resolve);
+  std::ranges::transform(attrs.jointIndices, device_attrs.jointIndices.begin(),
+                         resolve);
+  std::ranges::transform(attrs.jointWeights, device_attrs.jointWeights.begin(),
+                         resolve);
 
-  return out;
+  return device_attrs;
 }
 
-}  // namespace vkit::primitive
+};  // namespace vkit::primitive

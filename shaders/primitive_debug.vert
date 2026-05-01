@@ -15,11 +15,11 @@ layout(set = 0, binding = 0) uniform Camera {
     vec3 position;
 } camera;
 
-layout(std430, set = 3, binding = 0) readonly buffer PrimitiveBlock {
+layout(std430, set = 1, binding = 0) readonly buffer PrimitiveBlock {
     Primitive primitives[];
 } primData;
 
-layout(std430, set = 3, binding = 1) readonly buffer JointBlock {
+layout(std430, set = 1, binding = 1) readonly buffer JointBlock {
     mat4 joints[];
 } jointData;
 
@@ -28,8 +28,6 @@ layout(push_constant) uniform PushConstants {
     uint primIndex;
     uint skinOffset;
     uint enableSkinning;
-    uint materialType;
-    uint materialIndex;
 } pcs;
 
 void main() {

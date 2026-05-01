@@ -73,7 +73,7 @@ constexpr auto kColorRange = [] {
   return r;
 }();
 
-}  // namespace
+};  // namespace
 
 namespace vkit::graphics {
 
@@ -107,7 +107,7 @@ auto Swapchain::recreate(const glm::ivec2 size) -> bool {
 
 auto Swapchain::getExtent() const -> vk::Extent2D { return ci_.imageExtent; }
 
-auto Swapchain::getFormat() const -> dataformat::Format {
+auto Swapchain::getFormat() const -> vk::Format {
   return ci_.imageFormat;
 }
 

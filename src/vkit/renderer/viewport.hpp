@@ -106,7 +106,6 @@ class Viewport {
 
   Viewport() = default;
 
-  // --- NEW: Construct directly from the Info struct ---
   explicit Viewport(const ViewportInfo& info) {
     for (const auto& target : info.colorTargets) {
       colorTargets.emplace_back(target.format, target.usage, target.aspectFlags,
@@ -131,4 +130,4 @@ class Viewport {
   }
 };
 
-}  // namespace vkit::renderer
+};  // namespace vkit::renderer

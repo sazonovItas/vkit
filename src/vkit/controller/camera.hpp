@@ -16,7 +16,7 @@ class OrbitalCameraController {
   float yaw{-glm::half_pi<float>()};
   float pitch{0.0F};
 
-  float zoomSpeed{1.5F};
+  float zoomSpeed{0.1F};
   float mouseSensitivity{0.005F};
 
   void setZoomSpeed(float speed) { zoomSpeed = speed; }

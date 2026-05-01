@@ -46,10 +46,7 @@ void main() {
     vec3 hitPos = ro + rd * t;
     vec3 normal = normalize(hitPos - center);
 
-    // vec3 lightDir = -rd;
-    vec3 lightDir = LIGHT_DIR;
-
-    float diff = max(dot(normal, lightDir), 0.0);
+    float diff = max(dot(normal, LIGHT_DIR), 0.0);
 
     vec3 albedo = vec3(0.2, 0.5, 0.8);
     vec3 ambient = albedo * 0.1;

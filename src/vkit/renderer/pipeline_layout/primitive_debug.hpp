@@ -5,8 +5,6 @@
 #include <tuple>
 
 #include "vkit/graphics/pipeline_layout.hpp"
-#include "vkit/renderer/descriptor_set_layout/bindless.hpp"
-#include "vkit/renderer/descriptor_set_layout/material.hpp"
 #include "vkit/renderer/descriptor_set_layout/primitive.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
 
@@ -18,8 +16,6 @@ struct PrimitiveMaterialPipelineLayout final : graphics::PipelineLayout {
     std::uint32_t primIndex;
     std::uint32_t skinOffset;
     std::uint32_t enableSkinning;
-    std::uint32_t materialType;
-    std::uint32_t materialIndex;
   };
 
   static constexpr auto kPushConstantRange = vk::PushConstantRange{
@@ -29,9 +25,7 @@ struct PrimitiveMaterialPipelineLayout final : graphics::PipelineLayout {
   };
 
   using SetLayouts =
-      std::tuple<const dsl::SceneSetLayout&,
-                 const dsl::BindlessTextureSetLayout&,
-                 const dsl::MaterialSetLayout&, const dsl::PrimitiveSetLayout&>;
+      std::tuple<const dsl::SceneSetLayout&, const dsl::PrimitiveSetLayout&>;
 
   explicit PrimitiveMaterialPipelineLayout(vk::Device device,
                                            SetLayouts setLayouts)
@@ -40,11 +34,9 @@ struct PrimitiveMaterialPipelineLayout final : graphics::PipelineLayout {
  private:
   static auto createPipelineCreateInfo(SetLayouts setLayouts)
       -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 4>{
+    const auto set_layouts = std::array<vk::DescriptorSetLayout, 2>{
         *std::get<0>(setLayouts),
         *std::get<1>(setLayouts),
-        *std::get<2>(setLayouts),
-        *std::get<3>(setLayouts),
     };
 
     return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};

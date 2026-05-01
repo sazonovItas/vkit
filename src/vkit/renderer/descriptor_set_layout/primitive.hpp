@@ -14,8 +14,7 @@ struct PrimitiveSetLayout final : public graphics::DescriptorSetLayout {
               kPrimitiveBinding,
               vk::DescriptorType::eStorageBuffer,
               1,
-              vk::ShaderStageFlagBits::eVertex |
-                  vk::ShaderStageFlagBits::eFragment,
+              vk::ShaderStageFlagBits::eVertex,
           },
           vk::DescriptorSetLayoutBinding{
               kJointBinding,

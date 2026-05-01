@@ -1,60 +1,71 @@
 #pragma once
 
-#include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <memory>
+#include <mutex>
 #include <span>
+#include <unordered_map>
 #include <vector>
 
+#include "vkit/item/storage.hpp"
+#include "vkit/scene/node.hpp"
 #include "vkit/scene/skin.hpp"
 
 namespace vkit::scene {
 
-class SkinStorage {
+class SkinStorage : public Storage<Skin> {
  public:
   SkinStorage() = default;
 
-  std::vector<std::shared_ptr<Skin>> skins;
+  void update(std::span<const std::shared_ptr<Node>> activeNodes) {
+    std::lock_guard<std::mutex> lock{mutex_};
 
-  void add(const std::shared_ptr<Skin>& skin) {
-    skins.push_back(skin);
-    reallocateAndDistributeSpans();
-  }
+    nodeOffsets_.clear();
 
-  void remove(const std::shared_ptr<Skin>& skin) {
-    std::erase(skins, skin);
-    reallocateAndDistributeSpans();
-  }
-
-  [[nodiscard]] auto getData() const -> std::span<const std::byte> {
-    return std::as_bytes(std::span{data_});
-  }
-
- private:
-  void reallocateAndDistributeSpans() {
     std::size_t total_matrices = 0;
-    for (const auto& skin : skins) {
-      total_matrices += skin->joints.size();
+    for (const auto& node : activeNodes) {
+      if (node && node->skin) {
+        total_matrices += node->skin->joints.size();
+      }
     }
 
     data_.resize(total_matrices);
 
     std::uint32_t current_offset = 0;
-    for (const auto& skin : skins) {
-      std::size_t count = skin->joints.size();
+    for (const auto& node : activeNodes) {
+      if (node && node->skin) {
+        std::size_t count = node->skin->joints.size();
 
-      if (count > 0) {
-        std::span<glm::mat4> skin_span{data_.data() + current_offset, count};
+        if (count > 0) {
+          nodeOffsets_[node.get()] = current_offset;
 
-        skin->setJointData(skin_span, current_offset);
+          std::span<glm::mat4> skin_span{data_.data() + current_offset, count};
+          node->skin->computeJointMatrices(skin_span);
 
-        current_offset += count;
+          current_offset += count;
+        }
       }
     }
   }
 
+  [[nodiscard]] auto getData() const -> std::span<const glm::mat4> {
+    std::lock_guard<std::mutex> lock{mutex_};
+    return data_;
+  }
+
+  [[nodiscard]] auto getOffsetForNode(const Node* node) const -> std::uint32_t {
+    std::lock_guard<std::mutex> lock{mutex_};
+    if (auto it = nodeOffsets_.find(node); it != nodeOffsets_.end()) {
+      return it->second;
+    }
+    return 0;
+  }
+
+ private:
   std::vector<glm::mat4> data_;
+
+  std::unordered_map<const Node*, std::uint32_t> nodeOffsets_;
 };
 
 };  // namespace vkit::scene

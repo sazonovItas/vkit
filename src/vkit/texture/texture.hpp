@@ -8,10 +8,11 @@
 
 #include "vkit/graphics/texture.hpp"
 #include "vkit/item/item.hpp"
+#include "vkit/item/storage_item.hpp"
 
 namespace vkit::texture {
 
-class Texture : public Item<Texture> {
+class Texture : public Item<Texture>, public StorageItem {
  public:
   explicit Texture(std::string_view name,
                    const std::shared_ptr<vkit::graphics::Texture>& texture);

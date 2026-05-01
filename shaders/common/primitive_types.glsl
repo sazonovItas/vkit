@@ -16,8 +16,8 @@ struct Primitive {
     Attribute texcoords[4];
     Attribute tangent;
     Attribute bitangent;
-    Attribute jointIndices;
-    Attribute jointWeights;
+    Attribute jointIndices[2];
+    Attribute jointWeights[2];
 };
 
 bool isAttributeExists(Attribute attr) {

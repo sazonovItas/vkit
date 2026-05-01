@@ -22,7 +22,7 @@ using BufferUsageFlags = vk::Flags<vk::BufferUsageFlagBits>;
 
 [[nodiscard]] auto getBufferUsage(AttributeUsage usage) -> BufferUsageFlags;
 
-enum class AttributeFormat : uint32_t {
+enum class AttributeFormat : std::uint32_t {
   kInvalid = 0,
 
   // --- Float32 (4 bytes) ---
@@ -83,5 +83,7 @@ enum class AttributeFormat : uint32_t {
 [[nodiscard]] auto getComponentCount(AttributeFormat format) -> std::size_t;
 
 [[nodiscard]] auto getComponentByteSize(AttributeFormat format) -> std::size_t;
+
+[[nodiscard]] auto getIndexType(AttributeFormat format) -> vk::IndexType;
 
 };  // namespace vkit::dataformat
