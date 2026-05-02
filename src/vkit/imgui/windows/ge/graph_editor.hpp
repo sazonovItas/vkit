@@ -1,14 +1,12 @@
 #pragma once
 
-#include <imgui.h>
-#include <imgui_node_editor.h>
+#include <imnodes.h>
 
-#include <memory>
-#include <vector>
+#include <string_view>
 
+#include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/imgui_window.hpp"
 #include "vkit/imgui/windows/ge/node_ui.hpp"
-#include "vkit/workflow/workflow.hpp"
 
 namespace vkit::imgui::windows::ge {
 
@@ -19,17 +17,17 @@ class GraphEditorWindow : public ImguiWindow {
 
   void onDraw() override;
 
-  void setWorkflow(workflow::Workflow* wf) { workflow_ = wf; }
-  auto getRegistry() -> NodeUIRegistry& { return registry_; }
+  void setController(controller::WorkflowController* controller) {
+    controller_ = controller;
+  }
 
-  [[nodiscard]] auto getSelectedNode() const -> workflow::WorkflowNode*;
+  controller::WorkflowController* getController() const { return controller_; }
+
+  NodeUIRegistry& getRegistry() { return registry_; }
 
  private:
-  workflow::Workflow* workflow_{nullptr};
-  ax::NodeEditor::EditorContext* editorContext_{nullptr};
-
+  controller::WorkflowController* controller_{nullptr};
   NodeUIRegistry registry_;
-  std::vector<ax::NodeEditor::NodeId> selectedNodes_;
 };
 
 };  // namespace vkit::imgui::windows::ge

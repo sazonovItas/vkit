@@ -1,0 +1,114 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 1, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    uint  noiseType;
+    uint  worleyMode;
+    float scale;
+    float offsetX;
+    float offsetY;
+    float seed;
+    int   octaves;
+    float persistence;
+    float lacunarity;
+    float worleyJitter;
+} pc;
+
+float hash11(float p) {
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+}
+
+float hash21(vec2 p) {
+    p = fract(p * vec2(0.1031, 0.1030));
+    p += dot(p, p.yx + 33.33);
+    return fract((p.x + p.y) * p.x);
+}
+
+vec2 hash22(vec2 p) {
+    p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return fract(sin(p) * 43758.5453);
+}
+
+float gradientNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+
+    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+    vec2 ga = normalize(hash22(i + vec2(0.0, 0.0) + pc.seed) * 2.0 - 1.0);
+    vec2 gb = normalize(hash22(i + vec2(1.0, 0.0) + pc.seed) * 2.0 - 1.0);
+    vec2 gc = normalize(hash22(i + vec2(0.0, 1.0) + pc.seed) * 2.0 - 1.0);
+    vec2 gd = normalize(hash22(i + vec2(1.0, 1.0) + pc.seed) * 2.0 - 1.0);
+
+    float va = dot(ga, f - vec2(0.0, 0.0));
+    float vb = dot(gb, f - vec2(1.0, 0.0));
+    float vc = dot(gc, f - vec2(0.0, 1.0));
+    float vd = dot(gd, f - vec2(1.0, 1.0));
+
+    return 0.5 + mix(mix(va, vb, u.x), mix(vc, vd, u.x), u.y);
+}
+
+float fbm(vec2 p) {
+    float value = 0.0;
+    float amplitude = 0.5;
+    float frequency = 1.0;
+    float norm = 0.0;
+    for (int i = 0; i < pc.octaves; ++i) {
+        value    += (gradientNoise(p * frequency) * 2.0 - 1.0) * amplitude;
+        norm     += amplitude;
+        amplitude *= pc.persistence;
+        frequency *= pc.lacunarity;
+    }
+    return clamp(value / norm * 0.5 + 0.5, 0.0, 1.0);
+}
+
+float worleyNoise(vec2 p) {
+    vec2 cell = floor(p);
+    float f1 = 1e9;
+    float f2 = 1e9;
+
+    for (int dy = -2; dy <= 2; ++dy) {
+        for (int dx = -2; dx <= 2; ++dx) {
+            vec2 nc    = cell + vec2(float(dx), float(dy));
+            vec2 jit   = hash22(nc + pc.seed) * pc.worleyJitter;
+            vec2 point = nc + 0.5 + (jit - 0.5) * pc.worleyJitter;
+            float d    = distance(p, point);
+            if (d < f1) { f2 = f1; f1 = d; }
+            else if (d < f2) { f2 = d; }
+        }
+    }
+
+    float v;
+    if (pc.worleyMode == 0u) v = f1;
+    else if (pc.worleyMode == 1u) v = f2;
+    else v = f2 - f1;
+
+    return clamp(v, 0.0, 1.0);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(float(pc.width), float(pc.height));
+    vec2 p  = uv * pc.scale + vec2(pc.offsetX, pc.offsetY);
+
+    float n;
+    if      (pc.noiseType == 0u) n = gradientNoise(p);
+    else if (pc.noiseType == 1u) n = fbm(p);
+    else                         n = worleyNoise(p);
+
+    vec4 col = vec4(n, n, n, 1.0);
+
+    imageStore(outImageF32,   coord, col);
+    imageStore(outImageUnorm, coord, col);
+}

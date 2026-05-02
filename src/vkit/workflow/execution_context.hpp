@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vkit/core/events/compute.hpp"
+#include "vkit/core/events/noise.hpp"
 #include "vkit/core/events/texture.hpp"
 
 namespace vkit::workflow {
@@ -8,14 +8,14 @@ namespace vkit::workflow {
 struct ExecutionContext {
   core::events::TextureLoadBus texLoadBus;
   core::events::TextureReadyBus texReadyBus;
-  core::events::ComputeJobBus computeJobBus;
-  core::events::ComputeResultBus computeResultBus;
+  core::events::NoiseJobBus noiseJobBus;
+  core::events::NoiseResultBus noiseResultBus;
 
   void update() {
     texLoadBus.update();
-    computeJobBus.update();
+    noiseJobBus.update();
     texReadyBus.update();
-    computeResultBus.update();
+    noiseResultBus.update();
   }
 };
 

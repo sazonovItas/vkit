@@ -21,6 +21,8 @@ glslc:
 	glslc ./shaders/ibl/diffuse_ibl.comp -o ./assets/shaders/ibl/diffuse_ibl.comp
 	glslc ./shaders/ibl/specular_ibl.comp -o ./assets/shaders/ibl/specular_ibl.comp
 
+	glslc ./shaders/procedural/noise.comp -o ./assets/shaders/procedural/noise.comp
+
 .PHONY: cmake
 cmake:
 	cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++

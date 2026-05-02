@@ -8,16 +8,22 @@ namespace vkit::workflow {
 
 class WorkflowNode : public graph::Node {
  public:
-  using ::vkit::graph::Node::Node;
+  explicit WorkflowNode(const std::string_view name) : name_{name} {};
   ~WorkflowNode() override = default;
+
+  [[nodiscard]] auto getName() const -> const std::string& { return name_; }
+  void setName(const std::string& name) { name_ = name; }
 
   virtual void execute() {};
   [[nodiscard]] auto status() const -> NodeStatus { return status_; }
+
   void markStale();
 
   std::function<void()> onStateChanged;
 
  protected:
+  std::string name_;
+
   NodeStatus status_{NodeStatus::kStale};
   void setStatus(NodeStatus s);
   void propagateStale();

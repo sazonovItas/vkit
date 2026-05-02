@@ -32,8 +32,6 @@ auto TextureManager::add(const std::shared_ptr<Texture>& texture)
   if (id != kStorageItemInvalidId && texture) {
     const auto lock = std::scoped_lock{this->mutex_};
 
-    refCounts_[id] = 1;
-
     const auto graphics_tex = texture->getGraphicsTexture();
     if (graphics_tex) {
       if (bindlessManager_) {
@@ -49,27 +47,6 @@ auto TextureManager::add(const std::shared_ptr<Texture>& texture)
   }
 
   return id;
-}
-
-void TextureManager::release(std::uint32_t id) {
-  bool should_remove = false;
-
-  {
-    const auto lock = std::scoped_lock{this->mutex_};
-    auto it = refCounts_.find(id);
-    if (it != refCounts_.end()) {
-      if (it->second > 1) {
-        it->second--;
-      } else {
-        should_remove = true;
-        refCounts_.erase(it);
-      }
-    }
-  }
-
-  if (should_remove) {
-    this->remove(id);
-  }
 }
 
 void TextureManager::remove(std::uint32_t id) {
@@ -97,7 +74,7 @@ void TextureManager::remove(std::uint32_t id) {
     }
   }
 
-  vkit::Storage<Texture>::remove(id);
+  Storage<Texture>::remove(id);
 }
 
 void TextureManager::processGC() {

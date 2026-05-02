@@ -1,4 +1,4 @@
-#include "vkit/texture/texture_uploader.hpp"
+#include "vkit/texture/uploader.hpp"
 
 #include "vkit/texture/texture.hpp"
 

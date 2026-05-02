@@ -1,15 +1,13 @@
 #pragma once
 
 #include <atomic>
-#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string_view>
 
 #include "vkit/core/events/texture.hpp"
-#include "vkit/graph/pin.hpp"
-#include "vkit/item/storage.hpp"
-#include "vkit/texture/texture.hpp"
+#include "vkit/message_bus/message_bus.hpp"
+#include "vkit/texture/manager.hpp"
 #include "vkit/workflow/workflow_node.hpp"
 
 namespace vkit::workflow::node {
@@ -18,9 +16,9 @@ class TextureLoadNode : public WorkflowNode {
  public:
   TextureLoadNode(std::string_view name, core::events::TextureLoadBus& loadBus,
                   core::events::TextureReadyBus& readyBus,
-                  Storage<texture::Texture>* storage);
+                  texture::TextureManager& textureManager);
 
-  ~TextureLoadNode() override = default;
+  ~TextureLoadNode() override;
 
   void execute() override;
 
@@ -32,7 +30,7 @@ class TextureLoadNode : public WorkflowNode {
 
  private:
   core::events::TextureLoadBus& loadBus_;
-  Storage<texture::Texture>* storage_{nullptr};
+  texture::TextureManager& textureManager_;
 
   message_bus::Subscription<core::events::TextureReadyEvent> readySub_;
 

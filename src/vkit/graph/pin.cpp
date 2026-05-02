@@ -24,6 +24,10 @@ auto Pin::isSink() const -> bool { return !isSrc_; }
 
 auto Pin::getId() const -> int { return id_; }
 
+auto Pin::getKind() const -> PinKind {
+  return isSrc_ ? PinKind::kOutput : PinKind::kInput;
+}
+
 auto Pin::getKey() const -> std::size_t { return key_; }
 
 auto Pin::getName() const -> std::string_view { return name_; }

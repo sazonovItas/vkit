@@ -92,32 +92,19 @@ target_sources(imguizmo PRIVATE
     ImGuizmo/ImZoomSlider.h
 )
 
-message(STATUS "[imgui-node-editor]")
+message(STATUS "[imnodes]")
 
-add_library(imgui_node_editor)
-add_library(imgui_node_editor::imgui_node_editor ALIAS imgui_node_editor)
+add_library(imnodes)
+add_library(imnodes::imnodes ALIAS imnodes)
 
-target_include_directories(imgui_node_editor SYSTEM PUBLIC imgui-node-editor)
-
-target_link_libraries(imgui_node_editor PUBLIC imgui::imgui)
-
-target_compile_options(imgui_node_editor PRIVATE -Wno-deprecated-declarations)
-
-target_sources(imgui_node_editor PRIVATE
-    imgui-node-editor/crude_json.cpp
-    imgui-node-editor/crude_json.h
-    imgui-node-editor/imgui_bezier_math.h
-    imgui-node-editor/imgui_bezier_math.inl
-    imgui-node-editor/imgui_canvas.cpp
-    imgui-node-editor/imgui_canvas.h
-    imgui-node-editor/imgui_extra_math.h
-    imgui-node-editor/imgui_extra_math.inl
-    imgui-node-editor/imgui_node_editor.cpp
-    imgui-node-editor/imgui_node_editor.h
-    imgui-node-editor/imgui_node_editor_api.cpp
-    imgui-node-editor/imgui_node_editor_internal.h
-    imgui-node-editor/imgui_node_editor_internal.inl
+target_sources(imnodes PRIVATE
+    imnodes/imnodes.cpp
+    imnodes/imnodes_internal.h
+    imnodes/imnodes.h
 )
+
+target_link_libraries(imnodes PUBLIC imgui)
+target_include_directories(imnodes PUBLIC imnodes)
 
 message(STATUS "[vma]")
 
@@ -152,6 +139,12 @@ add_subdirectory(fastgltf)
 message(STATUS "[meshoptimizer]")
 add_subdirectory(meshoptimizer)
 
+message(STATUS "[nativefiledialog-extended]")
+set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
+set(NFD_WAYLAND OFF CACHE BOOL "" FORCE)
+add_subdirectory(nativefiledialog-extended)
+
 message(STATUS "[stb]")
 
 add_library(stb)
@@ -170,12 +163,13 @@ add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 target_link_libraries(${PROJECT_NAME} INTERFACE
     glm::glm
     imgui::imgui
+    imnodes::imnodes
     imguizmo::imguizmo
-    imgui_node_editor::imgui_node_editor
     vma::vma
     fastgltf::fastgltf
     meshoptimizer
     stb::stb
+    nfd
     dl
 )
 

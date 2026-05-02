@@ -22,6 +22,8 @@ class Workflow : public graph::Graph {
   [[nodiscard]] auto findPin(int id) -> graph::Pin*;
   [[nodiscard]] auto findLink(int id) -> graph::Link*;
 
+  [[nodiscard]] auto canConnect(graph::Pin* a, graph::Pin* b) const -> bool;
+
   template <typename NodeT, typename... Args>
   auto createNode(Args&&... args) -> NodeT* {
     auto node = std::make_unique<NodeT>(std::forward<Args>(args)...);
@@ -42,6 +44,9 @@ class Workflow : public graph::Graph {
  private:
   bool isDirty_{true};
   std::vector<std::unique_ptr<WorkflowNode>> ownedNodes_;
+
+  [[nodiscard]] auto wouldCreateCycle(graph::Node* sourceNode,
+                                      graph::Node* targetNode) const -> bool;
 };
 
 };  // namespace vkit::workflow

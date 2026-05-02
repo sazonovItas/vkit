@@ -1,9 +1,11 @@
 #pragma once
 
 #include <imgui.h>
+#include <imnodes.h>
 
 #include "vkit/imgui/imgui_window.hpp"
 #include "vkit/imgui/windows/ge/graph_editor.hpp"
+#include "vkit/workflow/workflow.hpp"
 
 namespace vkit::imgui::windows::ge {
 
@@ -14,12 +16,37 @@ class GraphNodeInspectorWindow : public ImguiWindow {
       : ImguiWindow(name), graphEditor_(graphEditor) {}
 
   void onDraw() override {
-    if (!graphEditor_) return;
+    if (!graphEditor_ || !graphEditor_->getController()) return;
 
-    auto* selected_node = graphEditor_->getSelectedNode();
+    auto* workflow = graphEditor_->getController()->getWorkflow();
+    if (!workflow) return;
+
+    int selected_count = ImNodes::NumSelectedNodes();
+
+    if (selected_count == 0) {
+      ImGui::TextDisabled("Select a node to inspect its properties.");
+      return;
+    }
+
+    if (selected_count > 1) {
+      ImGui::TextDisabled("%d nodes selected. Bulk editing not supported.",
+                          selected_count);
+      return;
+    }
+
+    int selected_id = -1;
+    ImNodes::GetSelectedNodes(&selected_id);
+
+    workflow::WorkflowNode* selected_node = nullptr;
+    for (auto* base_node : workflow->getNodes()) {
+      if (base_node->getId() == selected_id) {
+        selected_node = static_cast<workflow::WorkflowNode*>(base_node);
+        break;
+      }
+    }
 
     if (!selected_node) {
-      ImGui::TextDisabled("Select a node to inspect its properties.");
+      ImGui::TextDisabled("Selected item could not be found in the workflow.");
       return;
     }
 
@@ -31,7 +58,7 @@ class GraphNodeInspectorWindow : public ImguiWindow {
   }
 
  private:
-  ge::GraphEditorWindow* graphEditor_;
+  GraphEditorWindow* graphEditor_;
 };
 
 };  // namespace vkit::imgui::windows::ge

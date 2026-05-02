@@ -89,6 +89,25 @@ auto Workflow::findLink(int id) -> graph::Link* {
   return nullptr;
 }
 
+auto Workflow::canConnect(graph::Pin* a, graph::Pin* b) const -> bool {
+  if (!a || !b) return false;
+
+  if (a == b) return false;
+  if (a->getOwnerNode() == b->getOwnerNode()) return false;
+  if (a->getKind() == b->getKind()) return false;
+
+  auto* input_pin = (a->getKind() == graph::PinKind::kInput) ? a : b;
+  auto* output_pin = (a->getKind() == graph::PinKind::kOutput) ? a : b;
+
+  if (!input_pin->getLinks().empty()) return false;
+  if (input_pin->getKey() != output_pin->getKey()) return false;
+
+  auto* src_node = output_pin->getOwnerNode();
+  auto* dst_node = input_pin->getOwnerNode();
+
+  return !wouldCreateCycle(src_node, dst_node);
+}
+
 void Workflow::destroyNode(int nodeId) {
   auto it = std::ranges::find_if(
       nodes, [nodeId](const graph::Node* n) { return n->getId() == nodeId; });
@@ -116,6 +135,38 @@ void Workflow::destroyNode(int nodeId) {
   }
 
   markDirty();
+}
+
+auto Workflow::wouldCreateCycle(graph::Node* sourceNode,
+                                graph::Node* targetNode) const -> bool {
+  if (sourceNode == targetNode) return true;
+
+  std::unordered_set<graph::Node*> visited;
+  std::queue<graph::Node*> queue;
+
+  queue.push(targetNode);
+  visited.insert(targetNode);
+
+  while (!queue.empty()) {
+    auto* current = queue.front();
+    queue.pop();
+
+    if (current == sourceNode) {
+      return true;
+    }
+
+    for (auto& pin : current->getOutputs()) {
+      for (auto* link : pin->getLinks()) {
+        auto* downstream_node = link->getSink()->getOwnerNode();
+        if ((downstream_node != nullptr) &&
+            visited.insert(downstream_node).second) {
+          queue.push(downstream_node);
+        }
+      }
+    }
+  }
+
+  return false;
 }
 
 };  // namespace vkit::workflow

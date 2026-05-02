@@ -4,7 +4,8 @@ namespace vkit::workflow {
 
 enum class PinType : std::size_t {
   kNone = 0,
-  kColor = 1,
+  kColorTexture2D = 1,
+  kFloatTexture2D = 2,
 };
 
 [[nodiscard]] inline auto pinKeyType(const PinType type) -> std::size_t {

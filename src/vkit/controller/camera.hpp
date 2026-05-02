@@ -55,7 +55,7 @@ class FreeCameraController {
   float yaw{-glm::half_pi<float>()};
   float pitch{0.0F};
 
-  float movementSpeed{5.0F};
+  float movementSpeed{1.0F};
   float mouseSensitivity{0.005F};
 
   void setMovementSpeed(float speed) { movementSpeed = speed; }

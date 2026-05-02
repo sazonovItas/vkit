@@ -9,6 +9,11 @@ namespace vkit::graph {
 class Node;
 class Link;
 
+enum class PinKind {
+  kInput,
+  kOutput
+};
+
 class Pin {
  private:
   friend class Node;
@@ -20,6 +25,9 @@ class Pin {
 
   [[nodiscard]] auto isSrc() const -> bool;
   [[nodiscard]] auto isSink() const -> bool;
+  
+  [[nodiscard]] auto getKind() const -> PinKind; 
+
   [[nodiscard]] auto getId() const -> int;
   [[nodiscard]] auto getKey() const -> std::size_t;
   [[nodiscard]] auto getName() const -> std::string_view;
@@ -39,7 +47,9 @@ class Pin {
   std::size_t key_;
   Node* ownerNode_{nullptr};
   std::size_t slot_;
-  bool isSrc_{true};
+  
+  bool isSrc_{true}; 
+  
   std::string name_;
   std::vector<Link*> links_;
 };

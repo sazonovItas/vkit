@@ -1,10 +1,6 @@
 #pragma once
 
-#include <filesystem>
 #include <memory>
-#include <optional>
-#include <string>
-#include <unordered_map>
 
 #include "vkit/item/storage.hpp"
 #include "vkit/texture/texture.hpp"
@@ -32,8 +28,7 @@ class TextureManager : public vkit::Storage<Texture> {
   auto operator=(const TextureManager&) -> TextureManager& = delete;
 
   auto add(const std::shared_ptr<Texture>& texture) -> std::uint32_t override;
-
-  void release(std::uint32_t storageId);
+  void remove(std::uint32_t storageId) override;
 
   void setBindlessManager(graphics::BindlessTextureManager* manager);
   void setImguiRenderer(imgui::ImguiRenderer* renderer);
@@ -41,12 +36,9 @@ class TextureManager : public vkit::Storage<Texture> {
   void processGC();
 
  private:
-  void remove(std::uint32_t storageId) override;
 
   graphics::BindlessTextureManager* bindlessManager_{nullptr};
   imgui::ImguiRenderer* imguiRenderer_{nullptr};
-
-  std::unordered_map<std::uint32_t, std::uint32_t> refCounts_;
 
   struct GCTask {
     std::shared_ptr<Texture> texture;
