@@ -1,4 +1,4 @@
-#include "vkit/texture/storage.hpp"
+#include "vkit/texture/manager.hpp"
 
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/imgui/imgui_renderer.hpp"
@@ -6,7 +6,7 @@
 
 namespace vkit::texture {
 
-TextureStorage::~TextureStorage() {
+TextureManager::~TextureManager() {
   const auto lock = std::scoped_lock{this->mutex_};
 
   for (auto& texture : this->items_) {
@@ -25,12 +25,14 @@ TextureStorage::~TextureStorage() {
   }
 }
 
-auto TextureStorage::add(const std::shared_ptr<Texture>& texture)
+auto TextureManager::add(const std::shared_ptr<Texture>& texture)
     -> std::uint32_t {
-  const std::uint32_t id = vkit::Storage<Texture>::add(texture);
+  const std::uint32_t id = Storage<Texture>::add(texture);
 
   if (id != kStorageItemInvalidId && texture) {
     const auto lock = std::scoped_lock{this->mutex_};
+
+    refCounts_[id] = 1;
 
     const auto graphics_tex = texture->getGraphicsTexture();
     if (graphics_tex) {
@@ -49,7 +51,28 @@ auto TextureStorage::add(const std::shared_ptr<Texture>& texture)
   return id;
 }
 
-void TextureStorage::remove(std::uint32_t id) {
+void TextureManager::release(std::uint32_t id) {
+  bool should_remove = false;
+
+  {
+    const auto lock = std::scoped_lock{this->mutex_};
+    auto it = refCounts_.find(id);
+    if (it != refCounts_.end()) {
+      if (it->second > 1) {
+        it->second--;
+      } else {
+        should_remove = true;
+        refCounts_.erase(it);
+      }
+    }
+  }
+
+  if (should_remove) {
+    this->remove(id);
+  }
+}
+
+void TextureManager::remove(std::uint32_t id) {
   {
     const auto lock = std::scoped_lock{this->mutex_};
 
@@ -66,13 +89,32 @@ void TextureStorage::remove(std::uint32_t id) {
         imguiRenderer_->unregisterTexture(texture->getImguiId().value());
         texture->setImguiId(std::nullopt);
       }
+
+      gcQueue_.push_back({
+          .texture = texture,
+          .framesRemaining = static_cast<int>(maxFramesInFlight_) + 1,
+      });
     }
   }
 
   vkit::Storage<Texture>::remove(id);
 }
 
-void TextureStorage::setBindlessManager(
+void TextureManager::processGC() {
+  const auto lock = std::scoped_lock{this->mutex_};
+
+  for (auto it = gcQueue_.begin(); it != gcQueue_.end();) {
+    it->framesRemaining--;
+
+    if (it->framesRemaining <= 0) {
+      it = gcQueue_.erase(it);
+    } else {
+      ++it;
+    }
+  }
+}
+
+void TextureManager::setBindlessManager(
     graphics::BindlessTextureManager* manager) {
   const auto lock = std::scoped_lock{this->mutex_};
   bindlessManager_ = manager;
@@ -89,7 +131,7 @@ void TextureStorage::setBindlessManager(
   }
 }
 
-void TextureStorage::setImguiRenderer(imgui::ImguiRenderer* renderer) {
+void TextureManager::setImguiRenderer(imgui::ImguiRenderer* renderer) {
   const auto lock = std::scoped_lock{this->mutex_};
   imguiRenderer_ = renderer;
 

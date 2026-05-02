@@ -13,6 +13,10 @@ struct TextureCreateInfo {
   TextureType type{TextureType::k2D};
   vk::Format pixelFormat{vk::Format::eR8G8B8A8Srgb};
   vk::SampleCountFlagBits samples{vk::SampleCountFlagBits::e1};
+  vk::ImageUsageFlags usage{vk::ImageUsageFlagBits::eTransferDst |
+                            vk::ImageUsageFlagBits::eTransferSrc |
+                            vk::ImageUsageFlagBits::eSampled |
+                            vk::ImageUsageFlagBits::eStorage};
   bool useMipmaps{false};
   int width{1};
   int height{1};

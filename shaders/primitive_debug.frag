@@ -36,9 +36,9 @@ void main() {
 
     vec3 finalColor = ambient + (albedo * diff);
 
-    // finalColor = vec3(inUV, 0.0); // Visualize UVs
+    finalColor = vec3(inUV, 0.0); // Visualize UVs
     // finalColor = normal * 0.5 + 0.5; // Visualize World Normals
-    finalColor = normalize(inTangent) * 0.5 + 0.5; // Visualize Tangents
+    // finalColor = normalize(inTangent) * 0.5 + 0.5; // Visualize Tangents
 
     outFragColor = vec4(finalColor, 1.0);
 }

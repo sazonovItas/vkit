@@ -13,10 +13,12 @@
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/pipeline/graphics.hpp"
 #include "vkit/graphics/shader_module.hpp"
+#include "vkit/imgui/windows/ge/texture_load_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/viewport.hpp"
+#include "vkit/workflow/node/texture_load.hpp"
 
 namespace vkit {
 
@@ -129,6 +131,7 @@ struct alignas(16) CameraUBO {
 App::App() {
   initWindow();
   initVulkan();
+  initWorkflow();
   initImgui();
   initViewports();
   initDebugRendering();
@@ -174,13 +177,35 @@ void App::initVulkan() {
   }
 }
 
+void App::initWorkflow() {
+  textureManager_ =
+      std::make_shared<texture::TextureManager>(kMaxFramesInFlight);
+  executionContext_ = std::make_shared<workflow::ExecutionContext>();
+
+  textureUploader_ = std::make_shared<texture::TextureUploader>(
+      *gfxDevice_, textureManager_, executionContext_->texLoadBus,
+      executionContext_->texReadyBus);
+
+  asyncCompute_ = std::make_shared<compute::AsyncCompute>(
+      gfxDevice_->get(), gfxDevice_->queues.compute,
+      gfxDevice_->queueFamilies.compute);
+
+  computeDispatcher_ = std::make_shared<texture::ComputeDispatcher>(
+      *gfxDevice_, textureManager_, executionContext_->computeJobBus,
+      executionContext_->computeResultBus, asyncCompute_);
+
+  workflow_ = std::make_unique<workflow::Workflow>();
+}
+
 void App::initImgui() {
   imguiRenderer_ = std::make_unique<imgui::ImguiRenderer>(
       gfxDevice_->get(), gfxDevice_->allocator, swapchain_->getFormat(),
       vk::SampleCountFlagBits::e1, kMaxFramesInFlight);
 
-  imguiHost_ =
-      std::make_unique<imgui::WindowImguiHost>(*imguiRenderer_, "vkit", "");
+  textureManager_->setImguiRenderer(imguiRenderer_.get());
+
+  imguiHost_ = std::make_unique<imgui::WindowImguiHost>(
+      window_.get(), *imguiRenderer_, "vkit", "");
 
   imguiHost_->setDockLayoutCallback(
       [](vkit::imgui::WindowImguiHost& host, ImVec2 availableSize) {
@@ -195,14 +220,16 @@ void App::initImgui() {
           ImGuiID dock_right_id = ImGui::DockBuilderSplitNode(
               dock_main_id, ImGuiDir_Right, 0.25F, nullptr, &dock_main_id);
           ImGuiID dock_bottom_left_id = ImGui::DockBuilderSplitNode(
-              dock_main_id, ImGuiDir_Down, 0.25F, nullptr, &dock_main_id);
+              dock_main_id, ImGuiDir_Down, 0.40F, nullptr, &dock_main_id);
+          ImGuiID dock_bottom_left_left_id = ImGui::DockBuilderSplitNode(
+              dock_bottom_left_id, ImGuiDir_Left, 0.20F, nullptr, &dock_bottom_left_id);
           ImGuiID dock_top_right_id = ImGui::DockBuilderSplitNode(
               dock_right_id, ImGuiDir_Up, 0.30F, nullptr, &dock_right_id);
 
           ImGui::DockBuilderDockWindow("Scene", dock_main_id);
-          ImGui::DockBuilderDockWindow("Graph", dock_bottom_left_id);
+          ImGui::DockBuilderDockWindow("Graph Editor", dock_bottom_left_id);
+          ImGui::DockBuilderDockWindow("Graph Node Inspector", dock_bottom_left_left_id);
           ImGui::DockBuilderDockWindow("Material Preview", dock_top_right_id);
-          ImGui::DockBuilderDockWindow("Configuration", dock_right_id);
           ImGui::DockBuilderFinish(root_id);
         }
       });
@@ -215,6 +242,24 @@ void App::initImgui() {
 
   imguiRenderer_->uploadFont(submit_info);
   windowManager_ = std::make_unique<imgui::ImguiWindowManager>();
+
+  graphWindow_ =
+      std::make_shared<imgui::windows::ge::GraphEditorWindow>("Graph Editor");
+  graphWindow_->setWorkflow(workflow_.get());
+
+  auto texture_load_ui =
+      std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(
+          textureManager_.get());
+
+  graphWindow_->getRegistry().registerUI<workflow::node::TextureLoadNode>(
+      std::move(texture_load_ui));
+
+  graphNodeInspectorWindow_ =
+      std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
+          "Graph Node Inspector", graphWindow_.get());
+
+  windowManager_->addWindow(graphWindow_);
+  windowManager_->addWindow(graphNodeInspectorWindow_);
 }
 
 void App::initViewports() {
@@ -503,6 +548,17 @@ void App::mainLoop() {
   while (!window_->shouldClose()) {
     window_->pollEvents();
 
+    imguiRenderer_->processGC();
+    textureManager_->processGC();
+
+    workflow_->execute();
+    executionContext_->update();
+
+    textureUploader_->update();
+    computeDispatcher_->update();
+
+    executionContext_->update();
+
     auto current_time = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float, std::chrono::seconds::period>(
                    current_time - last_time)
@@ -595,14 +651,6 @@ void App::mainLoop() {
     frame.materialCameraBuffer->writeAt(std::as_bytes(std::span{&mat_ubo, 1}));
 
     imguiHost_->beginFrame(window_->getWidth(), window_->getHeight(), dt);
-
-    ImGui::Begin("Graph");
-    ImGui::Text("Node Graph");
-    ImGui::End();
-    ImGui::Begin("Configuration");
-    ImGui::Text("Inspector");
-    ImGui::End();
-
     windowManager_->drawWindows(currentFrame_);
     imguiHost_->endFrame();
 
@@ -654,4 +702,5 @@ void App::recreateSwapchain() {
     swapchain_->recreate(glm::ivec2{width, height});
   }
 }
+
 };  // namespace vkit

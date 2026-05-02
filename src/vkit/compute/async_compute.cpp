@@ -39,6 +39,7 @@ auto AsyncCompute::submit(const ComputeTask& task, vk::Fence computeFence)
   queue_.submit(submit_info, computeFence);
 
   return ComputeResult{
+      .commadBuffer = std::move(cb),
       .finishedSemaphore = std::move(finished_semaphore),
   };
 }

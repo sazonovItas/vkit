@@ -12,8 +12,8 @@ class Link;
 class Pin {
  private:
   friend class Node;
-  Pin(Node* ownerNode, std::size_t slot, bool isSrc, std::size_t key,
-      std::string_view name);
+  explicit Pin(Node* ownerNode, std::size_t slot, bool isSrc, std::size_t key,
+               std::string_view name);
 
  public:
   virtual ~Pin() noexcept;

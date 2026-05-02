@@ -5,7 +5,8 @@
 
 namespace vkit::imgui {
 
-WindowImguiHost::WindowImguiHost(ImguiRenderer& imguiRenderer,
+WindowImguiHost::WindowImguiHost(window::Window* window,
+                                 ImguiRenderer& imguiRenderer,
                                  const std::string_view name,
                                  const std::string_view iniFilename)
     : ImguiHost{name, iniFilename}, imguiRenderer_{imguiRenderer} {
@@ -15,6 +16,12 @@ WindowImguiHost::WindowImguiHost(ImguiRenderer& imguiRenderer,
   io.BackendRendererName = "vkit_vulkan_renderer";
   io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
   io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+
+  if (window) {
+    io.ClipboardUserData = window->getUserData();
+    io.SetClipboardTextFn = window::Window::setClipboardText;
+    io.GetClipboardTextFn = window::Window::getClipboardText;
+  }
 
   ImGui::SetCurrentContext(imguiContext_);
 

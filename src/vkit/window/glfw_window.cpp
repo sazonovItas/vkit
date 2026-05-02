@@ -183,6 +183,23 @@ auto Window::getHeight() const -> int { return height_; }
 
 auto Window::getGlfwWindow() const -> GLFWwindow* { return window_; }
 
+auto Window::getUserData() const -> GLFWwindow* { return window_; }
+
+void Window::setClipboardText(void* userData, const char* text) {
+  auto* window = static_cast<Window*>(userData);
+  if (window && window->getGlfwWindow()) {
+    glfwSetClipboardString(window->getGlfwWindow(), text);
+  }
+}
+
+auto Window::getClipboardText(void* userData) -> const char* {
+  auto* window = static_cast<Window*>(userData);
+  if (window && window->getGlfwWindow()) {
+    return glfwGetClipboardString(window->getGlfwWindow());
+  }
+  return nullptr;
+}
+
 auto Window::getInputEvents() -> std::vector<InputEvent>& {
   return events_[1 - eventWriteIndex_];
 }

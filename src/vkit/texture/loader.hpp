@@ -10,8 +10,8 @@
 namespace vkit::texture {
 
 struct LoadOptions {
-  bool useMipmaps{true};
-  bool isSrgb{true};
+  bool useMipmaps{false};
+  bool isSrgb{false};
   bool isHdr{false};
   graphics::TextureType type{graphics::TextureType::k2D};
 };

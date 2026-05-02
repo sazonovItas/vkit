@@ -32,7 +32,7 @@ constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
   std::unreachable();
 }
 
-constexpr auto kRequiredExtensions = std::array{ vk::KHRSwapchainExtensionName };
+constexpr auto kRequiredExtensions = std::array{vk::KHRSwapchainExtensionName};
 
 constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
                                        .setFillModeNonSolid(vk::True)
@@ -113,6 +113,10 @@ GfxDevice::GfxDevice(const Instance &instance, const Surface &surface)
       allocator{createAllocator(instance.get())},
       transferCommandPool{
           createCommandPool(queueFamilies.transfer,
+                            vk::CommandPoolCreateFlagBits::eTransient),
+      },
+      computeCommandPool{
+          createCommandPool(queueFamilies.compute,
                             vk::CommandPoolCreateFlagBits::eTransient),
       },
       graphicsPresentCommandPool{

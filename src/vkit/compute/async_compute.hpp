@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "vkit/graphics/command.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit::compute {
 
@@ -18,6 +19,7 @@ struct ComputeTask {
 };
 
 struct ComputeResult {
+  vk::UniqueCommandBuffer commadBuffer;
   vk::UniqueSemaphore finishedSemaphore;
 };
 

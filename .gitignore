@@ -2,8 +2,10 @@
 build
 compile_commands.json
 
-imgui.ini
 .renderdoc
 
 assets/models
 assets/shaders
+
+imgui.ini
+graph_editor.json

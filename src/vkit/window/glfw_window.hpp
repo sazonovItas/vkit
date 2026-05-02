@@ -83,6 +83,10 @@ class Window {
 
   [[nodiscard]] auto getGlfwWindow() const -> GLFWwindow*;
 
+  [[nodiscard]] auto getUserData() const -> GLFWwindow*;
+  [[nodiscard]] static auto getClipboardText(void* userData) -> const char*;
+  static void setClipboardText(void* userData, const char* text);
+
   [[nodiscard]] auto getInputEvents() -> std::vector<InputEvent>&;
 
   void setVisible(bool visible);

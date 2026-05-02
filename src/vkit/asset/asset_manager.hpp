@@ -15,7 +15,7 @@ namespace vkit::asset {
 class AssetManager {
  public:
   AssetManager(const graphics::GfxDevice& gfxDevice,
-               std::shared_ptr<texture::TextureStorage> textureStorage,
+               std::shared_ptr<texture::TextureManager> textureStorage,
                std::shared_ptr<material::MaterialStorage> materialStorage)
       : gfxDevice_{gfxDevice},
         textureStorage_{std::move(textureStorage)},
@@ -56,7 +56,7 @@ class AssetManager {
   }
 
   [[nodiscard]] auto getTextureStorage() const
-      -> std::shared_ptr<texture::TextureStorage> {
+      -> std::shared_ptr<texture::TextureManager> {
     return textureStorage_;
   }
   [[nodiscard]] auto getMaterialStorage() const
@@ -66,7 +66,7 @@ class AssetManager {
 
  private:
   const graphics::GfxDevice& gfxDevice_;
-  std::shared_ptr<texture::TextureStorage> textureStorage_;
+  std::shared_ptr<texture::TextureManager> textureStorage_;
   std::shared_ptr<material::MaterialStorage> materialStorage_;
 };
 

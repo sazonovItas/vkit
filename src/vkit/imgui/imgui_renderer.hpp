@@ -19,7 +19,7 @@ class ImguiRenderer {
  public:
   ImguiRenderer(vk::Device device, vma::Allocator allocator,
                 vk::Format colorFormat, vk::SampleCountFlagBits samples,
-                std::uint32_t framesInFlight = 2);
+                std::uint32_t maxFramesInFlight = 3);
   ~ImguiRenderer();
 
   void uploadFont(const graphics::util::RecordAndSubmitInfo& submitInfo);
@@ -36,7 +36,11 @@ class ImguiRenderer {
   void render(std::uint32_t frameIndex, vk::CommandBuffer cb,
               ImDrawData* drawData);
 
+  void processGC();
+
  private:
+  std::uint32_t maxFramesInFlight_;
+
   vk::Device device_;
   vma::Allocator allocator_;
 
@@ -59,6 +63,13 @@ class ImguiRenderer {
   vk::UniqueSampler linearSampler_;
   vk::UniqueSampler nearestSampler_;
   vk::UniqueSampler fontSampler_;
+
+  struct GCTask {
+    vk::DescriptorSet set;
+    int framesRemaining;
+  };
+
+  std::vector<GCTask> gcQueue_;
 };
 
 }  // namespace vkit::imgui

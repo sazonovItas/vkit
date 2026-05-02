@@ -33,6 +33,7 @@ class GfxDevice {
   vma::Allocator allocator;
 
   vk::UniqueCommandPool transferCommandPool;
+  vk::UniqueCommandPool computeCommandPool;
   vk::UniqueCommandPool graphicsPresentCommandPool;
 
   GfxDevice(const Instance& instance, const Surface& surface);
@@ -41,6 +42,10 @@ class GfxDevice {
 
   auto getTransferCommandPool() const -> vk::CommandPool {
     return *transferCommandPool;
+  }
+
+  auto getComputeCommandPool() const -> vk::CommandPool {
+    return *computeCommandPool;
   }
 
   auto getGraphicsPresentCommandPool() const -> vk::CommandPool {

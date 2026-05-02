@@ -12,8 +12,11 @@ namespace vkit::imgui {
 ImguiRenderer::ImguiRenderer(vk::Device device, vma::Allocator allocator,
                              vk::Format colorFormat,
                              vk::SampleCountFlagBits samples,
-                             const std::uint32_t framesInFlight)
-    : device_(device), allocator_(allocator), frames_(framesInFlight) {
+                             const std::uint32_t maxFramesInFlight)
+    : maxFramesInFlight_{maxFramesInFlight},
+      device_{device},
+      allocator_{allocator},
+      frames_{maxFramesInFlight} {
   const auto binding = vk::DescriptorSetLayoutBinding{
       0,
       vk::DescriptorType::eCombinedImageSampler,
@@ -169,8 +172,10 @@ auto ImguiRenderer::updateOrRegisterTexture(ImTextureID existingId,
 void ImguiRenderer::unregisterTexture(ImTextureID textureId) {
   if (textureId) {
     auto* const raw_set = reinterpret_cast<VkDescriptorSet>(textureId);
-    const auto set = vk::DescriptorSet{raw_set};
-    device_.freeDescriptorSets(*descriptorPool_, set);
+    gcQueue_.emplace_back(GCTask{
+        .set = raw_set,
+        .framesRemaining = static_cast<int>(maxFramesInFlight_) + 1,
+    });
   }
 }
 
@@ -245,7 +250,7 @@ void ImguiRenderer::uploadFont(
 
 void ImguiRenderer::render(std::uint32_t frameIndex, vk::CommandBuffer cb,
                            ImDrawData* drawData) {
-  assert(frameIndex < frames_.size() &&
+  assert(frameIndex < maxFramesInFlight_ &&
          "ImguiRenderer: frameIndex out of bounds!");
 
   if (!drawData || drawData->TotalVtxCount == 0) {
@@ -350,8 +355,20 @@ void ImguiRenderer::render(std::uint32_t frameIndex, vk::CommandBuffer cb,
     global_vtx_offset += cmd_list->VtxBuffer.Size;
     global_idx_offset += cmd_list->IdxBuffer.Size;
   }
+}
 
-  // Removed the automatic frame increment here
+void ImguiRenderer::processGC() {
+  for (auto it = gcQueue_.begin(); it != gcQueue_.end();) {
+    it->framesRemaining--;
+
+    if (it->framesRemaining <= 0) {
+      std::ignore =
+          device_.freeDescriptorSets(descriptorPool_.get(), 1, &it->set);
+      it = gcQueue_.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 };  // namespace vkit::imgui

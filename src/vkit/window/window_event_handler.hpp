@@ -133,10 +133,10 @@ constexpr Keycode kKeyLast = kKeyMenu;
 extern auto c_str(Keycode code) -> const char*;
 
 using KeyModifierMask = uint32_t;
-constexpr KeyModifierMask kKeyModifierBitCtrl = 0x0001U;
-constexpr KeyModifierMask kKeyModifierBitShift = 0x0002U;
-constexpr KeyModifierMask kKeyModifierBitSuper = 0x0004U;
-constexpr KeyModifierMask kKeyModifierBitMenu = 0x0008U;
+constexpr KeyModifierMask kKeyModifierBitShift = 0x0001U;
+constexpr KeyModifierMask kKeyModifierBitCtrl = 0x0002U;
+constexpr KeyModifierMask kKeyModifierBitAlt = 0x0004U;
+constexpr KeyModifierMask kKeyModifierBitSuper = 0x0008U;
 
 using MouseButton = uint32_t;
 constexpr MouseButton kMouseButtonLeft = 0;

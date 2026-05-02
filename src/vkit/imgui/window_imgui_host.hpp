@@ -4,6 +4,7 @@
 
 #include "vkit/imgui/imgui_host.hpp"
 #include "vkit/imgui/imgui_renderer.hpp"
+#include "vkit/window/window.hpp"
 
 namespace vkit::imgui {
 
@@ -13,9 +14,9 @@ class WindowImguiHost : public ImguiHost {
       std::function<void(WindowImguiHost& host, ImVec2 availableSize)>;
   using StatusBarCallback = std::function<void(WindowImguiHost& host)>;
 
-  explicit WindowImguiHost(ImguiRenderer& imguiRenderer,
-                           std::string_view name = "Vkit",
-                           std::string_view iniFilename = "imgui.ini");
+  explicit WindowImguiHost(window::Window* window, ImguiRenderer& renderer,
+                           std::string_view name,
+                           std::string_view iniFilename = "");
   ~WindowImguiHost() override = default;
 
   void setDockLayoutCallback(DockLayoutCallback callback);

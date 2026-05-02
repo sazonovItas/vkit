@@ -1,0 +1,121 @@
+#include "vkit/workflow/workflow.hpp"
+
+#include <algorithm>
+#include <queue>
+#include <unordered_map>
+
+namespace vkit::workflow {
+
+void Workflow::execute() {
+  if (!isDirty_) return;
+  isDirty_ = false;
+
+  std::unordered_map<graph::Node*, int> in_degree;
+  std::unordered_map<graph::Node*, bool> is_complete;
+
+  for (auto* node : nodes) {
+    in_degree.emplace(node, 0);
+    is_complete.emplace(node, false);
+  }
+
+  for (auto& link : links) {
+    if (auto* sink_node = link->getSink()->getOwnerNode()) {
+      in_degree[sink_node]++;
+    }
+  }
+
+  std::queue<graph::Node*> queue;
+  for (auto& [node, deg] : in_degree) {
+    if (deg == 0) queue.push(node);
+  }
+
+  while (!queue.empty()) {
+    auto* node = queue.front();
+    queue.pop();
+
+    auto* wn = dynamic_cast<WorkflowNode*>(node);
+
+    if (!wn || wn->status() == NodeStatus::kReady) {
+      is_complete[node] = true;
+    } else if (wn->status() == NodeStatus::kExecuting) {
+      is_complete[node] = false;
+    } else {
+      bool all_ready = true;
+      for (auto& pin : node->getInputs()) {
+        for (auto* link : pin->getLinks()) {
+          if (!is_complete[link->getSrc()->getOwnerNode()]) {
+            all_ready = false;
+            break;
+          }
+        }
+        if (!all_ready) break;
+      }
+
+      if (all_ready) {
+        wn->execute();
+      }
+      is_complete[node] = false;
+    }
+
+    if (!is_complete[node]) continue;
+
+    for (auto& pin : node->getOutputs()) {
+      for (auto* link : pin->getLinks()) {
+        auto* downstream = link->getSink()->getOwnerNode();
+        if (downstream && --in_degree[downstream] == 0) {
+          queue.push(downstream);
+        }
+      }
+    }
+  }
+}
+
+auto Workflow::findPin(int id) -> graph::Pin* {
+  for (auto* node : nodes) {
+    for (auto& pin : node->getInputs()) {
+      if (pin->getId() == id) return pin.get();
+    }
+    for (auto& pin : node->getOutputs()) {
+      if (pin->getId() == id) return pin.get();
+    }
+  }
+  return nullptr;
+}
+
+auto Workflow::findLink(int id) -> graph::Link* {
+  for (auto& link : links) {
+    if (link->getId() == id) return link.get();
+  }
+  return nullptr;
+}
+
+void Workflow::destroyNode(int nodeId) {
+  auto it = std::ranges::find_if(
+      nodes, [nodeId](const graph::Node* n) { return n->getId() == nodeId; });
+  if (it == nodes.end()) return;
+
+  auto* node = *it;
+
+  auto disconnect_all = [this](auto& pins) {
+    for (auto& pin : pins) {
+      auto links_copy = pin->getLinks();
+      for (auto* link : links_copy) {
+        disconnect(link);
+      }
+    }
+  };
+  disconnect_all(node->getInputs());
+  disconnect_all(node->getOutputs());
+
+  unregisterNode(node);
+
+  auto owned_it = std::ranges::find_if(
+      ownedNodes_, [nodeId](const auto& n) { return n->getId() == nodeId; });
+  if (owned_it != ownedNodes_.end()) {
+    ownedNodes_.erase(owned_it);
+  }
+
+  markDirty();
+}
+
+};  // namespace vkit::workflow

@@ -64,9 +64,7 @@ auto Texture::getImageView() const -> vk::ImageView { return *view_; }
 
 auto Texture::getTextureType() const -> TextureType { return type_; }
 
-auto Texture::getPixelFormat() const -> vk::Format {
-  return image_.format;
-}
+auto Texture::getPixelFormat() const -> vk::Format { return image_.format; }
 
 auto Texture::getWidth(std::uint32_t level) const -> int {
   return Image::mipExtent(image_.extent, level).width;
@@ -249,6 +247,7 @@ auto Texture::createAllocatedImage(vma::Allocator allocator,
 
   auto image_ci = vk::ImageCreateInfo{};
   image_ci.setImageType(toVkImageType(createInfo.type))
+      .setUsage(createInfo.usage)
       .setFormat(createInfo.pixelFormat)
       .setExtent(
           getExtent3D(createInfo.width, createInfo.height, createInfo.depth))

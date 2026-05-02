@@ -6,6 +6,7 @@
 #include <vk_mem_alloc.hpp>
 
 #include "vkit/asset/asset.hpp"
+#include "vkit/compute/async_compute.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/graphics/descriptor_buffer.hpp"
 #include "vkit/graphics/device.hpp"
@@ -15,6 +16,8 @@
 #include "vkit/imgui/imgui_renderer.hpp"
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
+#include "vkit/imgui/windows/ge/graph_editor.hpp"
+#include "vkit/imgui/windows/ge/graph_node_inspector.hpp"
 #include "vkit/imgui/windows/viewer.hpp"
 #include "vkit/renderer/descriptor_set_layout/primitive.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
@@ -23,6 +26,11 @@
 #include "vkit/renderer/renderer.hpp"
 #include "vkit/renderer/viewport.hpp"
 #include "vkit/scene/camera.hpp"
+#include "vkit/texture/compute_dispatcher.hpp"
+#include "vkit/texture/manager.hpp"
+#include "vkit/texture/texture_uploader.hpp"
+#include "vkit/workflow/execution_context.hpp"
+#include "vkit/workflow/workflow.hpp"
 
 namespace vkit {
 
@@ -36,6 +44,7 @@ class App {
  private:
   void initWindow();
   void initVulkan();
+  void initWorkflow();
   void initImgui();
   void initViewports();
   void initDebugRendering();
@@ -56,14 +65,24 @@ class App {
 
   std::unique_ptr<renderer::Renderer> renderer_;
 
+  std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
+
   std::unique_ptr<imgui::ImguiRenderer> imguiRenderer_;
   std::unique_ptr<imgui::WindowImguiHost> imguiHost_;
   std::unique_ptr<imgui::ImguiWindowManager> windowManager_;
 
-  std::vector<vk::UniqueSemaphore> imageAvailableSemaphores_;
+  std::shared_ptr<texture::TextureManager> textureManager_;
+  std::shared_ptr<workflow::ExecutionContext> executionContext_;
+  std::shared_ptr<texture::TextureUploader> textureUploader_;
+  std::shared_ptr<compute::AsyncCompute> asyncCompute_;
+  std::shared_ptr<texture::ComputeDispatcher> computeDispatcher_;
+  std::unique_ptr<workflow::Workflow> workflow_;
 
   std::shared_ptr<imgui::windows::Viewer> sceneViewer_;
   std::shared_ptr<imgui::windows::Viewer> materialViewer_;
+  std::shared_ptr<imgui::windows::ge::GraphEditorWindow> graphWindow_;
+  std::shared_ptr<imgui::windows::ge::GraphNodeInspectorWindow>
+      graphNodeInspectorWindow_;
 
   std::shared_ptr<scene::Camera> sceneCamera_;
   std::shared_ptr<scene::Camera> materialCamera_;

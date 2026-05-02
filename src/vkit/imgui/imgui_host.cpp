@@ -242,12 +242,12 @@ auto fromVkit(const window::MouseButton button) -> int {
 }
 
 void updateKeyModifiers(ImGuiIO& io, const uint32_t modifierMask) {
-  io.AddKeyEvent(ImGuiMod_Ctrl,
-                 (modifierMask & window::kKeyModifierBitCtrl) != 0);
   io.AddKeyEvent(ImGuiMod_Shift,
                  (modifierMask & window::kKeyModifierBitShift) != 0);
+  io.AddKeyEvent(ImGuiMod_Ctrl,
+                 (modifierMask & window::kKeyModifierBitCtrl) != 0);
   io.AddKeyEvent(ImGuiMod_Alt,
-                 (modifierMask & window::kKeyModifierBitMenu) != 0);
+                 (modifierMask & window::kKeyModifierBitAlt) != 0);
   io.AddKeyEvent(ImGuiMod_Super,
                  (modifierMask & window::kKeyModifierBitSuper) != 0);
 }
