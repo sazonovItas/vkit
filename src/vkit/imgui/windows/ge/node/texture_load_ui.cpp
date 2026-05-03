@@ -1,4 +1,4 @@
-#include "vkit/imgui/windows/ge/texture_load_ui.hpp"
+#include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
 
 #include <imgui.h>
 #include <imnodes.h>
@@ -13,8 +13,10 @@
 
 namespace vkit::imgui::windows::ge {
 
+using workflow::node::TextureLoadNode;
+
 void TextureLoadNodeUI::drawCanvas(workflow::WorkflowNode* node) {
-  auto* n = static_cast<workflow::node::TextureLoadNode*>(node);
+  auto* n = static_cast<TextureLoadNode*>(node);
 
   ImVec4 status_color = getStatusColor(n->status());
 
@@ -50,7 +52,7 @@ void TextureLoadNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 }
 
 void TextureLoadNodeUI::drawInspector(workflow::WorkflowNode* node) {
-  auto* n = static_cast<workflow::node::TextureLoadNode*>(node);
+  auto* n = static_cast<TextureLoadNode*>(node);
 
   ImGui::TextDisabled("Type: Texture Load Node");
   ImGui::Separator();

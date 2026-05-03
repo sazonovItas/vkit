@@ -91,4 +91,60 @@ using TintJobBus =
 using TintResultBus =
     message_bus::MessageBus<TintJobResult, message_bus::DispatchPolicy::kBoth>;
 
+struct NormalMapPushConstants {
+  uint32_t width{512};
+  uint32_t height{512};
+  float strength{1.0F};
+  uint32_t invertX{0};
+  uint32_t invertY{0};
+};
+
+struct NormalMapJobRequest {
+  std::uint64_t requestId{0};
+  std::shared_ptr<texture::Texture> inputTexture;
+  NormalMapPushConstants params;
+};
+
+struct NormalMapJobResult {
+  std::uint64_t requestId{0};
+  std::shared_ptr<texture::Texture> imageF32;
+  std::shared_ptr<texture::Texture> imageUnorm;
+  std::string error;
+};
+
+using NormalMapJobBus =
+    message_bus::MessageBus<NormalMapJobRequest,
+                            message_bus::DispatchPolicy::kBoth>;
+using NormalMapResultBus =
+    message_bus::MessageBus<NormalMapJobResult,
+                            message_bus::DispatchPolicy::kBoth>;
+
+struct MixPushConstants {
+  uint32_t width{512};
+  uint32_t height{512};
+  float factor{0.5F};
+  uint32_t useFacTex{0};
+  uint32_t mode{0};
+};
+
+struct MixJobRequest {
+  std::uint64_t requestId{0};
+  std::shared_ptr<texture::Texture> inputA;
+  std::shared_ptr<texture::Texture> inputB;
+  std::shared_ptr<texture::Texture> inputFac;
+  MixPushConstants params;
+};
+
+struct MixJobResult {
+  std::uint64_t requestId{0};
+  std::shared_ptr<texture::Texture> imageF32;
+  std::shared_ptr<texture::Texture> imageUnorm;
+  std::string error;
+};
+
+using MixJobBus =
+    message_bus::MessageBus<MixJobRequest, message_bus::DispatchPolicy::kBoth>;
+using MixResultBus =
+    message_bus::MessageBus<MixJobResult, message_bus::DispatchPolicy::kBoth>;
+
 };  // namespace vkit::core::events

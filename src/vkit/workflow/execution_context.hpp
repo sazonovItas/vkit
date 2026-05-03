@@ -15,8 +15,12 @@ struct ExecutionContext {
   core::events::SobelResultBus sobelResultBus;
   core::events::HeightMapJobBus heightMapJobBus;
   core::events::HeightMapResultBus heightMapResultBus;
+  core::events::NormalMapJobBus normalMapJobBus;
+  core::events::NormalMapResultBus normalMapResultBus;
   core::events::TintJobBus tintJobBus;
   core::events::TintResultBus tintResultBus;
+  core::events::MixJobBus mixJobBus;
+  core::events::MixResultBus mixResultBus;
 
   void update() {
     texLoadBus.update();
@@ -27,8 +31,12 @@ struct ExecutionContext {
     sobelResultBus.update();
     heightMapJobBus.update();
     heightMapResultBus.update();
+    normalMapJobBus.update();
+    normalMapResultBus.update();
     tintJobBus.update();
     tintResultBus.update();
+    mixJobBus.update();
+    mixResultBus.update();
   }
 };
 

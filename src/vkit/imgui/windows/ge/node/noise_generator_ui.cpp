@@ -1,4 +1,4 @@
-#include "vkit/imgui/windows/ge/noise_generator_ui.hpp"
+#include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 
 #include <imgui.h>
 #include <imnodes.h>

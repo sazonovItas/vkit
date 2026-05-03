@@ -28,7 +28,11 @@ static constexpr std::string_view kOperatorsSobelShaderPath =
     "shaders/operators/sobel.comp";
 static constexpr std::string_view kOperatorsHeightMapShaderPath =
     "shaders/operators/heightmap.comp";
+static constexpr std::string_view kOperatorsNormalMapShaderPath =
+    "shaders/operators/normalmap.comp";
 static constexpr std::string_view kOperatorsTintShaderPath =
     "shaders/operators/tint.comp";
+static constexpr std::string_view kOperatorsMixShaderPath =
+    "shaders/operators/mix.comp";
 
 };  // namespace vkit::asset

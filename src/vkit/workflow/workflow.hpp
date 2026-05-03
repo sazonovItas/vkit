@@ -24,6 +24,7 @@ class Workflow : public graph::Graph {
 
   [[nodiscard]] auto canConnect(graph::Pin* a, graph::Pin* b) const -> bool;
 
+  auto connect(graph::Pin* src, graph::Pin* sink) -> graph::Link* override;
   void disconnect(graph::Link* link) override;
 
   template <typename NodeT, typename... Args>

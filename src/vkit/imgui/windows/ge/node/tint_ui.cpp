@@ -1,4 +1,4 @@
-#include "vkit/imgui/windows/ge/sobel_ui.hpp"
+#include "vkit/imgui/windows/ge/node/tint_ui.hpp"
 
 #include <imgui.h>
 #include <imnodes.h>
@@ -6,20 +6,20 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/sobel.hpp"
+#include "vkit/workflow/node/tint.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::SobelNode;
-using workflow::node::SobelParams;
+using workflow::node::TintNode;
+using workflow::node::TintParams;
 
-auto SobelNodeUI::spawnNode(controller::WorkflowController* controller)
+auto TintNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {
-  return controller->createSobelNode("Sobel Edge");
+  return controller->createTintNode("Color Tint");
 }
 
-void SobelNodeUI::drawCanvas(workflow::WorkflowNode* node) {
-  auto* n = static_cast<SobelNode*>(node);
+void TintNodeUI::drawCanvas(workflow::WorkflowNode* node) {
+  auto* n = static_cast<TintNode*>(node);
 
   ImVec4 status_color = getStatusColor(n->status());
 
@@ -41,7 +41,10 @@ void SobelNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImGui::Dummy(ImVec2(node_width, 2.0F * zoom));
 
   const auto& p = n->getParams();
-  ImGui::TextDisabled("Intensity: %.2f", p.intensity);
+  ImVec4 display_color = ImVec4(p.color[0], p.color[1], p.color[2], 1.0F);
+  ImGui::ColorButton("##tint_color", display_color,
+                     ImGuiColorEditFlags_NoTooltip,
+                     ImVec2(node_width, 16.0F * zoom));
 
   ImGui::Dummy(ImVec2(node_width, 2.0F * zoom));
 
@@ -63,12 +66,12 @@ void SobelNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImNodes::PopColorStyle();
 }
 
-void SobelNodeUI::drawInspector(workflow::WorkflowNode* node) {
-  auto* n = static_cast<SobelNode*>(node);
-  SobelParams p = n->getParams();
+void TintNodeUI::drawInspector(workflow::WorkflowNode* node) {
+  auto* n = static_cast<workflow::node::TintNode*>(node);
+  workflow::node::TintParams p = n->getParams();
   bool changed = false;
 
-  ImGui::TextDisabled("Type: Sobel Edge");
+  ImGui::TextDisabled("Type: Color Tint");
   ImGui::Separator();
 
   {
@@ -82,10 +85,20 @@ void SobelNodeUI::drawInspector(workflow::WorkflowNode* node) {
   ImGui::Separator();
   ImGui::Spacing();
 
-  if (ImGui::DragFloat("Intensity", &p.intensity, 0.01F, 0.0F, 10.0F)) {
+  const char* mode_names[] = {"Mix", "Multiply", "Add", "Screen"};
+  int current_mode = static_cast<int>(p.mode);
+  if (ImGui::Combo("Blend Mode", &current_mode, mode_names, 4)) {
+    p.mode = static_cast<workflow::node::TintMode>(current_mode);
     changed = true;
   }
-  if (ImGui::DragFloat("Threshold", &p.threshold, 0.01F, 0.0F, 1.0F)) {
+
+  if (ImGui::SliderFloat("Factor (Fac)", &p.factor, 0.0F, 1.0F)) {
+    changed = true;
+  }
+
+  ImGui::Spacing();
+
+  if (ImGui::ColorEdit4("Color", p.color, ImGuiColorEditFlags_Float)) {
     changed = true;
   }
 

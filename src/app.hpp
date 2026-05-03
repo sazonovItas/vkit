@@ -8,7 +8,9 @@
 #include "vkit/asset/asset.hpp"
 #include "vkit/compute/async_compute.hpp"
 #include "vkit/compute/heightmap_dispatcher.hpp"
+#include "vkit/compute/mix_dispatcher.hpp"
 #include "vkit/compute/noise_dispatcher.hpp"
+#include "vkit/compute/normalmap_dispatcher.hpp"
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
 #include "vkit/controller/camera.hpp"
@@ -83,7 +85,9 @@ class App {
     std::shared_ptr<compute::NoiseDispatcher> noiseDispatcher;
     std::shared_ptr<compute::SobelDispatcher> sobelDispatcher;
     std::shared_ptr<compute::HeightMapDispatcher> heightMapDispatcher;
+    std::shared_ptr<compute::NormalMapDispatcher> normalMapDispatcher;
     std::shared_ptr<compute::TintDispatcher> tintDispatcher;
+    std::shared_ptr<compute::MixDispatcher> mixDispatcher;
 
     std::unique_ptr<workflow::Workflow> workflow;
     std::unique_ptr<controller::WorkflowController> workflowController;
@@ -96,7 +100,9 @@ class App {
       noiseDispatcher->update();
       sobelDispatcher->update();
       heightMapDispatcher->update();
+      normalMapDispatcher->update();
       tintDispatcher->update();
+      mixDispatcher->update();
       executionContext->update();
     }
   } engine_;

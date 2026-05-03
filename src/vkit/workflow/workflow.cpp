@@ -108,6 +108,19 @@ auto Workflow::canConnect(graph::Pin* a, graph::Pin* b) const -> bool {
   return !wouldCreateCycle(src_node, dst_node);
 }
 
+auto Workflow::connect(graph::Pin* src, graph::Pin* sink) -> graph::Link* {
+  auto* link = graph::Graph::connect(src, sink);
+
+  if (link && sink) {
+    if (auto* target_node = static_cast<WorkflowNode*>(sink->getOwnerNode())) {
+      target_node->markStale();
+    }
+  }
+
+  markDirty();
+  return link;
+}
+
 void Workflow::disconnect(graph::Link* link) {
   if (!link) return;
 

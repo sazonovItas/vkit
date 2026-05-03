@@ -1,5 +1,7 @@
 #include "vkit/controller/workflow.hpp"
 
+#include "vkit/core/events/operators.hpp"
+
 namespace vkit::controller {
 
 auto WorkflowController::setWorkflow(workflow::Workflow* workflow)
@@ -62,6 +64,18 @@ auto WorkflowController::setHeightMapResultBus(
   return *this;
 }
 
+auto WorkflowController::setNormalMapJobBus(core::events::NormalMapJobBus* bus)
+    -> WorkflowController& {
+  normalMapJobBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setNormalMapResultBus(
+    core::events::NormalMapResultBus* bus) -> WorkflowController& {
+  normalMapResultBus_ = bus;
+  return *this;
+}
+
 auto WorkflowController::setTintJobBus(core::events::TintJobBus* bus)
     -> WorkflowController& {
   tintJobBus_ = bus;
@@ -71,6 +85,18 @@ auto WorkflowController::setTintJobBus(core::events::TintJobBus* bus)
 auto WorkflowController::setTintResultBus(core::events::TintResultBus* bus)
     -> WorkflowController& {
   tintResultBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setMixJobBus(core::events::MixJobBus* bus)
+    -> WorkflowController& {
+  mixJobBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setMixResultBus(core::events::MixResultBus* bus)
+    -> WorkflowController& {
+  mixResultBus_ = bus;
   return *this;
 }
 
@@ -111,6 +137,16 @@ auto WorkflowController::createHeightMapNode(const std::string& name)
       name, *heightMapJobBus_, *heightMapResultBus_, *textureManager_);
 }
 
+auto WorkflowController::createNormalMapNode(const std::string& name)
+    -> workflow::node::NormalMapNode* {
+  if (!workflow_ || !normalMapJobBus_ || !normalMapResultBus_ ||
+      !textureManager_)
+    return nullptr;
+
+  return workflow_->createNode<workflow::node::NormalMapNode>(
+      name, *normalMapJobBus_, *normalMapResultBus_, *textureManager_);
+}
+
 auto WorkflowController::createTintNode(const std::string& name)
     -> workflow::node::TintNode* {
   if (!workflow_ || !tintJobBus_ || !tintResultBus_ || !textureManager_)
@@ -118,6 +154,15 @@ auto WorkflowController::createTintNode(const std::string& name)
 
   return workflow_->createNode<workflow::node::TintNode>(
       name, *tintJobBus_, *tintResultBus_, *textureManager_);
+}
+
+auto WorkflowController::createMixNode(const std::string& name)
+    -> workflow::node::MixNode* {
+  if (!workflow_ || !mixJobBus_ || !mixResultBus_ || !textureManager_)
+    return nullptr;
+
+  return workflow_->createNode<workflow::node::MixNode>(
+      name, *mixJobBus_, *mixResultBus_, *textureManager_);
 }
 
 void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {

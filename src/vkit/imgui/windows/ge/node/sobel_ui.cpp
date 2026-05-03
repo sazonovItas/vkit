@@ -1,4 +1,4 @@
-#include "vkit/imgui/windows/ge/heightmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 
 #include <imgui.h>
 #include <imnodes.h>
@@ -6,20 +6,20 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/heightmap.hpp"
+#include "vkit/workflow/node/sobel.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::HeightMapNode;
-using workflow::node::HeightMapParams;
+using workflow::node::SobelNode;
+using workflow::node::SobelParams;
 
-auto HeightMapNodeUI::spawnNode(controller::WorkflowController* controller)
+auto SobelNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {
-  return controller->createHeightMapNode("Height Map");
+  return controller->createSobelNode("Sobel Edge");
 }
 
-void HeightMapNodeUI::drawCanvas(workflow::WorkflowNode* node) {
-  auto* n = static_cast<HeightMapNode*>(node);
+void SobelNodeUI::drawCanvas(workflow::WorkflowNode* node) {
+  auto* n = static_cast<SobelNode*>(node);
 
   ImVec4 status_color = getStatusColor(n->status());
 
@@ -41,7 +41,7 @@ void HeightMapNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImGui::Dummy(ImVec2(node_width, 2.0F * zoom));
 
   const auto& p = n->getParams();
-  ImGui::TextDisabled(p.invert ? "Inverted" : "Normal");
+  ImGui::TextDisabled("Intensity: %.2f", p.intensity);
 
   ImGui::Dummy(ImVec2(node_width, 2.0F * zoom));
 
@@ -63,12 +63,12 @@ void HeightMapNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImNodes::PopColorStyle();
 }
 
-void HeightMapNodeUI::drawInspector(workflow::WorkflowNode* node) {
-  auto* n = static_cast<HeightMapNode*>(node);
-  HeightMapParams p = n->getParams();
+void SobelNodeUI::drawInspector(workflow::WorkflowNode* node) {
+  auto* n = static_cast<SobelNode*>(node);
+  SobelParams p = n->getParams();
   bool changed = false;
 
-  ImGui::TextDisabled("Type: Height Map");
+  ImGui::TextDisabled("Type: Sobel Edge");
   ImGui::Separator();
 
   {
@@ -82,14 +82,10 @@ void HeightMapNodeUI::drawInspector(workflow::WorkflowNode* node) {
   ImGui::Separator();
   ImGui::Spacing();
 
-  if (ImGui::DragFloat("Contrast", &p.contrast, 0.02F, 0.0F, 5.0F))
+  if (ImGui::DragFloat("Intensity", &p.intensity, 0.01F, 0.0F, 10.0F)) {
     changed = true;
-  if (ImGui::DragFloat("Brightness", &p.brightness, 0.01F, -1.0F, 1.0F))
-    changed = true;
-
-  bool invert_bool = (p.invert != 0);
-  if (ImGui::Checkbox("Invert", &invert_bool)) {
-    p.invert = invert_bool ? 1 : 0;
+  }
+  if (ImGui::DragFloat("Threshold", &p.threshold, 0.01F, 0.0F, 1.0F)) {
     changed = true;
   }
 

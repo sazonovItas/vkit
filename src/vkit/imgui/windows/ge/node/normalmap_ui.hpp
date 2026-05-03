@@ -1,16 +1,16 @@
 #pragma once
 
-#include "vkit/imgui/windows/ge/node_ui.hpp"
+#include "vkit/imgui/windows/ge/node/node_ui.hpp"
 #include "vkit/texture/manager.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-class TintNodeUI : public INodeUI {
+class NormalMapNodeUI : public INodeUI {
  public:
-  explicit TintNodeUI(texture::TextureManager* textureManager)
+  explicit NormalMapNodeUI(texture::TextureManager* textureManager)
       : textureManager_{textureManager} {}
 
-  auto getName() const -> const char* override { return "Color Tint"; }
+  auto getName() const -> const char* override { return "Normal Map"; }
   auto getCategory() const -> const char* override { return "Operators"; }
 
   auto spawnNode(controller::WorkflowController* controller)

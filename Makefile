@@ -25,7 +25,9 @@ glslc:
 
 	glslc ./shaders/operators/sobel.comp -o ./assets/shaders/operators/sobel.comp
 	glslc ./shaders/operators/heightmap.comp -o ./assets/shaders/operators/heightmap.comp
+	glslc ./shaders/operators/normalmap.comp -o ./assets/shaders/operators/normalmap.comp
 	glslc ./shaders/operators/tint.comp -o ./assets/shaders/operators/tint.comp
+	glslc ./shaders/operators/mix.comp -o ./assets/shaders/operators/mix.comp
 
 .PHONY: cmake
 cmake:

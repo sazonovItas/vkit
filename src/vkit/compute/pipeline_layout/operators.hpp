@@ -4,6 +4,7 @@
 #include <tuple>
 
 #include "vkit/compute/descriptor_set_layout/image_operator.hpp"
+#include "vkit/compute/descriptor_set_layout/mix.hpp"
 #include "vkit/core/events/operators.hpp"
 #include "vkit/graphics/pipeline_layout.hpp"
 
@@ -53,6 +54,43 @@ struct TintPipelineLayout final : graphics::PipelineLayout {
   using SetLayouts = std::tuple<const dsl::ImageOperatorSetLayout&>;
 
   explicit TintPipelineLayout(vk::Device device, const SetLayouts& setLayouts)
+      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+
+ private:
+  static auto createPipelineCreateInfo(const SetLayouts& setLayouts)
+      -> vk::PipelineLayoutCreateInfo {
+    const auto set_layouts =
+        std::array<vk::DescriptorSetLayout, 1>{*std::get<0>(setLayouts)};
+    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
+  }
+};
+
+struct NormalMapPipelineLayout final : graphics::PipelineLayout {
+  static constexpr auto kPushConstantRange =
+      vk::PushConstantRange{vk::ShaderStageFlagBits::eCompute, 0,
+                            sizeof(core::events::NormalMapPushConstants)};
+  using SetLayouts = std::tuple<const dsl::ImageOperatorSetLayout&>;
+
+  explicit NormalMapPipelineLayout(vk::Device device,
+                                   const SetLayouts& setLayouts)
+      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+
+ private:
+  static auto createPipelineCreateInfo(const SetLayouts& setLayouts)
+      -> vk::PipelineLayoutCreateInfo {
+    const auto set_layouts =
+        std::array<vk::DescriptorSetLayout, 1>{*std::get<0>(setLayouts)};
+    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
+  }
+};
+
+struct MixPipelineLayout final : graphics::PipelineLayout {
+  static constexpr auto kPushConstantRange =
+      vk::PushConstantRange{vk::ShaderStageFlagBits::eCompute, 0,
+                            sizeof(core::events::MixPushConstants)};
+  using SetLayouts = std::tuple<const dsl::MixOperatorSetLayout&>;
+
+  explicit MixPipelineLayout(vk::Device device, const SetLayouts& setLayouts)
       : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
 
  private:

@@ -76,7 +76,7 @@ void GraphEditorWindow::onDraw() {
 
   int hovered_pin_id;
   if (ImNodes::IsPinHovered(&hovered_pin_id)) {
-    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Middle)) {
       if (controller_ && controller_->getWorkflow()) {
         auto* workflow = controller_->getWorkflow();
         auto* pin = workflow->findPin(hovered_pin_id);

@@ -16,11 +16,13 @@
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/pipeline/graphics.hpp"
 #include "vkit/graphics/shader_module.hpp"
-#include "vkit/imgui/windows/ge/heightmap_ui.hpp"
-#include "vkit/imgui/windows/ge/noise_generator_ui.hpp"
-#include "vkit/imgui/windows/ge/sobel_ui.hpp"
-#include "vkit/imgui/windows/ge/texture_load_ui.hpp"
-#include "vkit/imgui/windows/ge/tint_ui.hpp"
+#include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/mix_ui.hpp"
+#include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
+#include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
+#include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
+#include "vkit/imgui/windows/ge/node/tint_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
@@ -217,9 +219,17 @@ void App::initWorkflow() {
       *sys_.device, engine_.executionContext->heightMapJobBus,
       engine_.executionContext->heightMapResultBus, engine_.asyncCompute);
 
+  engine_.normalMapDispatcher = std::make_shared<compute::NormalMapDispatcher>(
+      *sys_.device, engine_.executionContext->normalMapJobBus,
+      engine_.executionContext->normalMapResultBus, engine_.asyncCompute);
+
   engine_.tintDispatcher = std::make_shared<compute::TintDispatcher>(
       *sys_.device, engine_.executionContext->tintJobBus,
       engine_.executionContext->tintResultBus, engine_.asyncCompute);
+
+  engine_.mixDispatcher = std::make_shared<compute::MixDispatcher>(
+      *sys_.device, engine_.executionContext->mixJobBus,
+      engine_.executionContext->mixResultBus, engine_.asyncCompute);
 
   engine_.workflow = std::make_unique<workflow::Workflow>();
 
@@ -235,8 +245,12 @@ void App::initWorkflow() {
       .setSobelResultBus(&engine_.executionContext->sobelResultBus)
       .setHeightMapJobBus(&engine_.executionContext->heightMapJobBus)
       .setHeightMapResultBus(&engine_.executionContext->heightMapResultBus)
+      .setNormalMapJobBus(&engine_.executionContext->normalMapJobBus)
+      .setNormalMapResultBus(&engine_.executionContext->normalMapResultBus)
       .setTintJobBus(&engine_.executionContext->tintJobBus)
-      .setTintResultBus(&engine_.executionContext->tintResultBus);
+      .setTintResultBus(&engine_.executionContext->tintResultBus)
+      .setMixJobBus(&engine_.executionContext->mixJobBus)
+      .setMixResultBus(&engine_.executionContext->mixResultBus);
 }
 
 void App::initImgui() {
@@ -301,7 +315,11 @@ void App::initImgui() {
       engine_.textureManager.get());
   auto heightmap_ui = std::make_unique<imgui::windows::ge::HeightMapNodeUI>(
       engine_.textureManager.get());
+  auto normalmap_ui = std::make_unique<imgui::windows::ge::NormalMapNodeUI>(
+      engine_.textureManager.get());
   auto tint_ui = std::make_unique<imgui::windows::ge::TintNodeUI>(
+      engine_.textureManager.get());
+  auto mix_ui = std::make_unique<imgui::windows::ge::MixNodeUI>(
       engine_.textureManager.get());
 
   ui_.graphWindow->getRegistry().registerUI<workflow::node::TextureLoadNode>(
@@ -312,8 +330,12 @@ void App::initImgui() {
       std::move(sobel_ui));
   ui_.graphWindow->getRegistry().registerUI<workflow::node::HeightMapNode>(
       std::move(heightmap_ui));
+  ui_.graphWindow->getRegistry().registerUI<workflow::node::NormalMapNode>(
+      std::move(normalmap_ui));
   ui_.graphWindow->getRegistry().registerUI<workflow::node::TintNode>(
       std::move(tint_ui));
+  ui_.graphWindow->getRegistry().registerUI<workflow::node::MixNode>(
+      std::move(mix_ui));
 
   ui_.graphInspector =
       std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(

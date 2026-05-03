@@ -6,7 +6,7 @@
 
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/imgui_window.hpp"
-#include "vkit/imgui/windows/ge/node_ui.hpp"
+#include "vkit/imgui/windows/ge/node/node_ui.hpp"
 
 namespace vkit::imgui::windows::ge {
 

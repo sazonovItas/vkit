@@ -7,7 +7,9 @@
 #include "vkit/core/events/operators.hpp"
 #include "vkit/texture/manager.hpp"
 #include "vkit/workflow/node/heightmap.hpp"
+#include "vkit/workflow/node/mix.hpp"
 #include "vkit/workflow/node/noise_generator.hpp"
+#include "vkit/workflow/node/normalmap.hpp"
 #include "vkit/workflow/node/sobel.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
 #include "vkit/workflow/node/tint.hpp"
@@ -43,9 +45,17 @@ class WorkflowController {
   auto setHeightMapResultBus(core::events::HeightMapResultBus* bus)
       -> WorkflowController&;
 
+  auto setNormalMapJobBus(core::events::NormalMapJobBus* bus)
+      -> WorkflowController&;
+  auto setNormalMapResultBus(core::events::NormalMapResultBus* bus)
+      -> WorkflowController&;
+
   auto setTintJobBus(core::events::TintJobBus* bus) -> WorkflowController&;
   auto setTintResultBus(core::events::TintResultBus* bus)
       -> WorkflowController&;
+
+  auto setMixJobBus(core::events::MixJobBus* bus) -> WorkflowController&;
+  auto setMixResultBus(core::events::MixResultBus* bus) -> WorkflowController&;
 
   auto createTextureLoadNode(const std::string& name = "Texture Load")
       -> workflow::node::TextureLoadNode*;
@@ -55,8 +65,12 @@ class WorkflowController {
       -> workflow::node::SobelNode*;
   auto createHeightMapNode(const std::string& name = "Height Map")
       -> workflow::node::HeightMapNode*;
+  auto createNormalMapNode(const std::string& name = "Normal Map")
+      -> workflow::node::NormalMapNode*;
   auto createTintNode(const std::string& name = "Color Tint")
       -> workflow::node::TintNode*;
+  auto createMixNode(const std::string& name = "Mix")
+      -> workflow::node::MixNode*;
 
   void deleteNodes(const std::vector<int>& nodeIds);
 
@@ -85,8 +99,14 @@ class WorkflowController {
   core::events::HeightMapJobBus* heightMapJobBus_{nullptr};
   core::events::HeightMapResultBus* heightMapResultBus_{nullptr};
 
+  core::events::NormalMapJobBus* normalMapJobBus_{nullptr};
+  core::events::NormalMapResultBus* normalMapResultBus_{nullptr};
+
   core::events::TintJobBus* tintJobBus_{nullptr};
   core::events::TintResultBus* tintResultBus_{nullptr};
+
+  core::events::MixJobBus* mixJobBus_{nullptr};
+  core::events::MixResultBus* mixResultBus_{nullptr};
 };
 
 };  // namespace vkit::controller
