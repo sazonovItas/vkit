@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "vkit/graphics/command.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::compute {
 

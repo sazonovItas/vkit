@@ -15,6 +15,7 @@
 #include "vkit/compute/heightmap_dispatcher.hpp"
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
+#include "vkit/controller/environment.hpp"
 #include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
@@ -40,6 +41,45 @@ namespace vkit {
 
 namespace {
 
+class DrawSkyboxCommand final : public graphics::Command {
+ public:
+  DrawSkyboxCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+                    vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
+                    glm::vec4 baseColor, float blurLevel)
+      : pipeline_{pipeline},
+        layout_{layout},
+        sceneSet_{sceneSet},
+        bindlessSet_{bindlessSet},
+        baseColor_{baseColor},
+        blurLevel_{blurLevel} {}
+
+  void record(vk::CommandBuffer cb) const override {
+    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+
+    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, bindlessSet_};
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
+                          nullptr);
+
+    renderer::pl::SkyboxPipelineLayout::PushConstants pcs{
+        .baseColor = baseColor_,
+        .blurLevel = blurLevel_,
+    };
+
+    cb.pushConstants(layout_, vk::ShaderStageFlagBits::eFragment, 0,
+                     sizeof(pcs), &pcs);
+
+    cb.draw(6, 1, 0, 0);
+  }
+
+ private:
+  vk::Pipeline pipeline_;
+  vk::PipelineLayout layout_;
+  vk::DescriptorSet sceneSet_;
+  vk::DescriptorSet bindlessSet_;
+  glm::vec4 baseColor_;
+  float blurLevel_;
+};
+
 class DrawRaySphereCommand final : public graphics::Command {
  public:
   DrawRaySphereCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
@@ -51,8 +91,9 @@ class DrawRaySphereCommand final : public graphics::Command {
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, 1,
                           &set_, 0, nullptr);
 
-    renderer::pl::RaySphereDebugPipelineLayout::PushConstants pcs{.model =
-                                                                      model_};
+    renderer::pl::RaySphereDebugPipelineLayout::PushConstants pcs{
+        .model = model_,
+    };
     cb.pushConstants(
         layout_,
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
@@ -169,11 +210,15 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
 App::App() {
   initWindow();
   initVulkan();
-  initBindless();
+
+  initCore();
+  initImguiCore();
+  initCompute();
+  initEnvironment();
   initAsset();
   initWorkflow();
-  initImgui();
   initViewports();
+  initImguiWindows();
   initDebugRendering();
 }
 
@@ -189,6 +234,16 @@ App::~App() {
     if (frame.materialTextureId) {
       ui_.renderer->unregisterTexture(frame.materialTextureId);
     }
+  }
+
+  engine_.workflowController.reset();
+  engine_.workflow.reset();
+  engine_.assetController.reset();
+  engine_.assetManager.reset();
+  engine_.environmentManager.reset();
+
+  if (engine_.textureManager) {
+    engine_.textureManager->setImguiRenderer(nullptr);
   }
 }
 
@@ -221,9 +276,8 @@ void App::initVulkan() {
   }
 }
 
-void App::initBindless() {
+void App::initCore() {
   using BindlessDSL = renderer::dsl::BindlessTextureSetLayout;
-
   sys_.bindlessSetLayout = std::make_unique<BindlessDSL>(sys_.device->get());
 
   std::array<vk::DescriptorPoolSize, 2> pool_sizes = {
@@ -274,89 +328,13 @@ void App::initBindless() {
   engine_.bindlessManager = std::make_unique<graphics::BindlessTextureManager>(
       sys_.device->get(), sys_.bindlessSet, BindlessDSL::kMaxSamplers,
       BindlessDSL::kMaxTextures, engine_.dummyTexture);
-}
 
-void App::initAsset() {
-  engine_.gltfStorage = std::make_shared<asset::GltfStorage>();
-  engine_.assetManager = std::make_shared<asset::AssetManager>(
-      *sys_.device, engine_.gltfStorage, kMaxFramesInFlight);
-  engine_.assetController =
-      std::make_unique<controller::AssetController>(engine_.assetManager.get());
-
-  std::filesystem::path asset_path =
-      asset::assetPath("models/mechdrone/scene.gltf");
-  if (std::filesystem::exists(asset_path)) {
-    auto default_asset = engine_.assetManager->loadGltf(asset_path);
-    if (default_asset) {
-      engine_.assetController->setCurrentAsset(
-          default_asset->getStorageId().value());
-    }
-  }
-}
-
-void App::initWorkflow() {
   engine_.textureManager =
       std::make_shared<texture::TextureManager>(kMaxFramesInFlight);
   engine_.textureManager->setBindlessManager(engine_.bindlessManager.get());
-
-  engine_.executionContext = std::make_shared<workflow::ExecutionContext>();
-
-  engine_.textureUploader = std::make_shared<texture::TextureUploader>(
-      *sys_.device, engine_.textureManager,
-      engine_.executionContext->texLoadBus,
-      engine_.executionContext->texReadyBus);
-
-  engine_.asyncCompute = std::make_shared<compute::AsyncCompute>(
-      sys_.device->get(), sys_.device->queues.compute,
-      sys_.device->queueFamilies.compute);
-
-  engine_.noiseDispatcher = std::make_shared<compute::NoiseDispatcher>(
-      *sys_.device, engine_.executionContext->noiseJobBus,
-      engine_.executionContext->noiseResultBus, engine_.asyncCompute);
-
-  engine_.sobelDispatcher = std::make_shared<compute::SobelDispatcher>(
-      *sys_.device, engine_.executionContext->sobelJobBus,
-      engine_.executionContext->sobelResultBus, engine_.asyncCompute);
-
-  engine_.heightMapDispatcher = std::make_shared<compute::HeightMapDispatcher>(
-      *sys_.device, engine_.executionContext->heightMapJobBus,
-      engine_.executionContext->heightMapResultBus, engine_.asyncCompute);
-
-  engine_.normalMapDispatcher = std::make_shared<compute::NormalMapDispatcher>(
-      *sys_.device, engine_.executionContext->normalMapJobBus,
-      engine_.executionContext->normalMapResultBus, engine_.asyncCompute);
-
-  engine_.tintDispatcher = std::make_shared<compute::TintDispatcher>(
-      *sys_.device, engine_.executionContext->tintJobBus,
-      engine_.executionContext->tintResultBus, engine_.asyncCompute);
-
-  engine_.mixDispatcher = std::make_shared<compute::MixDispatcher>(
-      *sys_.device, engine_.executionContext->mixJobBus,
-      engine_.executionContext->mixResultBus, engine_.asyncCompute);
-
-  engine_.workflow = std::make_unique<workflow::Workflow>();
-
-  engine_.workflowController =
-      std::make_unique<controller::WorkflowController>();
-  engine_.workflowController->setWorkflow(engine_.workflow.get())
-      .setTextureManager(engine_.textureManager.get())
-      .setTextureLoadBus(&engine_.executionContext->texLoadBus)
-      .setTextureReadyBus(&engine_.executionContext->texReadyBus)
-      .setNoiseJobBus(&engine_.executionContext->noiseJobBus)
-      .setNoiseResultBus(&engine_.executionContext->noiseResultBus)
-      .setSobelJobBus(&engine_.executionContext->sobelJobBus)
-      .setSobelResultBus(&engine_.executionContext->sobelResultBus)
-      .setHeightMapJobBus(&engine_.executionContext->heightMapJobBus)
-      .setHeightMapResultBus(&engine_.executionContext->heightMapResultBus)
-      .setNormalMapJobBus(&engine_.executionContext->normalMapJobBus)
-      .setNormalMapResultBus(&engine_.executionContext->normalMapResultBus)
-      .setTintJobBus(&engine_.executionContext->tintJobBus)
-      .setTintResultBus(&engine_.executionContext->tintResultBus)
-      .setMixJobBus(&engine_.executionContext->mixJobBus)
-      .setMixResultBus(&engine_.executionContext->mixResultBus);
 }
 
-void App::initImgui() {
+void App::initImguiCore() {
   ui_.renderer = std::make_unique<imgui::ImguiRenderer>(
       sys_.device->get(), sys_.device->allocator, sys_.swapchain->getFormat(),
       vk::SampleCountFlagBits::e1, kMaxFramesInFlight);
@@ -406,23 +384,95 @@ void App::initImgui() {
 
   ui_.renderer->uploadFont(submit_info);
   ui_.windowManager = std::make_unique<imgui::ImguiWindowManager>();
+}
 
-  ui_.graphWindow =
-      std::make_shared<imgui::windows::ge::GraphEditorWindow>("Graph Editor");
-  ui_.graphWindow->setController(engine_.workflowController.get());
+void App::initCompute() {
+  engine_.executionContext = std::make_shared<workflow::ExecutionContext>();
 
-  registerGraphNodes(*ui_.graphWindow, engine_.textureManager.get());
+  engine_.textureUploader = std::make_shared<texture::TextureUploader>(
+      *sys_.device, engine_.textureManager,
+      engine_.executionContext->texLoadBus,
+      engine_.executionContext->texReadyBus);
 
-  ui_.graphInspector =
-      std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
-          "Graph Node Inspector", ui_.graphWindow.get());
+  engine_.asyncCompute = std::make_shared<compute::AsyncCompute>(
+      sys_.device->get(), sys_.device->queues.compute,
+      sys_.device->queueFamilies.compute);
 
-  ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
-      "Configuration", engine_.assetController.get());
+  engine_.noiseDispatcher = std::make_shared<compute::NoiseDispatcher>(
+      *sys_.device, engine_.executionContext->noiseJobBus,
+      engine_.executionContext->noiseResultBus, engine_.asyncCompute);
 
-  ui_.windowManager->addWindow(ui_.graphWindow);
-  ui_.windowManager->addWindow(ui_.graphInspector);
-  ui_.windowManager->addWindow(ui_.configWindow);
+  engine_.sobelDispatcher = std::make_shared<compute::SobelDispatcher>(
+      *sys_.device, engine_.executionContext->sobelJobBus,
+      engine_.executionContext->sobelResultBus, engine_.asyncCompute);
+
+  engine_.heightMapDispatcher = std::make_shared<compute::HeightMapDispatcher>(
+      *sys_.device, engine_.executionContext->heightMapJobBus,
+      engine_.executionContext->heightMapResultBus, engine_.asyncCompute);
+
+  engine_.normalMapDispatcher = std::make_shared<compute::NormalMapDispatcher>(
+      *sys_.device, engine_.executionContext->normalMapJobBus,
+      engine_.executionContext->normalMapResultBus, engine_.asyncCompute);
+
+  engine_.tintDispatcher = std::make_shared<compute::TintDispatcher>(
+      *sys_.device, engine_.executionContext->tintJobBus,
+      engine_.executionContext->tintResultBus, engine_.asyncCompute);
+
+  engine_.mixDispatcher = std::make_shared<compute::MixDispatcher>(
+      *sys_.device, engine_.executionContext->mixJobBus,
+      engine_.executionContext->mixResultBus, engine_.asyncCompute);
+}
+
+void App::initEnvironment() {
+  engine_.environmentManager = std::make_shared<env::EnvironmentManager>(
+      *sys_.device, engine_.textureManager, engine_.asyncCompute);
+
+  engine_.environmentManager->initializeGlobalBrdfLut();
+
+  engine_.environmentController =
+      std::make_unique<controller::EnvironmentController>(
+          engine_.environmentManager.get());
+}
+
+void App::initAsset() {
+  engine_.gltfStorage = std::make_shared<asset::GltfStorage>();
+  engine_.assetManager = std::make_shared<asset::AssetManager>(
+      *sys_.device, engine_.gltfStorage, kMaxFramesInFlight);
+  engine_.assetController =
+      std::make_unique<controller::AssetController>(engine_.assetManager.get());
+
+  std::filesystem::path asset_path =
+      asset::assetPath("models/mechdrone/scene.gltf");
+  if (std::filesystem::exists(asset_path)) {
+    auto default_asset = engine_.assetManager->loadGltf(asset_path);
+    if (default_asset) {
+      engine_.assetController->setCurrentAsset(
+          default_asset->getStorageId().value());
+    }
+  }
+}
+
+void App::initWorkflow() {
+  engine_.workflow = std::make_unique<workflow::Workflow>();
+
+  engine_.workflowController =
+      std::make_unique<controller::WorkflowController>();
+  engine_.workflowController->setWorkflow(engine_.workflow.get())
+      .setTextureManager(engine_.textureManager.get())
+      .setTextureLoadBus(&engine_.executionContext->texLoadBus)
+      .setTextureReadyBus(&engine_.executionContext->texReadyBus)
+      .setNoiseJobBus(&engine_.executionContext->noiseJobBus)
+      .setNoiseResultBus(&engine_.executionContext->noiseResultBus)
+      .setSobelJobBus(&engine_.executionContext->sobelJobBus)
+      .setSobelResultBus(&engine_.executionContext->sobelResultBus)
+      .setHeightMapJobBus(&engine_.executionContext->heightMapJobBus)
+      .setHeightMapResultBus(&engine_.executionContext->heightMapResultBus)
+      .setNormalMapJobBus(&engine_.executionContext->normalMapJobBus)
+      .setNormalMapResultBus(&engine_.executionContext->normalMapResultBus)
+      .setTintJobBus(&engine_.executionContext->tintJobBus)
+      .setTintResultBus(&engine_.executionContext->tintResultBus)
+      .setMixJobBus(&engine_.executionContext->mixJobBus)
+      .setMixResultBus(&engine_.executionContext->mixResultBus);
 }
 
 void App::initViewports() {
@@ -499,9 +549,6 @@ void App::initViewports() {
     }
   });
 
-  ui_.windowManager->addWindow(ui_.sceneViewer);
-  ui_.windowManager->addWindow(ui_.materialViewer);
-
   auto viewport_info = renderer::ViewportInfo{};
   viewport_info.addColorTarget(vk::Format::eR8G8B8A8Unorm,
                                vk::ImageUsageFlagBits::eColorAttachment,
@@ -518,6 +565,28 @@ void App::initViewports() {
     frame.sceneViewport = renderer::Viewport(viewport_info);
     frame.materialViewport = renderer::Viewport(viewport_info);
   }
+}
+
+void App::initImguiWindows() {
+  ui_.graphWindow =
+      std::make_shared<imgui::windows::ge::GraphEditorWindow>("Graph Editor");
+  ui_.graphWindow->setController(engine_.workflowController.get());
+
+  registerGraphNodes(*ui_.graphWindow, engine_.textureManager.get());
+
+  ui_.graphInspector =
+      std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
+          "Graph Node Inspector", ui_.graphWindow.get());
+
+  ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
+      "Configuration", engine_.assetController.get(),
+      engine_.environmentController.get());
+
+  ui_.windowManager->addWindow(ui_.sceneViewer);
+  ui_.windowManager->addWindow(ui_.materialViewer);
+  ui_.windowManager->addWindow(ui_.graphWindow);
+  ui_.windowManager->addWindow(ui_.graphInspector);
+  ui_.windowManager->addWindow(ui_.configWindow);
 }
 
 void App::initDebugRendering() {
@@ -576,6 +645,30 @@ void App::initDebugRendering() {
 
   debug_.primitivePipeline = prim_builder.build(device);
 
+  debug_.skyboxLayout = std::make_unique<renderer::pl::SkyboxPipelineLayout>(
+      device,
+      std::forward_as_tuple(*debug_.sceneSetLayout, *sys_.bindlessSetLayout));
+
+  auto sky_vert = graphics::SpirVShaderModule{
+      device, shaders::shaderPath(shaders::kSkyboxVertShaderPath)};
+  auto sky_frag = graphics::SpirVShaderModule{
+      device, shaders::shaderPath(shaders::kSkyboxFragShaderPath)};
+
+  auto sky_builder =
+      graphics::pipeline::GraphicsPipelineBuilder{debug_.skyboxLayout->get()};
+  sky_builder
+      .addShaderStage(
+          sky_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          sky_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::False, vk::False)
+      .setCullMode(vk::CullModeFlagBits::eNone)
+      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+
+  debug_.skyboxPipeline = sky_builder.build(device);
+
   vk::DescriptorPoolSize pool_sizes[] = {
       {vk::DescriptorType::eUniformBuffer, kMaxFramesInFlight * 2},
       {vk::DescriptorType::eStorageBuffer, kMaxFramesInFlight * 2}};
@@ -592,6 +685,10 @@ void App::initDebugRendering() {
                                     vk::BufferUsageFlagBits::eUniformBuffer));
 
     frame.materialCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        sys_.device->allocator, static_cast<dataformat::BufferUsageFlags>(
+                                    vk::BufferUsageFlagBits::eUniformBuffer));
+
+    frame.environmentBuffer = std::make_unique<graphics::DescriptorBuffer>(
         sys_.device->allocator, static_cast<dataformat::BufferUsageFlags>(
                                     vk::BufferUsageFlagBits::eUniformBuffer));
 
@@ -615,26 +712,50 @@ void App::initDebugRendering() {
 
     auto scene_buffer_info = frame.sceneCameraBuffer->descriptorInfo();
     auto mat_buffer_info = frame.materialCameraBuffer->descriptorInfo();
+    auto env_buffer_info = frame.environmentBuffer->descriptorInfo();
 
-    vk::WriteDescriptorSet scene_write{
-        frame.sceneDescriptorSet,
-        renderer::dsl::SceneSetLayout::kCameraBinding,
-        0,
-        1,
-        vk::DescriptorType::eUniformBuffer,
-        nullptr,
-        &scene_buffer_info,
-        nullptr};
-
-    vk::WriteDescriptorSet mat_write{
-        frame.materialDescriptorSet,
-        renderer::dsl::SceneSetLayout::kCameraBinding,
-        0,
-        1,
-        vk::DescriptorType::eUniformBuffer,
-        nullptr,
-        &mat_buffer_info,
-        nullptr};
+    std::array<vk::WriteDescriptorSet, 4> scene_writes = {
+        vk::WriteDescriptorSet{
+            frame.sceneDescriptorSet,
+            renderer::dsl::SceneSetLayout::kCameraBinding,
+            0,
+            1,
+            vk::DescriptorType::eUniformBuffer,
+            nullptr,
+            &scene_buffer_info,
+            nullptr,
+        },
+        vk::WriteDescriptorSet{
+            frame.sceneDescriptorSet,
+            renderer::dsl::SceneSetLayout::kEnvironmentBinding,
+            0,
+            1,
+            vk::DescriptorType::eUniformBuffer,
+            nullptr,
+            &env_buffer_info,
+            nullptr,
+        },
+        vk::WriteDescriptorSet{
+            frame.materialDescriptorSet,
+            renderer::dsl::SceneSetLayout::kCameraBinding,
+            0,
+            1,
+            vk::DescriptorType::eUniformBuffer,
+            nullptr,
+            &mat_buffer_info,
+            nullptr,
+        },
+        vk::WriteDescriptorSet{
+            frame.materialDescriptorSet,
+            renderer::dsl::SceneSetLayout::kEnvironmentBinding,
+            0,
+            1,
+            vk::DescriptorType::eUniformBuffer,
+            nullptr,
+            &env_buffer_info,
+            nullptr,
+        },
+    };
 
     vk::DescriptorSetAllocateInfo prim_alloc_info{
         *debug_.descriptorPool, 1, &debug_.primitiveSetLayout->get()};
@@ -664,8 +785,8 @@ void App::initDebugRendering() {
         &joint_info,
         nullptr};
 
-    device.updateDescriptorSets(
-        {scene_write, mat_write, prim_write, joint_write}, nullptr);
+    device.updateDescriptorSets(scene_writes, nullptr);
+    device.updateDescriptorSets({prim_write, joint_write}, nullptr);
   }
 }
 
@@ -728,6 +849,7 @@ void App::mainLoop() {
 
     sys_.renderer->beginFrame(currentFrame_);
 
+    engine_.assetManager->processGC();
     engine_.textureManager->processGC();
 
     auto image_index_opt = sys_.swapchain->acquireNextImage(
@@ -784,6 +906,25 @@ void App::mainLoop() {
       current_asset->update();
     }
 
+    env::EnvironmentParams env_params{};
+    auto current_env = engine_.environmentController->getCurrentEnvironment();
+    glm::vec4 env_base_color = glm::vec4(0.2F, 0.2F, 0.2F, 1.0F);
+    float env_blur = 0.0F;
+
+    if (current_env) {
+      env_params = current_env->getData();
+      env_blur = current_env->blurLevel;
+      env_base_color = glm::vec4(1.0F);
+    } else {
+      env_params.intensity = 1.0F;
+      env_params.prefilterTexIdx = -1;
+      env_params.irradianceTexIdx = -1;
+      env_params.brdfLutTexIdx = -1;
+    }
+
+    std::ignore = frame.environmentBuffer->writeAt(
+        std::as_bytes(std::span{&env_params, 1}));
+
     auto scene_ubo = renderer::types::CameraUBO{
         .view = scene_.sceneCamera->getViewMatrix(),
         .proj = scene_.sceneCamera->getProjectionMatrix(),
@@ -807,20 +948,24 @@ void App::mainLoop() {
     auto task = renderer::RenderTask{};
 
     if (ui_.sceneViewer->isVisible()) {
-      task.add<renderer::rp::BeginViewportPass>(
-              frame.sceneViewport, 0, 1,
-              std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
+      task.add<renderer::rp::BeginViewportPass>(frame.sceneViewport, 0, 1)
+          .add<DrawSkyboxCommand>(*debug_.skyboxPipeline,
+                                  debug_.skyboxLayout->get(),
+                                  frame.sceneDescriptorSet, sys_.bindlessSet,
+                                  env_base_color, env_blur)
           .add<DrawAssetCommand>(
               *debug_.primitivePipeline, debug_.primitiveLayout->get(),
               frame.sceneDescriptorSet, frame.primitiveDescriptorSet,
-              current_asset.get())  // Pass dynamic pointer safely!
+              current_asset.get())
           .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
     }
 
     if (ui_.materialViewer->isVisible()) {
-      task.add<renderer::rp::BeginViewportPass>(
-              frame.materialViewport, 0, 1,
-              std::array<float, 4>{0.15F, 0.15F, 0.15F, 1.0F})
+      task.add<renderer::rp::BeginViewportPass>(frame.materialViewport, 0, 1)
+          .add<DrawSkyboxCommand>(*debug_.skyboxPipeline,
+                                  debug_.skyboxLayout->get(),
+                                  frame.materialDescriptorSet, sys_.bindlessSet,
+                                  env_base_color, env_blur)
           .add<DrawRaySphereCommand>(
               *debug_.raySpherePipeline, debug_.raySphereLayout->get(),
               frame.materialDescriptorSet, glm::mat4(1.0F))
@@ -830,8 +975,7 @@ void App::mainLoop() {
     task.add<renderer::rp::BeginSwapchainPass>(
             sys_.swapchain->getImage(image_index),
             sys_.swapchain->getImageView(image_index),
-            sys_.swapchain->getExtent(),
-            std::array<float, 4>{0.02F, 0.02F, 0.02F, 1.0F})
+            sys_.swapchain->getExtent())
         .add<renderer::cmd::DrawImGuiCommand>(*ui_.host, currentFrame_)
         .add<renderer::rp::EndSwapchainPass>(
             sys_.swapchain->getImage(image_index));

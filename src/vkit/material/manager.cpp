@@ -12,7 +12,6 @@ void MaterialManager::clear() {
   diffuse.clear();
   diffuseSpecular.clear();
   principledBSDF.clear();
-  slots.clear();
 }
 
 auto MaterialManager::addMaterial(const std::shared_ptr<Material>& mat)

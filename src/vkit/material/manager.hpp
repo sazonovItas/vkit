@@ -11,7 +11,6 @@
 #include "vkit/material/diffuse.hpp"
 #include "vkit/material/diffuse_specular.hpp"
 #include "vkit/material/principled_bsdf.hpp"
-#include "vkit/material/slog.hpp"
 
 namespace vkit::material {
 
@@ -56,8 +55,6 @@ class MaterialManager {
   TypedMaterialStorage<DiffuseSpecular> diffuseSpecular;
   TypedMaterialStorage<PrincipledBSDF> principledBSDF;
 
-  vkit::Storage<Slot> slots;
-
   void update();
   void clear();
 
@@ -69,20 +66,6 @@ class MaterialManager {
       -> std::shared_ptr<Material>;
   [[nodiscard]] auto getAllMaterials() const
       -> std::vector<std::shared_ptr<Material>>;
-
-  auto addSlot(const std::shared_ptr<Slot>& slot) -> std::uint32_t {
-    return slots.add(slot);
-  }
-
-  void removeSlot(std::uint32_t id) { slots.remove(id); }
-
-  [[nodiscard]] auto getSlot(std::uint32_t id) const -> std::shared_ptr<Slot> {
-    return slots.get(id);
-  }
-
-  [[nodiscard]] auto getSlots() const -> std::vector<std::shared_ptr<Slot>> {
-    return slots.getItems();
-  }
 };
 
 };  // namespace vkit::material

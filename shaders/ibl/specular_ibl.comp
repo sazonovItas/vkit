@@ -22,7 +22,7 @@ void main() {
     vec3 R = N;
     vec3 V = R;
 
-    const uint SAMPLE_COUNT = 1024u;
+    const uint SAMPLE_COUNT = 2048u;
     vec3 prefilteredColor = vec3(0.0);
     float totalWeight = 0.0;
 
@@ -33,13 +33,33 @@ void main() {
 
         float NdotL = max(dot(N, L), 0.0);
         if (NdotL > 0.0) {
+            float NdotH = max(dot(N, H), 0.0);
+            float HdotV = max(dot(H, V), 0.0);
+
+            float a = pcs.roughness * pcs.roughness;
+            float a2 = a * a;
+            float nom = a2;
+            float denom = (NdotH * NdotH * (a2 - 1.0) + 1.0);
+            float D = nom / max(PI * denom * denom, 0.0001);
+
+            float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001; 
+
+            vec2 res = vec2(textureSize(sourceEnvMap, 0));
+            float saTexel  = 4.0 * PI / (res.x * res.y);
+            float saSample = 1.0 / (float(SAMPLE_COUNT) * pdf + 0.0001);
+            
+            float mipLevel = pcs.roughness == 0.0 ? 0.0 : (0.5 * log2(saSample / saTexel) + 1.0);
+
             vec2 sampleUV = directionToSphericalEnvmap(L);
-            prefilteredColor += texture(sourceEnvMap, sampleUV).rgb * NdotL;
+            vec3 sampleColor = textureLod(sourceEnvMap, sampleUV, mipLevel).rgb;
+            
+            sampleColor = min(sampleColor, vec3(25.0)); 
+
+            prefilteredColor += sampleColor * NdotL;
             totalWeight += NdotL;
         }
     }
 
-    prefilteredColor = prefilteredColor / totalWeight;
-
+    prefilteredColor = prefilteredColor / max(totalWeight, 0.0001);
     imageStore(outPrefilterMap, ivec3(texelCoord, pcs.layer), vec4(prefilteredColor, 1.0));
 }

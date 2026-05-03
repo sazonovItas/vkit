@@ -4,7 +4,6 @@
 
 #include "vkit/graphics/enums.hpp"
 #include "vkit/graphics/image.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::graphics {
 
@@ -147,97 +146,92 @@ void Texture::recordUpload(vk::CommandBuffer cb, const Buffer& stagingBuffer) {
 void Texture::recordMipmapGeneration(vk::CommandBuffer cb) {
   if (!useMipmaps_ || image_.mipLevels <= 1) return;
 
-  auto fn = [&](vk::CommandBuffer cb) {
-    const auto format = image_.format;
+  const auto format = image_.format;
+  const auto aspect = Image::inferAspectFlags(format);
 
-    const auto aspect = Image::inferAspectFlags(format);
-
-    for (uint32_t i = 1; i < image_.mipLevels; ++i) {
-      {
-        vk::ImageMemoryBarrier barrier{};
-        barrier.setImage(image_.image)
-            .setOldLayout(vk::ImageLayout::eTransferDstOptimal)
-            .setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
-            .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-            .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-            .setSubresourceRange(vk::ImageSubresourceRange{aspect, i - 1, 1, 0,
-                                                           image_.arrayLayers})
-            .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
-            .setDstAccessMask(vk::AccessFlagBits::eTransferRead);
-
-        cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
-                           vk::PipelineStageFlagBits::eTransfer, {}, nullptr,
-                           nullptr, barrier);
-      }
-
-      auto src_extent = image_.mipExtent(i - 1);
-      auto dst_extent = image_.mipExtent(i);
-
-      vk::ImageBlit blit{};
-      blit.setSrcSubresource(
-          vk::ImageSubresourceLayers{aspect, i - 1, 0, image_.arrayLayers});
-      blit.setDstSubresource(
-          vk::ImageSubresourceLayers{aspect, i, 0, image_.arrayLayers});
-
-      blit.setSrcOffsets({
-          vk::Offset3D{0, 0, 0},
-          vk::Offset3D{
-              static_cast<int32_t>(src_extent.width),
-              static_cast<int32_t>(src_extent.height),
-              static_cast<int32_t>(src_extent.depth),
-          },
-      });
-
-      blit.setDstOffsets({
-          vk::Offset3D{0, 0, 0},
-          vk::Offset3D{
-              static_cast<int32_t>(dst_extent.width),
-              static_cast<int32_t>(dst_extent.height),
-              static_cast<int32_t>(dst_extent.depth),
-          },
-      });
-
-      cb.blitImage(image_.image, vk::ImageLayout::eTransferSrcOptimal,
-                   image_.image, vk::ImageLayout::eTransferDstOptimal, blit,
-                   vk::Filter::eLinear);
-
-      {
-        vk::ImageMemoryBarrier barrier{};
-        barrier.setImage(image_.image)
-            .setOldLayout(vk::ImageLayout::eTransferSrcOptimal)
-            .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
-            .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
-            .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-            .setSubresourceRange(vk::ImageSubresourceRange{aspect, i - 1, 1, 0,
-                                                           image_.arrayLayers})
-            .setSrcAccessMask(vk::AccessFlagBits::eTransferRead)
-            .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
-
-        cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
-                           vk::PipelineStageFlagBits::eFragmentShader, {},
-                           nullptr, nullptr, barrier);
-      }
-    }
-
+  for (uint32_t i = 1; i < image_.mipLevels; ++i) {
     {
       vk::ImageMemoryBarrier barrier{};
       barrier.setImage(image_.image)
           .setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+          .setNewLayout(vk::ImageLayout::eTransferSrcOptimal)
+          .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+          .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+          .setSubresourceRange(vk::ImageSubresourceRange{aspect, i - 1, 1, 0,
+                                                         image_.arrayLayers})
+          .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+          .setDstAccessMask(vk::AccessFlagBits::eTransferRead);
+
+      cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                         vk::PipelineStageFlagBits::eTransfer, {}, nullptr,
+                         nullptr, barrier);
+    }
+
+    auto src_extent = image_.mipExtent(i - 1);
+    auto dst_extent = image_.mipExtent(i);
+
+    vk::ImageBlit blit{};
+    blit.setSrcSubresource(
+        vk::ImageSubresourceLayers{aspect, i - 1, 0, image_.arrayLayers});
+    blit.setDstSubresource(
+        vk::ImageSubresourceLayers{aspect, i, 0, image_.arrayLayers});
+
+    blit.setSrcOffsets({
+        vk::Offset3D{0, 0, 0},
+        vk::Offset3D{
+            static_cast<int32_t>(src_extent.width),
+            static_cast<int32_t>(src_extent.height),
+            static_cast<int32_t>(src_extent.depth),
+        },
+    });
+
+    blit.setDstOffsets({
+        vk::Offset3D{0, 0, 0},
+        vk::Offset3D{
+            static_cast<int32_t>(dst_extent.width),
+            static_cast<int32_t>(dst_extent.height),
+            static_cast<int32_t>(dst_extent.depth),
+        },
+    });
+
+    cb.blitImage(image_.image, vk::ImageLayout::eTransferSrcOptimal,
+                 image_.image, vk::ImageLayout::eTransferDstOptimal, blit,
+                 vk::Filter::eLinear);
+
+    {
+      vk::ImageMemoryBarrier barrier{};
+      barrier.setImage(image_.image)
+          .setOldLayout(vk::ImageLayout::eTransferSrcOptimal)
           .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
           .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
           .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
-          .setSubresourceRange(vk::ImageSubresourceRange{
-              aspect, image_.mipLevels - 1, 1, 0, image_.arrayLayers})
-          .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+          .setSubresourceRange(vk::ImageSubresourceRange{aspect, i - 1, 1, 0,
+                                                         image_.arrayLayers})
+          .setSrcAccessMask(vk::AccessFlagBits::eTransferRead)
           .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
 
       cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
                          vk::PipelineStageFlagBits::eFragmentShader, {},
                          nullptr, nullptr, barrier);
     }
-  };
+  }
 
-  fn(cb);
+  {
+    vk::ImageMemoryBarrier barrier{};
+    barrier.setImage(image_.image)
+        .setOldLayout(vk::ImageLayout::eTransferDstOptimal)
+        .setNewLayout(vk::ImageLayout::eShaderReadOnlyOptimal)
+        .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+        .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
+        .setSubresourceRange(vk::ImageSubresourceRange{
+            aspect, image_.mipLevels - 1, 1, 0, image_.arrayLayers})
+        .setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+        .setDstAccessMask(vk::AccessFlagBits::eShaderRead);
+
+    cb.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
+                       vk::PipelineStageFlagBits::eFragmentShader, {}, nullptr,
+                       nullptr, barrier);
+  }
 }
 
 auto Texture::createAllocatedImage(vma::Allocator allocator,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 #include "vkit/compute/pipeline_layout/ibl.hpp"
@@ -7,9 +8,9 @@
 
 namespace vkit::compute::cmd {
 
-class GenerateBrdfLutCommand final : public graphics::Command {
+class DispatchBrdfLutCommand final : public graphics::Command {
  public:
-  GenerateBrdfLutCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+  DispatchBrdfLutCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
                          vk::DescriptorSet set, std::uint32_t width,
                          std::uint32_t height)
       : pipeline_{pipeline},
@@ -22,7 +23,8 @@ class GenerateBrdfLutCommand final : public graphics::Command {
     cb.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline_);
     cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, layout_, 0, 1, &set_,
                           0, nullptr);
-    cb.dispatch((width_ + 15) / 16, (height_ + 15) / 16, 1);
+
+    cb.dispatch(width_ / 16, height_ / 16, 1);
   }
 
  private:
@@ -33,9 +35,9 @@ class GenerateBrdfLutCommand final : public graphics::Command {
   std::uint32_t height_;
 };
 
-class GenerateIrradianceCommand final : public graphics::Command {
+class DispatchIrradianceCommand final : public graphics::Command {
  public:
-  GenerateIrradianceCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+  DispatchIrradianceCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
                             vk::DescriptorSet set, std::uint32_t width,
                             std::uint32_t height)
       : pipeline_{pipeline},
@@ -48,7 +50,8 @@ class GenerateIrradianceCommand final : public graphics::Command {
     cb.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline_);
     cb.bindDescriptorSets(vk::PipelineBindPoint::eCompute, layout_, 0, 1, &set_,
                           0, nullptr);
-    cb.dispatch((width_ + 15) / 16, (height_ + 15) / 16, 1);
+
+    cb.dispatch(width_ / 16, height_ / 16, 1);
   }
 
  private:
@@ -59,17 +62,17 @@ class GenerateIrradianceCommand final : public graphics::Command {
   std::uint32_t height_;
 };
 
-class GeneratePrefilterCommand final : public graphics::Command {
+class DispatchPrefilterCommand final : public graphics::Command {
  public:
-  GeneratePrefilterCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+  DispatchPrefilterCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
                            vk::DescriptorSet set, std::uint32_t width,
-                           std::uint32_t height, std::uint32_t layers)
+                           std::uint32_t height, std::uint32_t layerCount)
       : pipeline_{pipeline},
         layout_{layout},
         set_{set},
         width_{width},
         height_{height},
-        layerCount_{layers} {}
+        layerCount_{layerCount} {}
 
   void record(vk::CommandBuffer cb) const override {
     cb.bindPipeline(vk::PipelineBindPoint::eCompute, pipeline_);
@@ -77,20 +80,18 @@ class GeneratePrefilterCommand final : public graphics::Command {
                           0, nullptr);
 
     for (std::uint32_t layer = 0; layer < layerCount_; ++layer) {
-      float roughness =
-          (layerCount_ > 1)
-              ? static_cast<float>(layer) / static_cast<float>(layerCount_ - 1)
-              : 0.0F;
+      float roughness = static_cast<float>(layer) /
+                        static_cast<float>(std::max(1U, layerCount_ - 1));
 
-      pl::SpecularPipelineLayout::PushConstants pcs{
+      compute::pl::SpecularPipelineLayout::PushConstants pcs{
           .roughness = roughness,
           .layer = layer,
       };
 
       cb.pushConstants(layout_, vk::ShaderStageFlagBits::eCompute, 0,
-                       sizeof(pl::SpecularPipelineLayout::PushConstants), &pcs);
+                       sizeof(pcs), &pcs);
 
-      cb.dispatch((width_ + 15) / 16, (height_ + 15) / 16, 1);
+      cb.dispatch(width_ / 16, height_ / 16, 1);
     }
   }
 

@@ -30,13 +30,20 @@ class TextureManager : public vkit::Storage<Texture> {
   auto add(const std::shared_ptr<Texture>& texture) -> std::uint32_t override;
   void remove(std::uint32_t storageId) override;
 
+  [[nodiscard]] auto getBindlessManager() const
+      -> graphics::BindlessTextureManager* {
+    return bindlessManager_;
+  }
   void setBindlessManager(graphics::BindlessTextureManager* manager);
+
+  [[nodiscard]] auto getImguiRenderer() const -> imgui::ImguiRenderer* {
+    return imguiRenderer_;
+  }
   void setImguiRenderer(imgui::ImguiRenderer* renderer);
 
   void processGC();
 
  private:
-
   graphics::BindlessTextureManager* bindlessManager_{nullptr};
   imgui::ImguiRenderer* imguiRenderer_{nullptr};
 
