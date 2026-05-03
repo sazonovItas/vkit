@@ -19,7 +19,8 @@ struct TextureLoadRequest {
 
 struct TextureReadyEvent {
   std::uint64_t requestId{0};
-  std::shared_ptr<texture::Texture> texture;
+  std::shared_ptr<texture::Texture> color;
+  std::shared_ptr<texture::Texture> image;
   std::string error;
 };
 

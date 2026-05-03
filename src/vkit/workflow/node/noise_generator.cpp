@@ -23,14 +23,18 @@ NoiseGeneratorNode::NoiseGeneratorNode(std::string_view name,
         }
 
         if (ev.imageF32 && ev.imageUnorm) {
-          outputF32Id = ev.imageF32->getStorageId();
-          outputColorId = ev.imageUnorm->getStorageId();
+          outputF32Id = textureManager_.add(ev.imageF32);
+          outputColorId = textureManager_.add(ev.imageUnorm);
+
+          if (outputF32Id) outImageF32_->setData<std::uint32_t>(*outputF32Id);
+          if (outputColorId) outColor_->setData<std::uint32_t>(*outputColorId);
+
           setStatus(NodeStatus::kReady);
           propagateStale();
         }
       })} {
-  outImageF32_ = addOutputPin(pinKeyType(PinType::kFloatTexture2D), "Image");
   outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
+  outImageF32_ = addOutputPin(pinKeyType(PinType::kFloatTexture2D), "Image");
 }
 
 NoiseGeneratorNode::~NoiseGeneratorNode() {
@@ -49,6 +53,9 @@ void NoiseGeneratorNode::execute() {
     textureManager_.remove(*outputColorId);
     outputColorId.reset();
   }
+
+  if (outColor_) outColor_->clearData();
+  if (outImageF32_) outImageF32_->clearData();
 
   pendingRequestId_ = ++request_counter_;
   setStatus(NodeStatus::kExecuting);

@@ -56,17 +56,6 @@ void TextureManager::remove(std::uint32_t id) {
     if (id < this->items_.size() && this->items_[id]) {
       auto texture = this->items_[id];
 
-      if ((bindlessManager_ != nullptr) &&
-          texture->getBindlessId().has_value()) {
-        bindlessManager_->removeTexture(texture->getBindlessId().value());
-        texture->setBindlessId(std::nullopt);
-      }
-
-      if ((imguiRenderer_ != nullptr) && texture->getImguiId().has_value()) {
-        imguiRenderer_->unregisterTexture(texture->getImguiId().value());
-        texture->setImguiId(std::nullopt);
-      }
-
       gcQueue_.push_back({
           .texture = texture,
           .framesRemaining = static_cast<int>(maxFramesInFlight_) + 1,
@@ -84,6 +73,19 @@ void TextureManager::processGC() {
     it->framesRemaining--;
 
     if (it->framesRemaining <= 0) {
+      auto& texture = it->texture;
+
+      if ((bindlessManager_ != nullptr) &&
+          texture->getBindlessId().has_value()) {
+        bindlessManager_->removeTexture(texture->getBindlessId().value());
+        texture->setBindlessId(std::nullopt);
+      }
+
+      if ((imguiRenderer_ != nullptr) && texture->getImguiId().has_value()) {
+        imguiRenderer_->unregisterTexture(texture->getImguiId().value());
+        texture->setImguiId(std::nullopt);
+      }
+
       it = gcQueue_.erase(it);
     } else {
       ++it;

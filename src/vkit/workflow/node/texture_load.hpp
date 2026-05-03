@@ -24,9 +24,14 @@ class TextureLoadNode : public WorkflowNode {
 
   void setPath(std::filesystem::path path);
   [[nodiscard]] auto getPath() const -> const std::filesystem::path&;
+
+  void setUseMipmaps(bool useMipmaps);
+  [[nodiscard]] auto getUseMipmaps() const -> bool;
+
   [[nodiscard]] auto isLoaded() const -> bool;
 
-  std::optional<std::uint32_t> outputTextureId;
+  std::optional<std::uint32_t> outputColorId;
+  std::optional<std::uint32_t> outputF32Id;
 
  private:
   core::events::TextureLoadBus& loadBus_;
@@ -35,9 +40,12 @@ class TextureLoadNode : public WorkflowNode {
   message_bus::Subscription<core::events::TextureReadyEvent> readySub_;
 
   std::filesystem::path path_;
+  bool useMipmaps_{true};
+
   std::uint64_t pendingRequestId_{0};
   bool loaded_{false};
 
+  graph::Pin* outImageF32_{nullptr};
   graph::Pin* outColor_{nullptr};
 
   static std::atomic<std::uint64_t> request_counter_;

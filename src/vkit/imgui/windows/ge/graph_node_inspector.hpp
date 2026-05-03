@@ -21,16 +21,21 @@ class GraphNodeInspectorWindow : public ImguiWindow {
     auto* workflow = graphEditor_->getController()->getWorkflow();
     if (!workflow) return;
 
+    ImGui::BeginChild("InspectorScrollRegion", ImVec2(0, 0), 0,
+                      ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
     int selected_count = ImNodes::NumSelectedNodes();
 
     if (selected_count == 0) {
       ImGui::TextDisabled("Select a node to inspect its properties.");
+      ImGui::EndChild();
       return;
     }
 
     if (selected_count > 1) {
       ImGui::TextDisabled("%d nodes selected. Bulk editing not supported.",
                           selected_count);
+      ImGui::EndChild();
       return;
     }
 
@@ -47,6 +52,7 @@ class GraphNodeInspectorWindow : public ImguiWindow {
 
     if (!selected_node) {
       ImGui::TextDisabled("Selected item could not be found in the workflow.");
+      ImGui::EndChild();
       return;
     }
 
@@ -55,6 +61,8 @@ class GraphNodeInspectorWindow : public ImguiWindow {
     } else {
       ImGui::TextDisabled("No Inspector UI registered for this node type.");
     }
+
+    ImGui::EndChild();
   }
 
  private:

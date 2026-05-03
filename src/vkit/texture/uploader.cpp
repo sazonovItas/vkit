@@ -17,10 +17,20 @@ TextureUploader::TextureUploader(const graphics::GfxDevice& device,
 void TextureUploader::onRequest(core::events::TextureLoadRequest& req) {
   auto future = std::async(
       std::launch::async, [this, path = req.path, opts = req.options]() {
-        return loadFromFile(device_.get(), device_.allocator, path, opts);
+        auto color_opts = opts;
+        auto loaded_color =
+            loadFromFile(device_.get(), device_.allocator, path, color_opts);
+
+        auto f32_opts = opts;
+        f32_opts.useMipmaps = false;
+        f32_opts.isHdr = true;
+        auto loaded_f32 =
+            loadFromFile(device_.get(), device_.allocator, path, f32_opts);
+
+        return std::make_pair(std::move(loaded_color), std::move(loaded_f32));
       });
 
-  inFlightLoads_.push_back({
+  inFlightLoads_.push_back(InFlightDiskLoad{
       .requestId = req.requestId,
       .path = req.path,
       .options = req.options,
@@ -34,9 +44,12 @@ void TextureUploader::update() {
   for (auto it = inFlightLoads_.begin(); it != inFlightLoads_.end();) {
     if (it->future.wait_for(0s) == std::future_status::ready) {
       try {
-        auto loaded = it->future.get();
-        auto logical = std::make_shared<Texture>(it->path.filename().string(),
-                                                 loaded.texture);
+        auto [loadedColor, loadedF32] = it->future.get();
+
+        auto color_tex = std::make_shared<Texture>(
+            it->path.filename().string() + "_color", loadedColor.texture);
+        auto f32_tex = std::make_shared<Texture>(
+            it->path.filename().string() + "_f32", loadedF32.texture);
 
         auto alloc_info =
             vk::CommandBufferAllocateInfo{}
@@ -50,10 +63,13 @@ void TextureUploader::update() {
         cb->begin(vk::CommandBufferBeginInfo{}.setFlags(
             vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
 
-        loaded.texture->recordUpload(*cb, loaded.stagingBuffer);
+        loadedColor.texture->recordUpload(*cb, loadedColor.stagingBuffer);
         if (it->options.useMipmaps) {
-          loaded.texture->recordMipmapGeneration(*cb);
+          loadedColor.texture->recordMipmapGeneration(*cb);
         }
+
+        loadedF32.texture->recordUpload(*cb, loadedF32.stagingBuffer);
+
         cb->end();
 
         auto fence = device_.get().createFenceUnique({});
@@ -61,18 +77,21 @@ void TextureUploader::update() {
 
         device_.queues.graphicsPresent.submit(submit_info, *fence);
 
-        inFlightUploads_.push_back({
+        inFlightUploads_.push_back(InFlightGpuUpload{
             .requestId = it->requestId,
-            .logicalTexture = std::move(logical),
+            .logicalColor = std::move(color_tex),
+            .logicalF32 = std::move(f32_tex),
             .fence = std::move(fence),
             .commandBuffer = std::move(cb),
-            .stagingBuffer = std::move(loaded.stagingBuffer),
+            .stagingColor = std::move(loadedColor.stagingBuffer),
+            .stagingF32 = std::move(loadedF32.stagingBuffer),
         });
 
       } catch (const std::exception& e) {
         readyBus_.sendMessage({
             .requestId = it->requestId,
-            .texture = nullptr,
+            .color = nullptr,
+            .image = nullptr,
             .error = e.what(),
         });
       }
@@ -84,13 +103,10 @@ void TextureUploader::update() {
 
   for (auto it = inFlightUploads_.begin(); it != inFlightUploads_.end();) {
     if (device_.get().getFenceStatus(*it->fence) == vk::Result::eSuccess) {
-      if (storage_) {
-        storage_->add(it->logicalTexture);
-      }
-
       readyBus_.sendMessage({
           .requestId = it->requestId,
-          .texture = it->logicalTexture,
+          .color = it->logicalColor,
+          .image = it->logicalF32,
           .error = "",
       });
 

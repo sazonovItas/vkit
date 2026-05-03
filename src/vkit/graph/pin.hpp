@@ -1,5 +1,6 @@
 #pragma once
 
+#include <any>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,10 +10,7 @@ namespace vkit::graph {
 class Node;
 class Link;
 
-enum class PinKind {
-  kInput,
-  kOutput
-};
+enum class PinKind { kInput, kOutput };
 
 class Pin {
  private:
@@ -25,8 +23,8 @@ class Pin {
 
   [[nodiscard]] auto isSrc() const -> bool;
   [[nodiscard]] auto isSink() const -> bool;
-  
-  [[nodiscard]] auto getKind() const -> PinKind; 
+
+  [[nodiscard]] auto getKind() const -> PinKind;
 
   [[nodiscard]] auto getId() const -> int;
   [[nodiscard]] auto getKey() const -> std::size_t;
@@ -42,16 +40,32 @@ class Pin {
 
   void setOwnerNode(Node* node);
 
+  template <typename T>
+  void setData(T value) {
+    payload_ = std::make_any<T>(std::move(value));
+  }
+
+  template <typename T>
+  [[nodiscard]] auto getData() const -> const T* {
+    return std::any_cast<T>(&payload_);
+  }
+
+  void clearData() { payload_.reset(); }
+
+  [[nodiscard]] auto hasData() const -> bool { return payload_.has_value(); }
+
  protected:
   int id_;
   std::size_t key_;
   Node* ownerNode_{nullptr};
   std::size_t slot_;
-  
-  bool isSrc_{true}; 
-  
+
+  bool isSrc_{true};
+
   std::string name_;
   std::vector<Link*> links_;
+
+  std::any payload_;
 };
 
 };  // namespace vkit::graph

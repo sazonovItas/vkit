@@ -15,15 +15,17 @@ struct InFlightDiskLoad {
   std::uint64_t requestId;
   std::filesystem::path path;
   LoadOptions options;
-  std::future<LoadedTexture> future;
+  std::future<std::pair<LoadedTexture, LoadedTexture>> future;
 };
 
 struct InFlightGpuUpload {
   std::uint64_t requestId;
-  std::shared_ptr<texture::Texture> logicalTexture;
+  std::shared_ptr<texture::Texture> logicalColor;
+  std::shared_ptr<texture::Texture> logicalF32;
   vk::UniqueFence fence;
   vk::UniqueCommandBuffer commandBuffer;
-  graphics::MappedBuffer stagingBuffer;
+  graphics::MappedBuffer stagingColor;
+  graphics::MappedBuffer stagingF32;
 };
 
 class TextureUploader {

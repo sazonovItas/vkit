@@ -23,21 +23,7 @@ auto NoiseGeneratorNodeUI::spawnNode(controller::WorkflowController* controller)
 void NoiseGeneratorNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   auto* n = static_cast<NoiseGeneratorNode*>(node);
 
-  ImVec4 status_color = style::colors::kStatusDefault;
-  switch (n->status()) {
-    case workflow::NodeStatus::kReady:
-      status_color = style::colors::kStatusReady;
-      break;
-    case workflow::NodeStatus::kStale:
-      status_color = style::colors::kStatusStale;
-      break;
-    case workflow::NodeStatus::kExecuting:
-      status_color = style::colors::kStatusExecuting;
-      break;
-    case workflow::NodeStatus::kError:
-      status_color = style::colors::kStatusError;
-      break;
-  }
+  ImVec4 status_color = getStatusColor(n->status());
 
   ImU32 header_color = ImGui::ColorConvertFloat4ToU32(status_color);
   ImNodes::PushColorStyle(ImNodesCol_TitleBar, header_color);
@@ -65,8 +51,10 @@ void NoiseGeneratorNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Image",
                     style::colors::kPinColorCyan, node_width);
+  ImGui::Spacing();
   PinUI::DrawOutput(n->getOutputs()[1].get(), "Color",
                     style::colors::kPinColorYellow, node_width);
+  ImGui::Spacing();
 
   ImNodes::EndNode();
 
@@ -150,24 +138,26 @@ void NoiseGeneratorNodeUI::drawInspector(workflow::WorkflowNode* node) {
 
   if (changed) n->setParams(p);
 
-  ImGui::Spacing();
-  ImGui::Separator();
-  ImGui::Spacing();
-
-  auto show_preview = [&](std::optional<uint32_t> id, const char* label) {
-    if (!id.has_value() || !textureManager_) return;
-    auto tex = textureManager_->get(*id);
-    if (!tex || !tex->getImguiId().has_value()) return;
-    ImGui::TextDisabled("%s", label);
-    ImGui::Image(*tex->getImguiId(), ImVec2(200, 200));
-  };
-
   if (n->status() == workflow::NodeStatus::kReady) {
-    show_preview(n->outputColorId, "Color (UNORM)");
-  } else if (n->status() == workflow::NodeStatus::kExecuting) {
-    ImGui::TextColored(style::colors::kTextExecuting, "Generating...");
-  } else if (n->status() == workflow::NodeStatus::kError) {
-    ImGui::TextColored(style::colors::kTextError, "Error generating noise.");
+    if (n->outputColorId.has_value() && textureManager_) {
+      auto tex = textureManager_->get(n->outputColorId.value());
+      if (tex && tex->getImguiId().has_value()) {
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextDisabled("Preview:");
+
+        float panel_width = ImGui::GetContentRegionAvail().x;
+        ImVec2 image_size(panel_width, panel_width);
+
+        ImGui::Image(*tex->getImguiId(), image_size);
+      } else if (n->status() == workflow::NodeStatus::kExecuting) {
+        ImGui::TextColored(style::colors::kTextExecuting, "Generating...");
+      } else if (n->status() == workflow::NodeStatus::kError) {
+        ImGui::TextColored(style::colors::kTextError,
+                           "Error generating noise.");
+      }
+    }
   }
 }
 

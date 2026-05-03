@@ -97,7 +97,6 @@ auto Importer::load(const std::filesystem::path& filepath)
   auto final_asset = std::move(asset_);
   resetState();
 
-  LOG_TRACE("=== Finished loading asset successfully! ===");
   return final_asset;
 }
 

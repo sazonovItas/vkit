@@ -36,8 +36,6 @@ class ImguiRenderer {
   void render(std::uint32_t frameIndex, vk::CommandBuffer cb,
               ImDrawData* drawData);
 
-  void processGC();
-
  private:
   std::uint32_t maxFramesInFlight_;
 
@@ -63,13 +61,6 @@ class ImguiRenderer {
   vk::UniqueSampler linearSampler_;
   vk::UniqueSampler nearestSampler_;
   vk::UniqueSampler fontSampler_;
-
-  struct GCTask {
-    vk::DescriptorSet set;
-    int framesRemaining;
-  };
-
-  std::vector<GCTask> gcQueue_;
 };
 
 }  // namespace vkit::imgui

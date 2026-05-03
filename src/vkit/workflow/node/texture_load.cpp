@@ -17,27 +17,30 @@ TextureLoadNode::TextureLoadNode(std::string_view name,
       readySub_{readyBus.subscribe([this](core::events::TextureReadyEvent& ev) {
         if (ev.requestId != pendingRequestId_) return;
 
-        if (!ev.texture) {
+        if (!ev.color || !ev.image) {
           pendingRequestId_ = 0;
           setStatus(NodeStatus::kError);
           return;
         }
 
-        if (auto id = ev.texture->getStorageId()) {
-          outputTextureId = id;
-          loaded_ = true;
-          pendingRequestId_ = 0;
-          setStatus(NodeStatus::kReady);
-          propagateStale();
-        }
+        outputColorId = textureManager_.add(ev.color);
+        outputF32Id = textureManager_.add(ev.image);
+
+        if (outputColorId) outColor_->setData<std::uint32_t>(*outputColorId);
+        if (outputF32Id) outImageF32_->setData<std::uint32_t>(*outputF32Id);
+
+        loaded_ = true;
+        pendingRequestId_ = 0;
+        setStatus(NodeStatus::kReady);
+        propagateStale();
       })} {
-  outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Texture");
+  outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
+  outImageF32_ = addOutputPin(pinKeyType(PinType::kFloatTexture2D), "Image");
 }
 
 TextureLoadNode::~TextureLoadNode() {
-  if (outputTextureId.has_value()) {
-    textureManager_.remove(outputTextureId.value());
-  }
+  if (outputColorId.has_value()) textureManager_.remove(outputColorId.value());
+  if (outputF32Id.has_value()) textureManager_.remove(outputF32Id.value());
 }
 
 void TextureLoadNode::execute() {
@@ -50,7 +53,7 @@ void TextureLoadNode::execute() {
 
   loadBus_.queueMessage(core::events::TextureLoadRequest{
       .path = path_,
-      .options = texture::LoadOptions{.useMipmaps = true},
+      .options = texture::LoadOptions{.useMipmaps = useMipmaps_},
       .requestId = pendingRequestId_,
   });
 }
@@ -61,10 +64,15 @@ void TextureLoadNode::setPath(std::filesystem::path path) {
   loaded_ = false;
   pendingRequestId_ = 0;
 
-  if (outputTextureId.has_value()) {
-    textureManager_.remove(outputTextureId.value());
-  }
-  outputTextureId = std::nullopt;
+  if (outputColorId.has_value()) textureManager_.remove(outputColorId.value());
+  if (outputF32Id.has_value()) textureManager_.remove(outputF32Id.value());
+
+  outputColorId = std::nullopt;
+  outputF32Id = std::nullopt;
+
+  // Wipe pins clean
+  if (outColor_) outColor_->clearData();
+  if (outImageF32_) outImageF32_->clearData();
 
   std::error_code ec;
   if (!path_.empty() && !std::filesystem::exists(path_, ec)) {
@@ -76,9 +84,31 @@ void TextureLoadNode::setPath(std::filesystem::path path) {
   markStale();
 }
 
+void TextureLoadNode::setUseMipmaps(bool useMipmaps) {
+  if (useMipmaps_ == useMipmaps) return;
+  useMipmaps_ = useMipmaps;
+
+  loaded_ = false;
+  pendingRequestId_ = 0;
+
+  if (outputColorId.has_value()) textureManager_.remove(outputColorId.value());
+  if (outputF32Id.has_value()) textureManager_.remove(outputF32Id.value());
+
+  outputColorId = std::nullopt;
+  outputF32Id = std::nullopt;
+
+  // Wipe pins clean
+  if (outColor_) outColor_->clearData();
+  if (outImageF32_) outImageF32_->clearData();
+
+  markStale();
+}
+
 auto TextureLoadNode::getPath() const -> const std::filesystem::path& {
   return path_;
 }
+
+auto TextureLoadNode::getUseMipmaps() const -> bool { return useMipmaps_; }
 
 auto TextureLoadNode::isLoaded() const -> bool { return loaded_; }
 

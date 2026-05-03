@@ -568,7 +568,6 @@ void App::mainLoop() {
   while (!sys_.window->shouldClose()) {
     sys_.window->pollEvents();
 
-    ui_.renderer->processGC();
     engine_.textureManager->processGC();
 
     engine_.workflow->execute();

@@ -6,6 +6,7 @@
 #include "vkit/asset/util.hpp"
 #include "vkit/graphics/mapped_buffer.hpp"
 #include "vkit/graphics/shader_module.hpp"
+#include "vulkan/vulkan.hpp"
 
 namespace vkit::imgui {
 
@@ -172,10 +173,8 @@ auto ImguiRenderer::updateOrRegisterTexture(ImTextureID existingId,
 void ImguiRenderer::unregisterTexture(ImTextureID textureId) {
   if (textureId) {
     auto* const raw_set = reinterpret_cast<VkDescriptorSet>(textureId);
-    gcQueue_.emplace_back(GCTask{
-        .set = raw_set,
-        .framesRemaining = static_cast<int>(maxFramesInFlight_) + 1,
-    });
+    auto set = vk::DescriptorSet{raw_set};
+    std::ignore = device_.freeDescriptorSets(descriptorPool_.get(), 1, &set);
   }
 }
 
@@ -354,20 +353,6 @@ void ImguiRenderer::render(std::uint32_t frameIndex, vk::CommandBuffer cb,
 
     global_vtx_offset += cmd_list->VtxBuffer.Size;
     global_idx_offset += cmd_list->IdxBuffer.Size;
-  }
-}
-
-void ImguiRenderer::processGC() {
-  for (auto it = gcQueue_.begin(); it != gcQueue_.end();) {
-    it->framesRemaining--;
-
-    if (it->framesRemaining <= 0) {
-      std::ignore =
-          device_.freeDescriptorSets(descriptorPool_.get(), 1, &it->set);
-      it = gcQueue_.erase(it);
-    } else {
-      ++it;
-    }
   }
 }
 

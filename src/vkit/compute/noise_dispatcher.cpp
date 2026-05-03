@@ -105,26 +105,44 @@ void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
   auto desc_pool =
       device_.get().createDescriptorPoolUnique(vk::DescriptorPoolCreateInfo{
           vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-          1,
+          2,
           pool_sizes,
       });
 
   auto set_layouts = pipeline_.descriptorSetLayout();
   auto alloc_info = vk::DescriptorSetAllocateInfo{}
                         .setDescriptorPool(*desc_pool)
-                        .setDescriptorSetCount(2)
                         .setSetLayouts(set_layouts);
   auto ds = device_.get().allocateDescriptorSets(alloc_info).front();
 
   std::array<vk::DescriptorImageInfo, 2> image_infos{
-      vk::DescriptorImageInfo{nullptr, *view_f32, vk::ImageLayout::eGeneral},
-      vk::DescriptorImageInfo{nullptr, *view_unorm, vk::ImageLayout::eGeneral},
+      vk::DescriptorImageInfo{
+          nullptr,
+          *view_f32,
+          vk::ImageLayout::eGeneral,
+      },
+      vk::DescriptorImageInfo{
+          nullptr,
+          *view_unorm,
+          vk::ImageLayout::eGeneral,
+      },
   };
+
   std::array<vk::WriteDescriptorSet, 2> writes{
-      vk::WriteDescriptorSet{ds, 0, 0, vk::DescriptorType::eStorageImage,
-                             image_infos[0]},
-      vk::WriteDescriptorSet{ds, 1, 0, vk::DescriptorType::eStorageImage,
-                             image_infos[1]},
+      vk::WriteDescriptorSet{
+          ds,
+          0,
+          0,
+          vk::DescriptorType::eStorageImage,
+          image_infos[0],
+      },
+      vk::WriteDescriptorSet{
+          ds,
+          1,
+          0,
+          vk::DescriptorType::eStorageImage,
+          image_infos[1],
+      },
   };
   device_.get().updateDescriptorSets(writes, {});
 
@@ -170,17 +188,16 @@ void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
       .viewUnorm = std::move(view_unorm),
       .fence = std::move(fence),
       .computeResult = std::move(result),
+      .task = task,
   });
 }
 
 void NoiseDispatcher::update() {
+  std::vector<core::events::NoiseJobResult> completed_results;
+
   for (auto it = inFlightJobs_.begin(); it != inFlightJobs_.end();) {
     if (device_.get().getFenceStatus(*it->fence) == vk::Result::eSuccess) {
-      if (storage_) {
-        storage_->add(it->outputF32);
-        storage_->add(it->outputUnorm);
-      }
-      resultBus_.sendMessage(core::events::NoiseJobResult{
+      completed_results.push_back(core::events::NoiseJobResult{
           .requestId = it->requestId,
           .imageF32 = it->outputF32,
           .imageUnorm = it->outputUnorm,
@@ -189,6 +206,10 @@ void NoiseDispatcher::update() {
     } else {
       ++it;
     }
+  }
+
+  for (auto& res : completed_results) {
+    resultBus_.sendMessage(res);
   }
 }
 

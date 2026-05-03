@@ -22,6 +22,7 @@ struct InFlightNoiseJob {
   vk::UniqueImageView viewUnorm;
   vk::UniqueFence fence;
   ComputeResult computeResult;
+  std::shared_ptr<ComputeTask> task;
 };
 
 class NoiseDispatcher {
