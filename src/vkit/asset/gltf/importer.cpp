@@ -61,6 +61,9 @@ auto Importer::load(const std::filesystem::path& filepath)
   resetState();
 
   asset_ = std::make_shared<Asset>(filepath.stem().string());
+  if (!filepath.parent_path().filename().string().empty()) {
+    asset_->setName(filepath.parent_path().filename().string());
+  }
 
   auto parser = fastgltf::Parser{
       fastgltf::Extensions::KHR_mesh_quantization |
@@ -320,6 +323,7 @@ void Importer::loadMeshes(const fastgltf::Asset& asset) {
       }
 
       auto prim = std::make_shared<primitive::Primitive>(deviceBuffers_, attrs);
+      prim->setMaterialSlot(gltf_prim.materialIndex.value_or(0));
 
       asset_->primitives.add(prim);
       mesh->addPrimitive(prim);

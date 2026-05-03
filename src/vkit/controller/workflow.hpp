@@ -6,13 +6,13 @@
 #include "vkit/core/events/noise.hpp"
 #include "vkit/core/events/operators.hpp"
 #include "vkit/texture/manager.hpp"
-#include "vkit/workflow/node/heightmap.hpp"
-#include "vkit/workflow/node/mix.hpp"
-#include "vkit/workflow/node/noise_generator.hpp"
-#include "vkit/workflow/node/normalmap.hpp"
-#include "vkit/workflow/node/sobel.hpp"
+#include "vkit/workflow/node/operators/heightmap.hpp"
+#include "vkit/workflow/node/operators/mix.hpp"
+#include "vkit/workflow/node/operators/normalmap.hpp"
+#include "vkit/workflow/node/operators/sobel.hpp"
+#include "vkit/workflow/node/operators/tint.hpp"
+#include "vkit/workflow/node/procedural/noise_generator.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
-#include "vkit/workflow/node/tint.hpp"
 #include "vkit/workflow/workflow.hpp"
 
 namespace vkit::controller {
@@ -60,17 +60,17 @@ class WorkflowController {
   auto createTextureLoadNode(const std::string& name = "Texture Load")
       -> workflow::node::TextureLoadNode*;
   auto createNoiseGeneratorNode(const std::string& name = "Noise Generator")
-      -> workflow::node::NoiseGeneratorNode*;
+      -> workflow::node::proc::NoiseGeneratorNode*;
   auto createSobelNode(const std::string& name = "Sobel Edge")
-      -> workflow::node::SobelNode*;
+      -> workflow::node::op::SobelNode*;
   auto createHeightMapNode(const std::string& name = "Height Map")
-      -> workflow::node::HeightMapNode*;
+      -> workflow::node::op::HeightMapNode*;
   auto createNormalMapNode(const std::string& name = "Normal Map")
-      -> workflow::node::NormalMapNode*;
+      -> workflow::node::op::NormalMapNode*;
   auto createTintNode(const std::string& name = "Color Tint")
-      -> workflow::node::TintNode*;
+      -> workflow::node::op::TintNode*;
   auto createMixNode(const std::string& name = "Mix")
-      -> workflow::node::MixNode*;
+      -> workflow::node::op::MixNode*;
 
   void deleteNodes(const std::vector<int>& nodeIds);
 

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "vkit/item/item.hpp"
+#include "vkit/item/storage_item.hpp"
 #include "vkit/primitive/storage.hpp"
 #include "vkit/scene/camera_storage.hpp"
 #include "vkit/scene/light_storage.hpp"
@@ -15,7 +16,7 @@
 
 namespace vkit::asset {
 
-class Asset : public Item<Asset> {
+class Asset : public Item<Asset>, public StorageItem {
  public:
   explicit Asset(std::string_view name = "Asset") : Item(name) {}
 

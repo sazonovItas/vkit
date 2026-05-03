@@ -5,14 +5,18 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <memory>
+#include <span>
 #include <tuple>
 
-#include "vkit/asset/gltf/importer.hpp"
-#include "vkit/asset/shaders.hpp"
+#include "vkit/asset/asset_manager.hpp"
+#include "vkit/asset/gltf_storage.hpp"
 #include "vkit/asset/util.hpp"
 #include "vkit/compute/heightmap_dispatcher.hpp"
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
+#include "vkit/core/shaders/shaders.hpp"
+#include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/pipeline/graphics.hpp"
 #include "vkit/graphics/shader_module.hpp"
@@ -26,10 +30,11 @@
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
+#include "vkit/renderer/types.hpp"
 #include "vkit/renderer/viewport.hpp"
-#include "vkit/workflow/node/noise_generator.hpp"
+#include "vkit/workflow/node/operators/tint.hpp"
+#include "vkit/workflow/node/procedural/noise_generator.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
-#include "vkit/workflow/node/tint.hpp"
 
 namespace vkit {
 
@@ -68,7 +73,7 @@ class DrawAssetCommand final : public graphics::Command {
  public:
   DrawAssetCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
                    vk::DescriptorSet sceneSet, vk::DescriptorSet primSet,
-                   const asset::Asset& asset)
+                   const asset::Asset* asset)
       : pipeline_{pipeline},
         layout_{layout},
         sceneSet_{sceneSet},
@@ -76,18 +81,20 @@ class DrawAssetCommand final : public graphics::Command {
         asset_{asset} {}
 
   void record(vk::CommandBuffer cb) const override {
+    if (!asset_) return;
+
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
 
     std::array<vk::DescriptorSet, 2> sets = {sceneSet_, primSet_};
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
-    if (asset_.scenes.empty()) return;
-    auto active_scene = asset_.getActiveScene();
+    if (asset_->scenes.empty()) return;
+    auto active_scene = asset_->getActiveScene();
     if (!active_scene) return;
 
     for (std::uint32_t root_id : active_scene->rootNodes) {
-      if (auto node = asset_.nodes.get(root_id)) {
+      if (auto node = asset_->nodes.get(root_id)) {
         drawNode(cb, node.get());
       }
     }
@@ -106,7 +113,7 @@ class DrawAssetCommand final : public graphics::Command {
         renderer::pl::PrimitiveMaterialPipelineLayout::PushConstants pcs{
             .model = node->getGlobalTransform().getMatrix(),
             .primIndex = prim->getStorageId().value(),
-            .skinOffset = asset_.skins.getOffsetForNode(node),
+            .skinOffset = asset_->skins.getOffsetForNode(node),
             .enableSkinning = (node->skin != nullptr) ? 1U : 0U,
         };
 
@@ -128,20 +135,42 @@ class DrawAssetCommand final : public graphics::Command {
   vk::PipelineLayout layout_;
   vk::DescriptorSet sceneSet_;
   vk::DescriptorSet primSet_;
-  const asset::Asset& asset_;
+  const asset::Asset* asset_;
 };
 
-struct alignas(16) CameraUBO {
-  glm::mat4 view;
-  glm::mat4 proj;
-  alignas(16) glm::vec3 position;
-};
+void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
+                        texture::TextureManager* texManager) {
+  auto& registry = graphWindow.getRegistry();
+
+  registry.registerUI<workflow::node::TextureLoadNode>(
+      std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::proc::NoiseGeneratorNode>(
+      std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::op::SobelNode>(
+      std::make_unique<imgui::windows::ge::SobelNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::op::HeightMapNode>(
+      std::make_unique<imgui::windows::ge::HeightMapNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::op::NormalMapNode>(
+      std::make_unique<imgui::windows::ge::NormalMapNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::op::TintNode>(
+      std::make_unique<imgui::windows::ge::TintNodeUI>(texManager));
+
+  registry.registerUI<workflow::node::op::MixNode>(
+      std::make_unique<imgui::windows::ge::MixNodeUI>(texManager));
+}
 
 };  // namespace
 
 App::App() {
   initWindow();
   initVulkan();
+  initBindless();
+  initAsset();
   initWorkflow();
   initImgui();
   initViewports();
@@ -150,7 +179,7 @@ App::App() {
 
 App::~App() {
   if (sys_.device) {
-    sys_.device->waitIdle();
+    sys_.device->get().waitIdle();
   }
 
   for (auto& frame : frames_) {
@@ -192,9 +221,83 @@ void App::initVulkan() {
   }
 }
 
+void App::initBindless() {
+  using BindlessDSL = renderer::dsl::BindlessTextureSetLayout;
+
+  sys_.bindlessSetLayout = std::make_unique<BindlessDSL>(sys_.device->get());
+
+  std::array<vk::DescriptorPoolSize, 2> pool_sizes = {
+      vk::DescriptorPoolSize{vk::DescriptorType::eSampler,
+                             BindlessDSL::kMaxSamplers},
+      vk::DescriptorPoolSize{vk::DescriptorType::eSampledImage,
+                             BindlessDSL::kMaxTextures}};
+
+  vk::DescriptorPoolCreateInfo pool_info{};
+  pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
+      .setMaxSets(1)
+      .setPoolSizes(pool_sizes);
+
+  sys_.bindlessPool = sys_.device->get().createDescriptorPoolUnique(pool_info);
+
+  auto layout_handle = sys_.bindlessSetLayout->get();
+  vk::DescriptorSetAllocateInfo alloc_info{};
+  alloc_info.setDescriptorPool(sys_.bindlessPool.get())
+      .setDescriptorSetCount(1)
+      .setSetLayouts(layout_handle);
+
+  sys_.bindlessSet =
+      sys_.device->get().allocateDescriptorSets(alloc_info).front();
+
+  static constexpr std::array<std::uint8_t, 4> kRedPixel = {255, 0, 0, 255};
+  auto red_span = std::span<const std::byte>{
+      reinterpret_cast<const std::byte*>(kRedPixel.data()), kRedPixel.size()};
+
+  texture::LoadOptions options{};
+  options.useMipmaps = false;
+  options.isSrgb = false;
+
+  auto loaded_dummy = texture::loadFromRawPixels(
+      sys_.device->get(), sys_.device->allocator, red_span, 1, 1, options);
+
+  engine_.dummyTexture = loaded_dummy.texture;
+
+  const auto submit_info = graphics::util::RecordAndSubmitInfo{
+      .device = sys_.device->get(),
+      .queue = sys_.device->queues.graphicsPresent,
+      .commandPool = sys_.device->getGraphicsPresentCommandPool(),
+  };
+
+  graphics::util::recordAndSubmit(submit_info, [&](vk::CommandBuffer cb) {
+    engine_.dummyTexture->recordUpload(cb, loaded_dummy.stagingBuffer);
+  });
+
+  engine_.bindlessManager = std::make_unique<graphics::BindlessTextureManager>(
+      sys_.device->get(), sys_.bindlessSet, BindlessDSL::kMaxSamplers,
+      BindlessDSL::kMaxTextures, engine_.dummyTexture);
+}
+
+void App::initAsset() {
+  engine_.gltfStorage = std::make_shared<asset::GltfStorage>();
+  engine_.assetManager = std::make_shared<asset::AssetManager>(
+      *sys_.device, engine_.gltfStorage, kMaxFramesInFlight);
+  engine_.assetController =
+      std::make_unique<controller::AssetController>(engine_.assetManager.get());
+
+  std::filesystem::path asset_path =
+      asset::assetPath("models/mechdrone/scene.gltf");
+  if (std::filesystem::exists(asset_path)) {
+    auto default_asset = engine_.assetManager->loadGltf(asset_path);
+    if (default_asset) {
+      engine_.assetController->setCurrentAsset(
+          default_asset->getStorageId().value());
+    }
+  }
+}
+
 void App::initWorkflow() {
   engine_.textureManager =
       std::make_shared<texture::TextureManager>(kMaxFramesInFlight);
+  engine_.textureManager->setBindlessManager(engine_.bindlessManager.get());
 
   engine_.executionContext = std::make_shared<workflow::ExecutionContext>();
 
@@ -278,8 +381,9 @@ void App::initImgui() {
 
       ImGuiID dock_top_right_id = ImGui::DockBuilderSplitNode(
           dock_main_id, ImGuiDir_Right, 0.30F, nullptr, &dock_main_id);
+
       ImGuiID dock_top_right_bottom_id = ImGui::DockBuilderSplitNode(
-          dock_top_right_id, ImGuiDir_Up, 0.30F, nullptr, &dock_top_right_id);
+          dock_top_right_id, ImGuiDir_Down, 0.40F, nullptr, &dock_top_right_id);
 
       ImGuiID dock_bottom_left_id = ImGui::DockBuilderSplitNode(
           dock_bottom_id, ImGuiDir_Left, 0.20F, nullptr, &dock_bottom_id);
@@ -288,6 +392,8 @@ void App::initImgui() {
       ImGui::DockBuilderDockWindow("Graph Editor", dock_bottom_id);
       ImGui::DockBuilderDockWindow("Graph Node Inspector", dock_bottom_left_id);
       ImGui::DockBuilderDockWindow("Material Preview", dock_top_right_id);
+      ImGui::DockBuilderDockWindow("Configuration", dock_top_right_bottom_id);
+
       ImGui::DockBuilderFinish(root_id);
     }
   });
@@ -305,44 +411,18 @@ void App::initImgui() {
       std::make_shared<imgui::windows::ge::GraphEditorWindow>("Graph Editor");
   ui_.graphWindow->setController(engine_.workflowController.get());
 
-  auto texture_load_ui =
-      std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(
-          engine_.textureManager.get());
-  auto noise_generator_ui =
-      std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(
-          engine_.textureManager.get());
-  auto sobel_ui = std::make_unique<imgui::windows::ge::SobelNodeUI>(
-      engine_.textureManager.get());
-  auto heightmap_ui = std::make_unique<imgui::windows::ge::HeightMapNodeUI>(
-      engine_.textureManager.get());
-  auto normalmap_ui = std::make_unique<imgui::windows::ge::NormalMapNodeUI>(
-      engine_.textureManager.get());
-  auto tint_ui = std::make_unique<imgui::windows::ge::TintNodeUI>(
-      engine_.textureManager.get());
-  auto mix_ui = std::make_unique<imgui::windows::ge::MixNodeUI>(
-      engine_.textureManager.get());
-
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::TextureLoadNode>(
-      std::move(texture_load_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::NoiseGeneratorNode>(
-      std::move(noise_generator_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::SobelNode>(
-      std::move(sobel_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::HeightMapNode>(
-      std::move(heightmap_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::NormalMapNode>(
-      std::move(normalmap_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::TintNode>(
-      std::move(tint_ui));
-  ui_.graphWindow->getRegistry().registerUI<workflow::node::MixNode>(
-      std::move(mix_ui));
+  registerGraphNodes(*ui_.graphWindow, engine_.textureManager.get());
 
   ui_.graphInspector =
       std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
           "Graph Node Inspector", ui_.graphWindow.get());
 
+  ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
+      "Configuration", engine_.assetController.get());
+
   ui_.windowManager->addWindow(ui_.graphWindow);
   ui_.windowManager->addWindow(ui_.graphInspector);
+  ui_.windowManager->addWindow(ui_.configWindow);
 }
 
 void App::initViewports() {
@@ -443,15 +523,6 @@ void App::initViewports() {
 void App::initDebugRendering() {
   vk::Device device = sys_.device->get();
 
-  std::filesystem::path asset_path = "assets/models/mechdrone/scene.gltf";
-  asset::gltf::Importer importer(*sys_.device);
-  if (!std::filesystem::exists(asset_path)) {
-    throw std::runtime_error{"Asset file isn't existing"};
-  }
-
-  debug_.loadedAsset = importer.load(asset_path);
-  debug_.loadedAsset->update();
-
   debug_.sceneSetLayout =
       std::make_unique<renderer::dsl::SceneSetLayout>(device);
   debug_.primitiveSetLayout =
@@ -466,9 +537,9 @@ void App::initDebugRendering() {
                                         *debug_.primitiveSetLayout));
 
   auto vert_module = graphics::SpirVShaderModule{
-      device, asset::assetPath(asset::kRaySphereVertShaderPath)};
+      device, shaders::shaderPath(shaders::kRaySphereVertShaderPath)};
   auto frag_module = graphics::SpirVShaderModule{
-      device, asset::assetPath(asset::kRaySphereDebugFragShaderPath)};
+      device, shaders::shaderPath(shaders::kRaySphereDebugFragShaderPath)};
 
   auto builder = graphics::pipeline::GraphicsPipelineBuilder{
       debug_.raySphereLayout->get()};
@@ -486,9 +557,9 @@ void App::initDebugRendering() {
   debug_.raySpherePipeline = builder.build(device);
 
   auto prim_vert = graphics::SpirVShaderModule{
-      device, asset::assetPath(asset::kPrimitiveDebugVertShaderPath)};
+      device, shaders::shaderPath(shaders::kPrimitiveDebugVertShaderPath)};
   auto prim_frag = graphics::SpirVShaderModule{
-      device, asset::assetPath(asset::kPrimitiveDebugFragShaderPath)};
+      device, shaders::shaderPath(shaders::kPrimitiveDebugFragShaderPath)};
 
   auto prim_builder = graphics::pipeline::GraphicsPipelineBuilder{
       debug_.primitiveLayout->get()};
@@ -528,15 +599,13 @@ void App::initDebugRendering() {
         sys_.device->allocator,
         static_cast<dataformat::BufferUsageFlags>(
             vk::BufferUsageFlagBits::eStorageBuffer),
-        sizeof(primitive::PrimitiveData) *
-            std::max<std::size_t>(
-                1000, debug_.loadedAsset->primitives.getItems().size()));
+        sizeof(primitive::PrimitiveData) * 1000);
 
     frame.jointSSBO = std::make_unique<graphics::DescriptorBuffer>(
         sys_.device->allocator,
         static_cast<dataformat::BufferUsageFlags>(
             vk::BufferUsageFlagBits::eStorageBuffer),
-        sizeof(glm::mat4) * std::max<std::size_t>(1000, 1000));
+        sizeof(glm::mat4) * 1000);
 
     vk::DescriptorSetAllocateInfo cam_alloc_info{*debug_.descriptorPool, 1,
                                                  &debug_.sceneSetLayout->get()};
@@ -617,6 +686,16 @@ void App::ensureViewportSize(renderer::Viewport& viewport,
   }
 }
 
+void App::recreateSwapchain() const {
+  auto width = sys_.window->getWidth();
+  auto height = sys_.window->getHeight();
+
+  if (width > 0 && height > 0) {
+    sys_.device->get().waitIdle();
+    sys_.swapchain->recreate(glm::ivec2{width, height});
+  }
+}
+
 void App::run() { mainLoop(); }
 
 void App::mainLoop() {
@@ -662,62 +741,64 @@ void App::mainLoop() {
 
     auto& frame = frames_[currentFrame_];
 
-    ensureViewportSize(frame.sceneViewport, frame.sceneTextureId,
-                       ui_.sceneViewer->getWidth(),
-                       ui_.sceneViewer->getHeight(), 1);
-    ui_.sceneViewer->setCurrentTexture(frame.sceneTextureId);
+    if (ui_.sceneViewer->isVisible()) {
+      ensureViewportSize(frame.sceneViewport, frame.sceneTextureId,
+                         ui_.sceneViewer->getWidth(),
+                         ui_.sceneViewer->getHeight(), 1);
+      ui_.sceneViewer->setCurrentTexture(frame.sceneTextureId);
 
-    ensureViewportSize(frame.materialViewport, frame.materialTextureId,
-                       ui_.materialViewer->getWidth(),
-                       ui_.materialViewer->getHeight(), 1);
-    ui_.materialViewer->setCurrentTexture(frame.materialTextureId);
+      scene_.sceneController.update(*scene_.sceneCamera);
+    }
 
-    scene_.sceneController.update(*scene_.sceneCamera);
-    scene_.materialController.update(*scene_.materialCamera);
+    if (ui_.materialViewer->isVisible()) {
+      ensureViewportSize(frame.materialViewport, frame.materialTextureId,
+                         ui_.materialViewer->getWidth(),
+                         ui_.materialViewer->getHeight(), 1);
+      ui_.materialViewer->setCurrentTexture(frame.materialTextureId);
+
+      scene_.materialController.update(*scene_.materialCamera);
+    }
+
+    checkAndUpdateAssetDescriptors(currentFrame_);
 
     static float time = 0.0F;
     time += dt;
 
-    for (const auto& skin : debug_.loadedAsset->skins.getItems()) {
-      if (!skin) continue;
-      std::size_t joints_to_wiggle =
-          std::min<std::size_t>(3, skin->joints.size());
-      for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
-        if (auto joint = skin->joints[i]) {
-          auto local = joint->getLocalTransform();
-          float angle = std::sin(time * 2.0F) * 0.5F;
-          glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F, 0.0F));
-          local.setRotation(spin);
-          joint->setLocalTransform(local);
+    auto current_asset = engine_.assetController->getCurrentAsset();
+    if (current_asset) {
+      for (const auto& skin : current_asset->skins.getItems()) {
+        if (!skin) continue;
+        std::size_t joints_to_wiggle =
+            std::min<std::size_t>(3, skin->joints.size());
+        for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
+          if (auto joint = skin->joints[i]) {
+            auto local = joint->getLocalTransform();
+            float angle = std::sin(time * 2.0F) * 0.5F;
+            glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F, 0.0F));
+            local.setRotation(spin);
+            joint->setLocalTransform(local);
+          }
         }
       }
+
+      current_asset->update();
     }
 
-    debug_.loadedAsset->update();
-
-    auto prim_data = debug_.loadedAsset->primitives.getData();
-    if (!prim_data.empty()) {
-      frame.primitiveSSBO->writeAt(std::as_bytes(prim_data));
-    }
-
-    auto joint_data = debug_.loadedAsset->skins.getData();
-    if (!joint_data.empty()) {
-      frame.jointSSBO->writeAt(std::as_bytes(joint_data));
-    }
-
-    CameraUBO scene_ubo{
+    auto scene_ubo = renderer::types::CameraUBO{
         .view = scene_.sceneCamera->getViewMatrix(),
         .proj = scene_.sceneCamera->getProjectionMatrix(),
         .position = scene_.sceneCamera->getPosition(),
     };
-    frame.sceneCameraBuffer->writeAt(std::as_bytes(std::span{&scene_ubo, 1}));
+    std::ignore = frame.sceneCameraBuffer->writeAt(
+        std::as_bytes(std::span{&scene_ubo, 1}));
 
-    CameraUBO mat_ubo{
+    auto mat_ubo = renderer::types::CameraUBO{
         .view = scene_.materialCamera->getViewMatrix(),
         .proj = scene_.materialCamera->getProjectionMatrix(),
         .position = scene_.materialCamera->getPosition(),
     };
-    frame.materialCameraBuffer->writeAt(std::as_bytes(std::span{&mat_ubo, 1}));
+    std::ignore = frame.materialCameraBuffer->writeAt(
+        std::as_bytes(std::span{&mat_ubo, 1}));
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ui_.windowManager->drawWindows(currentFrame_);
@@ -725,22 +806,26 @@ void App::mainLoop() {
 
     auto task = renderer::RenderTask{};
 
-    task.add<renderer::rp::BeginViewportPass>(
-            frame.sceneViewport, 0, 1,
-            std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
-        .add<DrawAssetCommand>(
-            *debug_.primitivePipeline, debug_.primitiveLayout->get(),
-            frame.sceneDescriptorSet, frame.primitiveDescriptorSet,
-            *debug_.loadedAsset)
-        .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
+    if (ui_.sceneViewer->isVisible()) {
+      task.add<renderer::rp::BeginViewportPass>(
+              frame.sceneViewport, 0, 1,
+              std::array<float, 4>{0.1F, 0.1F, 0.1F, 1.0F})
+          .add<DrawAssetCommand>(
+              *debug_.primitivePipeline, debug_.primitiveLayout->get(),
+              frame.sceneDescriptorSet, frame.primitiveDescriptorSet,
+              current_asset.get())  // Pass dynamic pointer safely!
+          .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
+    }
 
-    task.add<renderer::rp::BeginViewportPass>(
-            frame.materialViewport, 0, 1,
-            std::array<float, 4>{0.15F, 0.15F, 0.15F, 1.0F})
-        .add<DrawRaySphereCommand>(*debug_.raySpherePipeline,
-                                   debug_.raySphereLayout->get(),
-                                   frame.materialDescriptorSet, glm::mat4(1.0F))
-        .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
+    if (ui_.materialViewer->isVisible()) {
+      task.add<renderer::rp::BeginViewportPass>(
+              frame.materialViewport, 0, 1,
+              std::array<float, 4>{0.15F, 0.15F, 0.15F, 1.0F})
+          .add<DrawRaySphereCommand>(
+              *debug_.raySpherePipeline, debug_.raySphereLayout->get(),
+              frame.materialDescriptorSet, glm::mat4(1.0F))
+          .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
+    }
 
     task.add<renderer::rp::BeginSwapchainPass>(
             sys_.swapchain->getImage(image_index),
@@ -764,13 +849,59 @@ void App::mainLoop() {
   }
 }
 
-void App::recreateSwapchain() const {
-  auto width = sys_.window->getWidth();
-  auto height = sys_.window->getHeight();
+void App::checkAndUpdateAssetDescriptors(std::uint32_t frameIndex) {
+  auto& frame = frames_[frameIndex];
+  auto current_asset_id = engine_.assetController->getCurrentAssetId();
 
-  if (width > 0 && height > 0) {
-    sys_.device->waitIdle();
-    sys_.swapchain->recreate(glm::ivec2{width, height});
+  bool descriptors_need_update = false;
+
+  if (frame.lastRenderedAssetId != current_asset_id) {
+    descriptors_need_update = true;
+    frame.lastRenderedAssetId = current_asset_id;
+  }
+
+  auto current_asset = engine_.assetController->getCurrentAsset();
+  if (!current_asset) return;
+
+  auto prim_data = current_asset->primitives.getData();
+  if (!prim_data.empty()) {
+    if (frame.primitiveSSBO->writeAt(std::as_bytes(std::span{prim_data}))) {
+      descriptors_need_update = true;
+    }
+  }
+
+  auto joint_data = current_asset->skins.getData();
+  if (!joint_data.empty()) {
+    if (frame.jointSSBO->writeAt(std::as_bytes(std::span{joint_data}))) {
+      descriptors_need_update = true;
+    }
+  }
+
+  if (descriptors_need_update && frame.primitiveDescriptorSet) {
+    auto prim_info = frame.primitiveSSBO->descriptorInfo();
+    auto joint_info = frame.jointSSBO->descriptorInfo();
+
+    vk::WriteDescriptorSet prim_write{
+        frame.primitiveDescriptorSet,
+        renderer::dsl::PrimitiveSetLayout::kPrimitiveBinding,
+        0,
+        1,
+        vk::DescriptorType::eStorageBuffer,
+        nullptr,
+        &prim_info,
+        nullptr};
+
+    vk::WriteDescriptorSet joint_write{
+        frame.primitiveDescriptorSet,
+        renderer::dsl::PrimitiveSetLayout::kJointBinding,
+        0,
+        1,
+        vk::DescriptorType::eStorageBuffer,
+        nullptr,
+        &joint_info,
+        nullptr};
+
+    sys_.device->get().updateDescriptorSets({prim_write, joint_write}, nullptr);
   }
 }
 

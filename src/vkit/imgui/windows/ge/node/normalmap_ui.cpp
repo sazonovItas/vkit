@@ -6,12 +6,12 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/normalmap.hpp"
+#include "vkit/workflow/node/operators/normalmap.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::NormalMapNode;
-using workflow::node::NormalMapParams;
+using workflow::node::op::NormalMapNode;
+using workflow::node::op::NormalMapParams;
 
 auto NormalMapNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {

@@ -9,25 +9,24 @@
 #include "vkit/texture/manager.hpp"
 #include "vkit/workflow/workflow_node.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::op {
 
-struct HeightMapParams {
-  float contrast{1.0F};
-  float brightness{0.0F};
-  uint32_t invert{0};
+struct NormalMapParams {
+  float strength{1.0F};
+  uint32_t invertX{0};
+  uint32_t invertY{0};
 };
 
-class HeightMapNode : public WorkflowNode {
+class NormalMapNode : public WorkflowNode {
  public:
-  HeightMapNode(std::string_view name, core::events::HeightMapJobBus& jobBus,
-                core::events::HeightMapResultBus& resultBus,
+  NormalMapNode(std::string_view name, core::events::NormalMapJobBus& jobBus,
+                core::events::NormalMapResultBus& resultBus,
                 texture::TextureManager& textureManager);
-  ~HeightMapNode() override;
+  ~NormalMapNode() override;
 
   void execute() override;
-
-  void setParams(HeightMapParams params);
-  [[nodiscard]] auto getParams() const -> const HeightMapParams& {
+  void setParams(NormalMapParams params);
+  [[nodiscard]] auto getParams() const -> const NormalMapParams& {
     return params_;
   }
 
@@ -35,12 +34,11 @@ class HeightMapNode : public WorkflowNode {
   std::optional<std::uint32_t> outputColorId;
 
  private:
-  core::events::HeightMapJobBus& jobBus_;
+  core::events::NormalMapJobBus& jobBus_;
   texture::TextureManager& textureManager_;
+  message_bus::Subscription<core::events::NormalMapJobResult> resultSub_;
 
-  message_bus::Subscription<core::events::HeightMapJobResult> resultSub_;
-
-  HeightMapParams params_;
+  NormalMapParams params_;
   std::uint64_t pendingRequestId_{0};
 
   graph::Pin* inImage_{nullptr};
@@ -50,4 +48,4 @@ class HeightMapNode : public WorkflowNode {
   static std::atomic<std::uint64_t> request_counter_;
 };
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::op

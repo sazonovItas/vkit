@@ -2,10 +2,17 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
+// --- CORE / ASSETS ---
 #include "vkit/asset/asset.hpp"
+#include "vkit/asset/asset_manager.hpp"
+#include "vkit/asset/gltf_storage.hpp"
+#include "vkit/controller/asset.hpp"
+
+// --- COMPUTE ---
 #include "vkit/compute/async_compute.hpp"
 #include "vkit/compute/heightmap_dispatcher.hpp"
 #include "vkit/compute/mix_dispatcher.hpp"
@@ -13,6 +20,8 @@
 #include "vkit/compute/normalmap_dispatcher.hpp"
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
+
+// --- GRAPHICS / SCENE ---
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/workflow.hpp"
 #include "vkit/graphics/descriptor_buffer.hpp"
@@ -20,13 +29,19 @@
 #include "vkit/graphics/instance.hpp"
 #include "vkit/graphics/surface.hpp"
 #include "vkit/graphics/swapchain.hpp"
+
+// --- IMGUI / UI ---
 #include "vkit/imgui/imgui_renderer.hpp"
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
+#include "vkit/imgui/windows/configuration.hpp"
 #include "vkit/imgui/windows/ge/graph_editor.hpp"
 #include "vkit/imgui/windows/ge/graph_node_inspector.hpp"
 #include "vkit/imgui/windows/viewer.hpp"
 #include "vkit/platform/file_dialog.hpp"
+
+// --- RENDERER / WORKFLOW ---
+#include "vkit/renderer/descriptor_set_layout/bindless.hpp"
 #include "vkit/renderer/descriptor_set_layout/primitive.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_debug.hpp"
@@ -51,6 +66,8 @@ class App {
  private:
   void initWindow();
   void initVulkan();
+  void initBindless();
+  void initAsset();
   void initWorkflow();
   void initImgui();
   void initViewports();
@@ -58,6 +75,8 @@ class App {
 
   void mainLoop();
   void recreateSwapchain() const;
+
+  void checkAndUpdateAssetDescriptors(std::uint32_t frameIndex);
 
   static constexpr int kMaxFramesInFlight = 3;
   std::uint32_t currentFrame_{0};
@@ -73,14 +92,24 @@ class App {
     std::unique_ptr<graphics::Swapchain> swapchain;
     std::unique_ptr<renderer::Renderer> renderer;
     std::vector<vk::UniqueSemaphore> imageAvailableSemaphores;
+
+    std::unique_ptr<renderer::dsl::BindlessTextureSetLayout> bindlessSetLayout;
+    vk::UniqueDescriptorPool bindlessPool;
+    vk::DescriptorSet bindlessSet;
   } sys_;
 
   struct EngineContext {
+    std::shared_ptr<asset::GltfStorage> gltfStorage;
+    std::shared_ptr<asset::AssetManager> assetManager;
+    std::unique_ptr<controller::AssetController> assetController;
+
+    std::shared_ptr<graphics::Texture> dummyTexture;
+    std::unique_ptr<graphics::BindlessTextureManager> bindlessManager;
+
     std::shared_ptr<texture::TextureManager> textureManager;
     std::shared_ptr<texture::TextureUploader> textureUploader;
 
     std::shared_ptr<workflow::ExecutionContext> executionContext;
-
     std::shared_ptr<compute::AsyncCompute> asyncCompute;
     std::shared_ptr<compute::NoiseDispatcher> noiseDispatcher;
     std::shared_ptr<compute::SobelDispatcher> sobelDispatcher;
@@ -93,17 +122,18 @@ class App {
     std::unique_ptr<controller::WorkflowController> workflowController;
 
     void update() {
-      workflow->execute();
+      if (workflow) workflow->execute();
+      if (executionContext) executionContext->update();
+      if (textureUploader) textureUploader->update();
 
-      executionContext->update();
-      textureUploader->update();
-      noiseDispatcher->update();
-      sobelDispatcher->update();
-      heightMapDispatcher->update();
-      normalMapDispatcher->update();
-      tintDispatcher->update();
-      mixDispatcher->update();
-      executionContext->update();
+      if (noiseDispatcher) noiseDispatcher->update();
+      if (sobelDispatcher) sobelDispatcher->update();
+      if (heightMapDispatcher) heightMapDispatcher->update();
+      if (normalMapDispatcher) normalMapDispatcher->update();
+      if (tintDispatcher) tintDispatcher->update();
+      if (mixDispatcher) mixDispatcher->update();
+
+      if (assetManager) assetManager->processGC();
     }
   } engine_;
 
@@ -117,6 +147,8 @@ class App {
     std::shared_ptr<imgui::windows::ge::GraphEditorWindow> graphWindow;
     std::shared_ptr<imgui::windows::ge::GraphNodeInspectorWindow>
         graphInspector;
+
+    std::shared_ptr<imgui::windows::ConfigurationWindow> configWindow;
   } ui_;
 
   struct SceneContext {
@@ -154,8 +186,11 @@ class App {
 
     std::unique_ptr<graphics::DescriptorBuffer> sceneCameraBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
+
     std::unique_ptr<graphics::DescriptorBuffer> primitiveSSBO;
     std::unique_ptr<graphics::DescriptorBuffer> jointSSBO;
+
+    std::optional<std::uint32_t> lastRenderedAssetId{std::nullopt};
   };
 
   std::array<Frame, kMaxFramesInFlight> frames_;

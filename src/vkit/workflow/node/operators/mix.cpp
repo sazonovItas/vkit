@@ -1,9 +1,9 @@
-#include "vkit/workflow/node/mix.hpp"
+#include "vkit/workflow/node/operators/mix.hpp"
 
 #include "vkit/graph/link.hpp"
 #include "vkit/workflow/pin_type.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::op {
 
 std::atomic<std::uint64_t> MixNode::request_counter_{0};
 
@@ -128,4 +128,4 @@ void MixNode::setParams(MixParams params) {
   markStale();
 }
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::op

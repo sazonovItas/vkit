@@ -6,13 +6,13 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/mix.hpp"
+#include "vkit/workflow/node/operators/mix.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::MixMode;
-using workflow::node::MixNode;
-using workflow::node::MixParams;
+using workflow::node::op::MixMode;
+using workflow::node::op::MixNode;
+using workflow::node::op::MixParams;
 
 auto MixNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {

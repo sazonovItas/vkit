@@ -6,12 +6,13 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/tint.hpp"
+#include "vkit/workflow/node/operators/tint.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::TintNode;
-using workflow::node::TintParams;
+using workflow::node::op::TintMode;
+using workflow::node::op::TintNode;
+using workflow::node::op::TintParams;
 
 auto TintNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {
@@ -67,8 +68,8 @@ void TintNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 }
 
 void TintNodeUI::drawInspector(workflow::WorkflowNode* node) {
-  auto* n = static_cast<workflow::node::TintNode*>(node);
-  workflow::node::TintParams p = n->getParams();
+  auto* n = static_cast<TintNode*>(node);
+  TintParams p = n->getParams();
   bool changed = false;
 
   ImGui::TextDisabled("Type: Color Tint");
@@ -88,7 +89,7 @@ void TintNodeUI::drawInspector(workflow::WorkflowNode* node) {
   const char* mode_names[] = {"Mix", "Multiply", "Add", "Screen"};
   int current_mode = static_cast<int>(p.mode);
   if (ImGui::Combo("Blend Mode", &current_mode, mode_names, 4)) {
-    p.mode = static_cast<workflow::node::TintMode>(current_mode);
+    p.mode = static_cast<TintMode>(current_mode);
     changed = true;
   }
 

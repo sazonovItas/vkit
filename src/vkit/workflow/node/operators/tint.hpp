@@ -9,7 +9,7 @@
 #include "vkit/texture/manager.hpp"
 #include "vkit/workflow/workflow_node.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::op {
 
 enum class TintMode : uint32_t {
   kMix = 0,
@@ -52,4 +52,4 @@ class TintNode : public WorkflowNode {
   static std::atomic<std::uint64_t> request_counter_;
 };
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::op

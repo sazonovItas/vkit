@@ -1,9 +1,8 @@
 #include "vkit/compute/noise_dispatcher.hpp"
 
-#include "vkit/asset/shaders.hpp"
-#include "vkit/asset/util.hpp"
 #include "vkit/compute/command/image.hpp"
 #include "vkit/compute/util.hpp"
+#include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/command.hpp"
 
 namespace vkit::compute {
@@ -23,7 +22,7 @@ NoiseDispatcher::NoiseDispatcher(const graphics::GfxDevice& device,
 
   pipeline_ = std::make_unique<NoisePipeline>(
       device.get(), *pipelineLayout_,
-      asset::assetPath(asset::kProceduralNoiceShaderPath));
+      shaders::shaderPath(shaders::kProceduralNoiceShaderPath));
 
   sampler_ = device.get().createSamplerUnique(vk::SamplerCreateInfo{
       {},

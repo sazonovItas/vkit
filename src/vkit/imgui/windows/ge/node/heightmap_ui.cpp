@@ -6,12 +6,12 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/heightmap.hpp"
+#include "vkit/workflow/node/operators/heightmap.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::HeightMapNode;
-using workflow::node::HeightMapParams;
+using workflow::node::op::HeightMapNode;
+using workflow::node::op::HeightMapParams;
 
 auto HeightMapNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {

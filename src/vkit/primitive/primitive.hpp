@@ -65,8 +65,10 @@ class Primitive : public StorageItem {
   PolygonMode polygonMode{PolygonMode::eFill};
   DevicePrimitiveAttributes attrs;
 
-  void attach(const std::shared_ptr<Attachment>& attachment);
-  void detach(Attachment* attachment);
+  [[nodiscard]] auto getMaterialSlot() const -> std::uint32_t {
+    return materialSlot_;
+  }
+  void setMaterialSlot(const std::uint32_t slot) { materialSlot_ = slot; }
 
   template <typename T>
   [[nodiscard]] auto getAttachmentAs() const -> std::shared_ptr<T> {
@@ -126,6 +128,8 @@ class Primitive : public StorageItem {
   std::optional<std::uint32_t> id_;
   std::shared_ptr<DeviceBuffers> buffers_;
   std::vector<std::shared_ptr<Attachment>> attachments_;
+
+  std::uint32_t materialSlot_{0};
 
   [[nodiscard]] static auto createDeviceAttributes(
       const std::shared_ptr<DeviceBuffers>& buffers,

@@ -8,18 +8,6 @@ Primitive::Primitive(const std::shared_ptr<DeviceBuffers>& buffers,
                      const PrimitiveAttributes& attrs)
     : attrs{createDeviceAttributes(buffers, attrs)}, buffers_{buffers} {}
 
-void Primitive::attach(const std::shared_ptr<Attachment>& attachment) {
-  if (attachment) {
-    attachment->setPrimitive(this);
-    attachments_.push_back(attachment);
-  }
-}
-
-void Primitive::detach(Attachment* attachment) {
-  std::erase_if(attachments_,
-                [attachment](const auto& a) { return a.get() == attachment; });
-}
-
 auto Primitive::createDeviceAttributes(
     const std::shared_ptr<DeviceBuffers>& buffers,
     const PrimitiveAttributes& attrs) -> DevicePrimitiveAttributes {

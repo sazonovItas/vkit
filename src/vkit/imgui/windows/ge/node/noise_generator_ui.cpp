@@ -6,14 +6,14 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/noise_generator.hpp"
+#include "vkit/workflow/node/procedural/noise_generator.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::NoiseGeneratorNode;
-using workflow::node::NoiseParams;
-using workflow::node::NoiseType;
-using workflow::node::WorleyMode;
+using workflow::node::proc::NoiseGeneratorNode;
+using workflow::node::proc::NoiseParams;
+using workflow::node::proc::NoiseType;
+using workflow::node::proc::WorleyMode;
 
 auto NoiseGeneratorNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {

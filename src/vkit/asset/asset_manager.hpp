@@ -1,73 +1,94 @@
 #pragma once
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
+#include <vector>
 
+#include "vkit/asset/gltf/importer.hpp"
+#include "vkit/asset/gltf_storage.hpp"
 #include "vkit/graphics/device.hpp"
-#include "vkit/graphics/util.hpp"
-#include "vkit/material/storage.hpp"
-#include "vkit/texture/loader.hpp"
-#include "vkit/texture/storage.hpp"
-#include "vkit/texture/texture.hpp"
+#include "vkit/platform/file_dialog.hpp"
 
 namespace vkit::asset {
 
 class AssetManager {
  public:
   AssetManager(const graphics::GfxDevice& gfxDevice,
-               std::shared_ptr<texture::TextureManager> textureStorage,
-               std::shared_ptr<material::MaterialStorage> materialStorage)
+               std::shared_ptr<GltfStorage> gltfStorage,
+               std::uint32_t maxFramesInFlight = 3)
       : gfxDevice_{gfxDevice},
-        textureStorage_{std::move(textureStorage)},
-        materialStorage_{std::move(materialStorage)} {}
+        gltfStorage_{std::move(gltfStorage)},
+        maxFramesInFlight_{maxFramesInFlight} {}
 
   AssetManager(const AssetManager&) = delete;
   auto operator=(const AssetManager&) -> AssetManager& = delete;
 
-  [[nodiscard]] auto loadTexture(const std::filesystem::path& filepath,
-                                 const texture::LoadOptions& options = {})
-      -> std::shared_ptr<texture::Texture> {
-    auto loaded = texture::loadFromFile(gfxDevice_.get(), gfxDevice_.allocator,
-                                        filepath, options);
+  [[nodiscard]] auto loadGltf(const std::filesystem::path& filepath)
+      -> std::shared_ptr<Asset> {
+    gltf::Importer importer(gfxDevice_);
+    auto asset = importer.load(filepath);
 
-    const auto submit_info = graphics::util::RecordAndSubmitInfo{
-        .device = gfxDevice_.get(),
-        .queue = gfxDevice_.queues.graphicsPresent,
-        .commandPool = gfxDevice_.getGraphicsPresentCommandPool(),
-    };
-
-    graphics::util::recordAndSubmit(submit_info, [&](vk::CommandBuffer cb) {
-      loaded.texture->recordUpload(cb, loaded.stagingBuffer);
-
-      if (options.useMipmaps) {
-        loaded.texture->recordMipmapGeneration(cb);
-      }
-    });
-
-    const auto name = filepath.filename().string();
-    auto logical_texture =
-        std::make_shared<texture::Texture>(name, loaded.texture);
-
-    if (textureStorage_) {
-      textureStorage_->add(logical_texture);
+    if (asset && gltfStorage_) {
+      gltfStorage_->add(asset);
     }
 
-    return logical_texture;
+    return asset;
   }
 
-  [[nodiscard]] auto getTextureStorage() const
-      -> std::shared_ptr<texture::TextureManager> {
-    return textureStorage_;
+  [[nodiscard]] auto promptAndLoadGltf() -> std::shared_ptr<Asset> {
+    std::array<platform::FileFilter, 1> filters = {
+        platform::FileFilter{.name = "glTF Models", .spec = "gltf"}};
+
+    auto selected_path = platform::openFileDialog(filters, "");
+
+    if (selected_path.has_value()) {
+      return loadGltf(selected_path.value());
+    }
+
+    return nullptr;
   }
-  [[nodiscard]] auto getMaterialStorage() const
-      -> std::shared_ptr<material::MaterialStorage> {
-    return materialStorage_;
+
+  void removeGltf(std::uint32_t id) {
+    if (!gltfStorage_) return;
+
+    auto asset = gltfStorage_->get(id);
+    if (asset) {
+      gcQueue_.push_back(
+          {.asset = std::move(asset),
+           .framesRemaining = static_cast<int>(maxFramesInFlight_)});
+      gltfStorage_->remove(id);
+    }
+  }
+
+  void processGC() {
+    for (auto it = gcQueue_.begin(); it != gcQueue_.end();) {
+      if (it->framesRemaining > 0) {
+        it->framesRemaining--;
+        ++it;
+      } else {
+        it = gcQueue_.erase(it);
+      }
+    }
+  }
+
+  [[nodiscard]] auto getGltfStorage() const -> std::shared_ptr<GltfStorage> {
+    return gltfStorage_;
   }
 
  private:
   const graphics::GfxDevice& gfxDevice_;
-  std::shared_ptr<texture::TextureManager> textureStorage_;
-  std::shared_ptr<material::MaterialStorage> materialStorage_;
+  std::shared_ptr<GltfStorage> gltfStorage_;
+
+  struct GCTask {
+    std::shared_ptr<Asset> asset;
+    int framesRemaining;
+  };
+
+  std::vector<GCTask> gcQueue_;
+  std::uint32_t maxFramesInFlight_{3};
 };
 
-}  // namespace vkit::asset
+};  // namespace vkit::asset

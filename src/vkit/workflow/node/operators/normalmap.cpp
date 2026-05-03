@@ -1,9 +1,9 @@
-#include "vkit/workflow/node/normalmap.hpp"
+#include "vkit/workflow/node/operators/normalmap.hpp"
 
 #include "vkit/graph/link.hpp"
 #include "vkit/workflow/pin_type.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::op {
 
 std::atomic<std::uint64_t> NormalMapNode::request_counter_{0};
 
@@ -113,4 +113,4 @@ void NormalMapNode::setParams(NormalMapParams params) {
   markStale();
 }
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::op

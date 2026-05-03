@@ -9,7 +9,7 @@
 #include "vkit/texture/manager.hpp"
 #include "vkit/workflow/workflow_node.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::proc {
 
 enum class NoiseType : uint32_t {
   kGradient = 0,
@@ -68,4 +68,4 @@ class NoiseGeneratorNode : public WorkflowNode {
   static std::atomic<std::uint64_t> request_counter_;
 };
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::proc

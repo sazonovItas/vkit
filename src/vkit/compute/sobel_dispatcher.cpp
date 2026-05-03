@@ -1,9 +1,8 @@
 #include "vkit/compute/sobel_dispatcher.hpp"
 
-#include "vkit/asset/shaders.hpp"
-#include "vkit/asset/util.hpp"
 #include "vkit/compute/command/image.hpp"
 #include "vkit/compute/util.hpp"
+#include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/command.hpp"
 #include "vkit/graphics/shader_module.hpp"
 
@@ -23,7 +22,7 @@ SobelDispatcher::SobelDispatcher(const graphics::GfxDevice& device,
       device.get(), std::forward_as_tuple(*setLayout_));
 
   graphics::SpirVShaderModule shader(
-      device.get(), asset::assetPath(asset::kOperatorsSobelShaderPath));
+      device.get(), shaders::shaderPath(shaders::kOperatorsSobelShaderPath));
   auto stage = shader.stageCreateInfo(vk::ShaderStageFlagBits::eCompute);
   auto [result, pipe] = device.get().createComputePipelineUnique(
       nullptr,

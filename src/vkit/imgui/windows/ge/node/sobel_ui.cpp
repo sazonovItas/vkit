@@ -6,12 +6,12 @@
 #include "vkit/controller/workflow.hpp"
 #include "vkit/imgui/windows/ge/pin_ui.hpp"
 #include "vkit/imgui/windows/ge/style.hpp"
-#include "vkit/workflow/node/sobel.hpp"
+#include "vkit/workflow/node/operators/sobel.hpp"
 
 namespace vkit::imgui::windows::ge {
 
-using workflow::node::SobelNode;
-using workflow::node::SobelParams;
+using workflow::node::op::SobelNode;
+using workflow::node::op::SobelParams;
 
 auto SobelNodeUI::spawnNode(controller::WorkflowController* controller)
     -> workflow::WorkflowNode* {

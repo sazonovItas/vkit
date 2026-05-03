@@ -1,8 +1,8 @@
-#include "vkit/workflow/node/noise_generator.hpp"
+#include "vkit/workflow/node/procedural/noise_generator.hpp"
 
 #include "vkit/workflow/pin_type.hpp"
 
-namespace vkit::workflow::node {
+namespace vkit::workflow::node::proc {
 
 std::atomic<std::uint64_t> NoiseGeneratorNode::request_counter_{0};
 
@@ -87,4 +87,4 @@ void NoiseGeneratorNode::setParams(NoiseParams params) {
   markStale();
 }
 
-};  // namespace vkit::workflow::node
+};  // namespace vkit::workflow::node::proc

@@ -1,6 +1,13 @@
 #pragma once
 
-namespace vkit::asset {
+#include "vkit/asset/util.hpp"
+
+namespace vkit::shaders {
+
+[[nodiscard]] inline auto shaderPath(std::string_view uri)
+    -> std::filesystem::path {
+  return asset::assetPath(uri);
+}
 
 static constexpr std::string_view kImguiVertShaderPath = "shaders/imgui.vert";
 static constexpr std::string_view kImguiFragShaderPath = "shaders/imgui.frag";
@@ -35,4 +42,4 @@ static constexpr std::string_view kOperatorsTintShaderPath =
 static constexpr std::string_view kOperatorsMixShaderPath =
     "shaders/operators/mix.comp";
 
-};  // namespace vkit::asset
+};  // namespace vkit::shaders

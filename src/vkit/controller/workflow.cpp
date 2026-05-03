@@ -110,58 +110,58 @@ auto WorkflowController::createTextureLoadNode(const std::string& name)
 }
 
 auto WorkflowController::createNoiseGeneratorNode(const std::string& name)
-    -> workflow::node::NoiseGeneratorNode* {
+    -> workflow::node::proc::NoiseGeneratorNode* {
   if (!workflow_ || !noiseJobBus_ || !noiseResultBus_ || !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::NoiseGeneratorNode>(
+  return workflow_->createNode<workflow::node::proc::NoiseGeneratorNode>(
       name, *noiseJobBus_, *noiseResultBus_, *textureManager_);
 }
 
 auto WorkflowController::createSobelNode(const std::string& name)
-    -> workflow::node::SobelNode* {
+    -> workflow::node::op::SobelNode* {
   if (!workflow_ || !sobelJobBus_ || !sobelResultBus_ || !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::SobelNode>(
+  return workflow_->createNode<workflow::node::op::SobelNode>(
       name, *sobelJobBus_, *sobelResultBus_, *textureManager_);
 }
 
 auto WorkflowController::createHeightMapNode(const std::string& name)
-    -> workflow::node::HeightMapNode* {
+    -> workflow::node::op::HeightMapNode* {
   if (!workflow_ || !heightMapJobBus_ || !heightMapResultBus_ ||
       !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::HeightMapNode>(
+  return workflow_->createNode<workflow::node::op::HeightMapNode>(
       name, *heightMapJobBus_, *heightMapResultBus_, *textureManager_);
 }
 
 auto WorkflowController::createNormalMapNode(const std::string& name)
-    -> workflow::node::NormalMapNode* {
+    -> workflow::node::op::NormalMapNode* {
   if (!workflow_ || !normalMapJobBus_ || !normalMapResultBus_ ||
       !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::NormalMapNode>(
+  return workflow_->createNode<workflow::node::op::NormalMapNode>(
       name, *normalMapJobBus_, *normalMapResultBus_, *textureManager_);
 }
 
 auto WorkflowController::createTintNode(const std::string& name)
-    -> workflow::node::TintNode* {
+    -> workflow::node::op::TintNode* {
   if (!workflow_ || !tintJobBus_ || !tintResultBus_ || !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::TintNode>(
+  return workflow_->createNode<workflow::node::op::TintNode>(
       name, *tintJobBus_, *tintResultBus_, *textureManager_);
 }
 
 auto WorkflowController::createMixNode(const std::string& name)
-    -> workflow::node::MixNode* {
+    -> workflow::node::op::MixNode* {
   if (!workflow_ || !mixJobBus_ || !mixResultBus_ || !textureManager_)
     return nullptr;
 
-  return workflow_->createNode<workflow::node::MixNode>(
+  return workflow_->createNode<workflow::node::op::MixNode>(
       name, *mixJobBus_, *mixResultBus_, *textureManager_);
 }
 

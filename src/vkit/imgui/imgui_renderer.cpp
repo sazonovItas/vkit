@@ -2,8 +2,8 @@
 
 #include <cstring>
 
-#include "vkit/asset/shaders.hpp"
 #include "vkit/asset/util.hpp"
+#include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/mapped_buffer.hpp"
 #include "vkit/graphics/shader_module.hpp"
 #include "vulkan/vulkan.hpp"
@@ -73,11 +73,11 @@ ImguiRenderer::ImguiRenderer(vk::Device device, vma::Allocator allocator,
 
   auto vert_module = graphics::SpirVShaderModule{
       device_,
-      asset::assetPath(asset::kImguiVertShaderPath),
+      shaders::shaderPath(shaders::kImguiVertShaderPath),
   };
   auto frag_module = graphics::SpirVShaderModule{
       device_,
-      asset::assetPath(asset::kImguiFragShaderPath),
+      shaders::shaderPath(shaders::kImguiFragShaderPath),
   };
 
   auto builder =
