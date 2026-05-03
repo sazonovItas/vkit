@@ -34,8 +34,8 @@ TextureLoadNode::TextureLoadNode(std::string_view name,
         setStatus(NodeStatus::kReady);
         propagateStale();
       })} {
-  outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
   outImageF32_ = addOutputPin(pinKeyType(PinType::kFloatTexture2D), "Image");
+  outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
 }
 
 TextureLoadNode::~TextureLoadNode() {

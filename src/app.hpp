@@ -7,7 +7,10 @@
 
 #include "vkit/asset/asset.hpp"
 #include "vkit/compute/async_compute.hpp"
+#include "vkit/compute/heightmap_dispatcher.hpp"
 #include "vkit/compute/noise_dispatcher.hpp"
+#include "vkit/compute/sobel_dispatcher.hpp"
+#include "vkit/compute/tint_dispatcher.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/workflow.hpp"
 #include "vkit/graphics/descriptor_buffer.hpp"
@@ -73,12 +76,29 @@ class App {
   struct EngineContext {
     std::shared_ptr<texture::TextureManager> textureManager;
     std::shared_ptr<texture::TextureUploader> textureUploader;
+
     std::shared_ptr<workflow::ExecutionContext> executionContext;
+
     std::shared_ptr<compute::AsyncCompute> asyncCompute;
     std::shared_ptr<compute::NoiseDispatcher> noiseDispatcher;
+    std::shared_ptr<compute::SobelDispatcher> sobelDispatcher;
+    std::shared_ptr<compute::HeightMapDispatcher> heightMapDispatcher;
+    std::shared_ptr<compute::TintDispatcher> tintDispatcher;
 
     std::unique_ptr<workflow::Workflow> workflow;
     std::unique_ptr<controller::WorkflowController> workflowController;
+
+    void update() {
+      workflow->execute();
+
+      executionContext->update();
+      textureUploader->update();
+      noiseDispatcher->update();
+      sobelDispatcher->update();
+      heightMapDispatcher->update();
+      tintDispatcher->update();
+      executionContext->update();
+    }
   } engine_;
 
   struct UIContext {

@@ -24,6 +24,8 @@ class Workflow : public graph::Graph {
 
   [[nodiscard]] auto canConnect(graph::Pin* a, graph::Pin* b) const -> bool;
 
+  void disconnect(graph::Link* link) override;
+
   template <typename NodeT, typename... Args>
   auto createNode(Args&&... args) -> NodeT* {
     auto node = std::make_unique<NodeT>(std::forward<Args>(args)...);

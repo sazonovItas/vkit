@@ -4,16 +4,14 @@
 #include <vector>
 
 #include "vkit/compute/async_compute.hpp"
-#include "vkit/compute/descriptor_set_layout/noise.hpp"
-#include "vkit/compute/pipeline/noise.hpp"
-#include "vkit/compute/pipeline_layout/noise.hpp"
-#include "vkit/core/events/noise.hpp"
+#include "vkit/compute/pipeline_layout/operators.hpp"
+#include "vkit/core/events/operators.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/message_bus/message_bus.hpp"
 
 namespace vkit::compute {
 
-struct InFlightNoiseJob {
+struct InFlightSobelJob {
   uint64_t requestId;
   std::shared_ptr<texture::Texture> outputF32;
   std::shared_ptr<texture::Texture> outputUnorm;
@@ -25,29 +23,29 @@ struct InFlightNoiseJob {
   std::shared_ptr<ComputeTask> task;
 };
 
-class NoiseDispatcher {
+class SobelDispatcher {
  public:
-  NoiseDispatcher(const graphics::GfxDevice& device,
-                  core::events::NoiseJobBus& jobBus,
-                  core::events::NoiseResultBus& resultBus,
+  SobelDispatcher(const graphics::GfxDevice& device,
+                  core::events::SobelJobBus& jobBus,
+                  core::events::SobelResultBus& resultBus,
                   std::shared_ptr<AsyncCompute> asyncCompute);
 
   void update();
 
  private:
-  void onRequest(core::events::NoiseJobRequest& req);
+  void onRequest(core::events::SobelJobRequest& req);
 
   const graphics::GfxDevice& device_;
-  core::events::NoiseResultBus& resultBus_;
+  core::events::SobelResultBus& resultBus_;
   std::shared_ptr<AsyncCompute> asyncCompute_;
 
-  std::unique_ptr<dsl::NoiseSetLayout> setLayout_;
-  std::unique_ptr<pl::NoisePipelineLayout> pipelineLayout_;
-  std::unique_ptr<NoisePipeline> pipeline_;
+  std::unique_ptr<dsl::ImageOperatorSetLayout> setLayout_;
+  std::unique_ptr<pl::SobelPipelineLayout> pipelineLayout_;
+  vk::UniquePipeline pipeline_;
 
   vk::UniqueSampler sampler_;
-  message_bus::Subscription<core::events::NoiseJobRequest> sub_;
-  std::vector<InFlightNoiseJob> inFlightJobs_;
+  message_bus::Subscription<core::events::SobelJobRequest> sub_;
+  std::vector<InFlightSobelJob> inFlightJobs_;
 };
 
 };  // namespace vkit::compute

@@ -23,6 +23,10 @@ glslc:
 
 	glslc ./shaders/procedural/noise.comp -o ./assets/shaders/procedural/noise.comp
 
+	glslc ./shaders/operators/sobel.comp -o ./assets/shaders/operators/sobel.comp
+	glslc ./shaders/operators/heightmap.comp -o ./assets/shaders/operators/heightmap.comp
+	glslc ./shaders/operators/tint.comp -o ./assets/shaders/operators/tint.comp
+
 .PHONY: cmake
 cmake:
 	cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++

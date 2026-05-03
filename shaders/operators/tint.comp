@@ -1,0 +1,49 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inImage;
+
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 2, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    float rCoef;
+    float gCoef;
+    float bCoef;
+    float aCoef;
+    float factor;
+    uint  mode;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(float(pc.width), float(pc.height));
+    vec4 baseColor = texture(inImage, uv);
+    vec4 tintColor = vec4(pc.rCoef, pc.gCoef, pc.bCoef, pc.aCoef);
+    
+    vec4 resultColor;
+
+    if (pc.mode == 0u) {
+        resultColor = tintColor;
+    } else if (pc.mode == 1u) {
+        resultColor = baseColor * tintColor;
+    } else if (pc.mode == 2u) {
+        resultColor = baseColor + tintColor;
+    } else if (pc.mode == 3u) {
+        resultColor = 1.0 - (1.0 - baseColor) * (1.0 - tintColor);
+    } else {
+        resultColor = baseColor * tintColor; 
+    }
+
+    vec4 finalColor = mix(baseColor, resultColor, pc.factor);
+
+    finalColor = clamp(finalColor, 0.0, 1.0);
+
+    imageStore(outImageF32,   coord, finalColor);
+    imageStore(outImageUnorm, coord, finalColor);
+}

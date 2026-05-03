@@ -108,6 +108,24 @@ auto Workflow::canConnect(graph::Pin* a, graph::Pin* b) const -> bool {
   return !wouldCreateCycle(src_node, dst_node);
 }
 
+void Workflow::disconnect(graph::Link* link) {
+  if (!link) return;
+
+  auto* dst_pin = link->getSink();
+  WorkflowNode* target_node = nullptr;
+  if (dst_pin) {
+    target_node = static_cast<WorkflowNode*>(dst_pin->getOwnerNode());
+  }
+
+  graph::Graph::disconnect(link);
+
+  if (target_node) {
+    target_node->markStale();
+  }
+
+  markDirty();
+}
+
 void Workflow::destroyNode(int nodeId) {
   auto it = std::ranges::find_if(
       nodes, [nodeId](const graph::Node* n) { return n->getId() == nodeId; });

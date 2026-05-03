@@ -1,0 +1,51 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inImage;
+
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 2, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    float intensity;
+    float threshold;
+} pc;
+
+float getLuma(ivec2 coord) {
+    ivec2 clampedCoord = clamp(coord, ivec2(0), ivec2(pc.width - 1, pc.height - 1));
+    vec3 color = texelFetch(inImage, clampedCoord, 0).rgb;
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    float tl = getLuma(coord + ivec2(-1, -1));
+    float tc = getLuma(coord + ivec2( 0, -1));
+    float tr = getLuma(coord + ivec2( 1, -1));
+    
+    float ml = getLuma(coord + ivec2(-1,  0));
+    float mr = getLuma(coord + ivec2( 1,  0));
+    
+    float bl = getLuma(coord + ivec2(-1,  1));
+    float bc = getLuma(coord + ivec2( 0,  1));
+    float br = getLuma(coord + ivec2( 1,  1));
+
+    float gx = -tl - (2.0 * ml) - bl + tr + (2.0 * mr) + br;
+    float gy = -tl - (2.0 * tc) - tr + bl + (2.0 * bc) + br;
+
+    float mag = length(vec2(gx, gy));
+    
+    float edge = smoothstep(pc.threshold, pc.threshold + 0.05, mag);
+    
+    edge = clamp(edge * pc.intensity, 0.0, 1.0);
+
+    vec4 outCol = vec4(edge, edge, edge, 1.0);
+
+    imageStore(outImageF32,   coord, outCol);
+    imageStore(outImageUnorm, coord, outCol);
+}

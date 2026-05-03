@@ -17,10 +17,10 @@ class Link;
 
 class Graph {
  public:
-  void registerNode(Node* node);
-  void unregisterNode(Node* node);
-  auto connect(Pin* src, Pin* sink) -> Link*;
-  void disconnect(Link* link);
+  virtual void registerNode(Node* node);
+  virtual void unregisterNode(Node* node);
+  virtual auto connect(Pin* src, Pin* sink) -> Link*;
+  virtual void disconnect(Link* link);
 
   [[nodiscard]] auto getNodes() const -> const std::vector<Node*>&;
   [[nodiscard]] auto getNodes() -> std::vector<Node*>&;

@@ -24,4 +24,11 @@ static constexpr std::string_view kPrimitiveMaterialFragShaderPath =
 static constexpr std::string_view kProceduralNoiceShaderPath =
     "shaders/procedural/noise.comp";
 
+static constexpr std::string_view kOperatorsSobelShaderPath =
+    "shaders/operators/sobel.comp";
+static constexpr std::string_view kOperatorsHeightMapShaderPath =
+    "shaders/operators/heightmap.comp";
+static constexpr std::string_view kOperatorsTintShaderPath =
+    "shaders/operators/tint.comp";
+
 };  // namespace vkit::asset

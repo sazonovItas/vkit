@@ -1,19 +1,19 @@
-#include "vkit/workflow/node/noise_generator.hpp"
+#include "vkit/workflow/node/sobel.hpp"
 
+#include "vkit/graph/link.hpp"
 #include "vkit/workflow/pin_type.hpp"
 
 namespace vkit::workflow::node {
 
-std::atomic<std::uint64_t> NoiseGeneratorNode::request_counter_{0};
+std::atomic<std::uint64_t> SobelNode::request_counter_{0};
 
-NoiseGeneratorNode::NoiseGeneratorNode(std::string_view name,
-                                       core::events::NoiseJobBus& jobBus,
-                                       core::events::NoiseResultBus& resultBus,
-                                       texture::TextureManager& textureManager)
+SobelNode::SobelNode(std::string_view name, core::events::SobelJobBus& jobBus,
+                     core::events::SobelResultBus& resultBus,
+                     texture::TextureManager& textureManager)
     : WorkflowNode(name),
       jobBus_{jobBus},
       textureManager_{textureManager},
-      resultSub_{resultBus.subscribe([this](core::events::NoiseJobResult& ev) {
+      resultSub_{resultBus.subscribe([this](core::events::SobelJobResult& ev) {
         if (ev.requestId != pendingRequestId_) return;
         pendingRequestId_ = 0;
 
@@ -33,17 +33,39 @@ NoiseGeneratorNode::NoiseGeneratorNode(std::string_view name,
           propagateStale();
         }
       })} {
+  inImage_ = addInputPin(pinKeyType(PinType::kColorTexture2D), "Color");
+
   outImageF32_ = addOutputPin(pinKeyType(PinType::kFloatTexture2D), "Image");
   outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
 }
 
-NoiseGeneratorNode::~NoiseGeneratorNode() {
+SobelNode::~SobelNode() {
   if (outputF32Id.has_value()) textureManager_.remove(*outputF32Id);
   if (outputColorId.has_value()) textureManager_.remove(*outputColorId);
 }
 
-void NoiseGeneratorNode::execute() {
+void SobelNode::execute() {
   if (pendingRequestId_ != 0) return;
+
+  auto links = inImage_->getLinks();
+  if (links.empty()) return;
+
+  auto* source_pin = links.front()->getSrc();
+  const auto* incoming_tex_id = source_pin->getData<std::uint32_t>();
+
+  if (!incoming_tex_id) return;
+
+  auto input_texture = textureManager_.get(*incoming_tex_id);
+  if (!input_texture) {
+    setStatus(NodeStatus::kError);
+    return;
+  }
+
+  auto gfx_texture = input_texture->getGraphicsTexture();
+  if (!gfx_texture) return;
+
+  uint32_t tex_width = gfx_texture->getWidth();
+  uint32_t tex_height = gfx_texture->getHeight();
 
   if (outputF32Id.has_value()) {
     textureManager_.remove(*outputF32Id);
@@ -60,28 +82,21 @@ void NoiseGeneratorNode::execute() {
   pendingRequestId_ = ++request_counter_;
   setStatus(NodeStatus::kExecuting);
 
-  core::events::NoisePushConstants pc{
-      .width = params_.width,
-      .height = params_.height,
-      .noiseType = static_cast<uint32_t>(params_.type),
-      .worleyMode = static_cast<uint32_t>(params_.worleyMode),
-      .scale = params_.scale,
-      .offsetX = params_.offsetX,
-      .offsetY = params_.offsetY,
-      .seed = params_.seed,
-      .octaves = params_.octaves,
-      .persistence = params_.persistence,
-      .lacunarity = params_.lacunarity,
-      .worleyJitter = params_.worleyJitter,
+  core::events::SobelPushConstants pc{
+      .width = tex_width,
+      .height = tex_height,
+      .intensity = params_.intensity,
+      .threshold = params_.threshold,
   };
 
-  jobBus_.queueMessage(core::events::NoiseJobRequest{
+  jobBus_.queueMessage(core::events::SobelJobRequest{
       .requestId = pendingRequestId_,
+      .inputTexture = input_texture,
       .params = pc,
   });
 }
 
-void NoiseGeneratorNode::setParams(NoiseParams params) {
+void SobelNode::setParams(SobelParams params) {
   params_ = params;
   pendingRequestId_ = 0;
   markStale();

@@ -10,17 +10,24 @@
 #include "vkit/asset/gltf/importer.hpp"
 #include "vkit/asset/shaders.hpp"
 #include "vkit/asset/util.hpp"
+#include "vkit/compute/heightmap_dispatcher.hpp"
+#include "vkit/compute/sobel_dispatcher.hpp"
+#include "vkit/compute/tint_dispatcher.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/pipeline/graphics.hpp"
 #include "vkit/graphics/shader_module.hpp"
+#include "vkit/imgui/windows/ge/heightmap_ui.hpp"
 #include "vkit/imgui/windows/ge/noise_generator_ui.hpp"
+#include "vkit/imgui/windows/ge/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/texture_load_ui.hpp"
+#include "vkit/imgui/windows/ge/tint_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/viewport.hpp"
 #include "vkit/workflow/node/noise_generator.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
+#include "vkit/workflow/node/tint.hpp"
 
 namespace vkit {
 
@@ -199,9 +206,20 @@ void App::initWorkflow() {
       sys_.device->queueFamilies.compute);
 
   engine_.noiseDispatcher = std::make_shared<compute::NoiseDispatcher>(
-      *sys_.device, engine_.textureManager,
-      engine_.executionContext->noiseJobBus,
+      *sys_.device, engine_.executionContext->noiseJobBus,
       engine_.executionContext->noiseResultBus, engine_.asyncCompute);
+
+  engine_.sobelDispatcher = std::make_shared<compute::SobelDispatcher>(
+      *sys_.device, engine_.executionContext->sobelJobBus,
+      engine_.executionContext->sobelResultBus, engine_.asyncCompute);
+
+  engine_.heightMapDispatcher = std::make_shared<compute::HeightMapDispatcher>(
+      *sys_.device, engine_.executionContext->heightMapJobBus,
+      engine_.executionContext->heightMapResultBus, engine_.asyncCompute);
+
+  engine_.tintDispatcher = std::make_shared<compute::TintDispatcher>(
+      *sys_.device, engine_.executionContext->tintJobBus,
+      engine_.executionContext->tintResultBus, engine_.asyncCompute);
 
   engine_.workflow = std::make_unique<workflow::Workflow>();
 
@@ -212,7 +230,13 @@ void App::initWorkflow() {
       .setTextureLoadBus(&engine_.executionContext->texLoadBus)
       .setTextureReadyBus(&engine_.executionContext->texReadyBus)
       .setNoiseJobBus(&engine_.executionContext->noiseJobBus)
-      .setNoiseResultBus(&engine_.executionContext->noiseResultBus);
+      .setNoiseResultBus(&engine_.executionContext->noiseResultBus)
+      .setSobelJobBus(&engine_.executionContext->sobelJobBus)
+      .setSobelResultBus(&engine_.executionContext->sobelResultBus)
+      .setHeightMapJobBus(&engine_.executionContext->heightMapJobBus)
+      .setHeightMapResultBus(&engine_.executionContext->heightMapResultBus)
+      .setTintJobBus(&engine_.executionContext->tintJobBus)
+      .setTintResultBus(&engine_.executionContext->tintResultBus);
 }
 
 void App::initImgui() {
@@ -273,11 +297,23 @@ void App::initImgui() {
   auto noise_generator_ui =
       std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(
           engine_.textureManager.get());
+  auto sobel_ui = std::make_unique<imgui::windows::ge::SobelNodeUI>(
+      engine_.textureManager.get());
+  auto heightmap_ui = std::make_unique<imgui::windows::ge::HeightMapNodeUI>(
+      engine_.textureManager.get());
+  auto tint_ui = std::make_unique<imgui::windows::ge::TintNodeUI>(
+      engine_.textureManager.get());
 
   ui_.graphWindow->getRegistry().registerUI<workflow::node::TextureLoadNode>(
       std::move(texture_load_ui));
   ui_.graphWindow->getRegistry().registerUI<workflow::node::NoiseGeneratorNode>(
       std::move(noise_generator_ui));
+  ui_.graphWindow->getRegistry().registerUI<workflow::node::SobelNode>(
+      std::move(sobel_ui));
+  ui_.graphWindow->getRegistry().registerUI<workflow::node::HeightMapNode>(
+      std::move(heightmap_ui));
+  ui_.graphWindow->getRegistry().registerUI<workflow::node::TintNode>(
+      std::move(tint_ui));
 
   ui_.graphInspector =
       std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
@@ -566,15 +602,9 @@ void App::mainLoop() {
   auto swapchain_needs_recreation = false;
 
   while (!sys_.window->shouldClose()) {
+    engine_.update();
+
     sys_.window->pollEvents();
-
-    engine_.textureManager->processGC();
-
-    engine_.workflow->execute();
-    engine_.executionContext->update();
-    engine_.textureUploader->update();
-    engine_.noiseDispatcher->update();
-    engine_.executionContext->update();
 
     auto current_time = std::chrono::steady_clock::now();
     float dt = std::chrono::duration<float, std::chrono::seconds::period>(
@@ -597,12 +627,15 @@ void App::mainLoop() {
 
     sys_.renderer->beginFrame(currentFrame_);
 
+    engine_.textureManager->processGC();
+
     auto image_index_opt = sys_.swapchain->acquireNextImage(
         *sys_.imageAvailableSemaphores[currentFrame_]);
     if (!image_index_opt) {
       swapchain_needs_recreation = true;
       continue;
     }
+
     const auto image_index = image_index_opt.value();
 
     auto& frame = frames_[currentFrame_];

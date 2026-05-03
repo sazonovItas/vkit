@@ -12,7 +12,7 @@ GraphEditorWindow::GraphEditorWindow(const std::string_view name)
   auto& style = ImNodes::GetStyle();
   style.NodeCornerRounding = 4.0F;
   style.PinCircleRadius = 5.0F;
-  style.LinkThickness = 3.0F;
+  style.LinkThickness = 6.0F;
 }
 
 GraphEditorWindow::~GraphEditorWindow() { ImNodes::DestroyContext(); }
@@ -42,8 +42,8 @@ void GraphEditorWindow::onDraw() {
 
   ImNodes::BeginNodeEditor();
 
-  if (open_create_menu ||
-      (ImNodes::IsEditorHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
+  if (open_create_menu || (ImNodes::IsEditorHovered() &&
+                           ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
     ImGui::OpenPopup("CreateNodePopup");
   }
 
@@ -73,6 +73,37 @@ void GraphEditorWindow::onDraw() {
   }
 
   ImNodes::EndNodeEditor();
+
+  int hovered_pin_id;
+  if (ImNodes::IsPinHovered(&hovered_pin_id)) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+      if (controller_ && controller_->getWorkflow()) {
+        auto* workflow = controller_->getWorkflow();
+        auto* pin = workflow->findPin(hovered_pin_id);
+
+        if (pin) {
+          auto links_to_delete = pin->getLinks();
+
+          for (auto* link : links_to_delete) {
+            controller_->disconnectLink(link->getId());
+          }
+        }
+      }
+    }
+  }
+
+  const int num_selected_nodes = ImNodes::NumSelectedNodes();
+  if (num_selected_nodes > 0 && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+    std::vector<int> selected_nodes;
+    selected_nodes.resize(num_selected_nodes);
+    ImNodes::GetSelectedNodes(selected_nodes.data());
+
+    if (controller_) {
+      controller_->deleteNodes(selected_nodes);
+    }
+
+    ImNodes::ClearNodeSelection();
+  }
 
   int start_pin_id;
   int end_pin_id;

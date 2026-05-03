@@ -2,68 +2,29 @@
 
 #include "vkit/asset/shaders.hpp"
 #include "vkit/asset/util.hpp"
+#include "vkit/compute/command/image.hpp"
+#include "vkit/compute/util.hpp"
 #include "vkit/graphics/command.hpp"
-#include "vkit/graphics/texture.hpp"
-#include "vulkan/vulkan.hpp"
 
 namespace vkit::compute {
 
-namespace {
-
-auto makeNoiseTexture(const graphics::GfxDevice& device, uint32_t w, uint32_t h,
-                      vk::Format fmt, vk::Sampler sampler,
-                      std::string_view name)
-    -> std::shared_ptr<texture::Texture> {
-  graphics::TextureCreateInfo ci{
-      .type = graphics::TextureType::k2D,
-      .pixelFormat = fmt,
-      .usage = vk::ImageUsageFlagBits::eStorage |
-               vk::ImageUsageFlagBits::eSampled |
-               vk::ImageUsageFlagBits::eTransferSrc,
-      .useMipmaps = false,
-      .width = static_cast<int>(w),
-      .height = static_cast<int>(h),
-  };
-  auto gfx =
-      std::make_shared<graphics::Texture>(device.get(), device.allocator, ci);
-  gfx->setSampler(sampler);
-  return std::make_shared<texture::Texture>(name, gfx);
-}
-
-void recordLayoutTransition(vk::CommandBuffer cb, vk::Image img,
-                            vk::ImageLayout from, vk::ImageLayout to,
-                            vk::PipelineStageFlags srcStage,
-                            vk::PipelineStageFlags dstStage,
-                            vk::AccessFlags srcAccess,
-                            vk::AccessFlags dstAccess) {
-  vk::ImageMemoryBarrier barrier{
-      srcAccess,
-      dstAccess,
-      from,
-      to,
-      vk::QueueFamilyIgnored,
-      vk::QueueFamilyIgnored,
-      img,
-      vk::ImageSubresourceRange{vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1},
-  };
-  cb.pipelineBarrier(srcStage, dstStage, {}, {}, {}, barrier);
-}
-
-};  // namespace
-
-NoiseDispatcher::NoiseDispatcher(
-    const graphics::GfxDevice& device,
-    std::shared_ptr<texture::TextureManager> storage,
-    core::events::NoiseJobBus& jobBus, core::events::NoiseResultBus& resultBus,
-    std::shared_ptr<AsyncCompute> asyncCompute)
+NoiseDispatcher::NoiseDispatcher(const graphics::GfxDevice& device,
+                                 core::events::NoiseJobBus& jobBus,
+                                 core::events::NoiseResultBus& resultBus,
+                                 std::shared_ptr<AsyncCompute> asyncCompute)
     : device_{device},
-      storage_{std::move(storage)},
       resultBus_{resultBus},
       asyncCompute_{std::move(asyncCompute)},
-      pipeline_{device.get(),
-                asset::assetPath(asset::kProceduralNoiceShaderPath)},
       sub_{jobBus.subscribe(
           [this](core::events::NoiseJobRequest& req) { onRequest(req); })} {
+  setLayout_ = std::make_unique<dsl::NoiseSetLayout>(device.get());
+  pipelineLayout_ = std::make_unique<pl::NoisePipelineLayout>(
+      device.get(), std::forward_as_tuple(*setLayout_));
+
+  pipeline_ = std::make_unique<NoisePipeline>(
+      device.get(), *pipelineLayout_,
+      asset::assetPath(asset::kProceduralNoiceShaderPath));
+
   sampler_ = device.get().createSamplerUnique(vk::SamplerCreateInfo{
       {},
       vk::Filter::eLinear,
@@ -78,12 +39,12 @@ NoiseDispatcher::NoiseDispatcher(
 void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
   const auto& p = req.params;
 
-  auto tex_f32 =
-      makeNoiseTexture(device_, p.width, p.height,
-                       vk::Format::eR32G32B32A32Sfloat, *sampler_, "noise_f32");
-  auto tex_unorm =
-      makeNoiseTexture(device_, p.width, p.height, vk::Format::eR8G8B8A8Unorm,
-                       *sampler_, "noise_color");
+  auto tex_f32 = util::makeOutputTexture(device_, p.width, p.height,
+                                         vk::Format::eR32G32B32A32Sfloat,
+                                         *sampler_, "noise_f32");
+  auto tex_unorm = util::makeOutputTexture(device_, p.width, p.height,
+                                           vk::Format::eR8G8B8A8Unorm,
+                                           *sampler_, "noise_color");
 
   auto& gfx_f32 = *tex_f32->getGraphicsTexture();
   auto& gfx_unorm = *tex_unorm->getGraphicsTexture();
@@ -109,7 +70,8 @@ void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
           pool_sizes,
       });
 
-  auto set_layouts = pipeline_.descriptorSetLayout();
+  auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{setLayout_->get()};
+
   auto alloc_info = vk::DescriptorSetAllocateInfo{}
                         .setDescriptorPool(*desc_pool)
                         .setSetLayouts(set_layouts);
@@ -131,14 +93,14 @@ void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
   std::array<vk::WriteDescriptorSet, 2> writes{
       vk::WriteDescriptorSet{
           ds,
-          0,
+          dsl::NoiseSetLayout::kOutImageF32Binding,
           0,
           vk::DescriptorType::eStorageImage,
           image_infos[0],
       },
       vk::WriteDescriptorSet{
           ds,
-          1,
+          dsl::NoiseSetLayout::kOutImageUnormBinding,
           0,
           vk::DescriptorType::eStorageImage,
           image_infos[1],
@@ -147,34 +109,37 @@ void NoiseDispatcher::onRequest(core::events::NoiseJobRequest& req) {
   device_.get().updateDescriptorSets(writes, {});
 
   auto task = std::make_shared<ComputeTask>();
+
+  task->add<cmd::ComputeImageBarrierCommand>(
+      img_f32, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
+      vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eTopOfPipe,
+      vk::PipelineStageFlagBits2::eComputeShader);
+
+  task->add<cmd::ComputeImageBarrierCommand>(
+      img_unorm, vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
+      vk::AccessFlagBits2::eNone, vk::AccessFlagBits2::eShaderWrite,
+      vk::PipelineStageFlagBits2::eTopOfPipe,
+      vk::PipelineStageFlagBits2::eComputeShader);
+
   task->add<graphics::LambdaCommand>(
-      [this, img_f32, img_unorm, ds, params = p](vk::CommandBuffer cb) {
-        recordLayoutTransition(cb, img_f32, vk::ImageLayout::eUndefined,
-                               vk::ImageLayout::eGeneral,
-                               vk::PipelineStageFlagBits::eTopOfPipe,
-                               vk::PipelineStageFlagBits::eComputeShader, {},
-                               vk::AccessFlagBits::eShaderWrite);
-        recordLayoutTransition(cb, img_unorm, vk::ImageLayout::eUndefined,
-                               vk::ImageLayout::eGeneral,
-                               vk::PipelineStageFlagBits::eTopOfPipe,
-                               vk::PipelineStageFlagBits::eComputeShader, {},
-                               vk::AccessFlagBits::eShaderWrite);
-
-        pipeline_.recordDispatch(cb, ds, params);
-
-        recordLayoutTransition(cb, img_f32, vk::ImageLayout::eGeneral,
-                               vk::ImageLayout::eShaderReadOnlyOptimal,
-                               vk::PipelineStageFlagBits::eComputeShader,
-                               vk::PipelineStageFlagBits::eComputeShader,
-                               vk::AccessFlagBits::eShaderWrite,
-                               vk::AccessFlagBits::eShaderRead);
-        recordLayoutTransition(cb, img_unorm, vk::ImageLayout::eGeneral,
-                               vk::ImageLayout::eShaderReadOnlyOptimal,
-                               vk::PipelineStageFlagBits::eComputeShader,
-                               vk::PipelineStageFlagBits::eComputeShader,
-                               vk::AccessFlagBits::eShaderWrite,
-                               vk::AccessFlagBits::eShaderRead);
+      [this, ds, params = p](vk::CommandBuffer cb) {
+        pipeline_->recordDispatch(cb, pipelineLayout_->get(), ds, params);
       });
+
+  task->add<cmd::ComputeImageBarrierCommand>(
+      img_f32, vk::ImageLayout::eGeneral,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2::eShaderWrite, vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2::eComputeShader,
+      vk::PipelineStageFlagBits2::eComputeShader);
+
+  task->add<cmd::ComputeImageBarrierCommand>(
+      img_unorm, vk::ImageLayout::eGeneral,
+      vk::ImageLayout::eShaderReadOnlyOptimal,
+      vk::AccessFlagBits2::eShaderWrite, vk::AccessFlagBits2::eShaderRead,
+      vk::PipelineStageFlagBits2::eComputeShader,
+      vk::PipelineStageFlagBits2::eComputeShader);
 
   auto fence = device_.get().createFenceUnique({});
   auto result = asyncCompute_->submit(*task, *fence);

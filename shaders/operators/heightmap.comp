@@ -1,0 +1,42 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inImage;
+
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 2, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    float contrast;
+    float brightness;
+    uint  invert;
+} pc;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(float(pc.width), float(pc.height));
+
+    vec3 color = texture(inImage, uv).rgb;
+
+    float heightMap = dot(color, vec3(0.299, 0.587, 0.114));
+
+    heightMap = (heightMap - 0.5) * pc.contrast + 0.5;
+
+    heightMap += pc.brightness;
+
+    if (pc.invert == 1u) {
+        heightMap = 1.0 - heightMap;
+    }
+
+    heightMap = clamp(heightMap, 0.0, 1.0);
+
+    vec4 outCol = vec4(heightMap, heightMap, heightMap, 1.0);
+
+    imageStore(outImageF32,   coord, outCol);
+    imageStore(outImageUnorm, coord, outCol);
+}

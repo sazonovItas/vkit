@@ -1,8 +1,5 @@
 #include "vkit/controller/workflow.hpp"
 
-#include "vkit/core/events/noise.hpp"
-#include "vkit/workflow/node/noise_generator.hpp"
-
 namespace vkit::controller {
 
 auto WorkflowController::setWorkflow(workflow::Workflow* workflow)
@@ -41,6 +38,42 @@ auto WorkflowController::setNoiseResultBus(core::events::NoiseResultBus* bus)
   return *this;
 }
 
+auto WorkflowController::setSobelJobBus(core::events::SobelJobBus* bus)
+    -> WorkflowController& {
+  sobelJobBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setSobelResultBus(core::events::SobelResultBus* bus)
+    -> WorkflowController& {
+  sobelResultBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setHeightMapJobBus(core::events::HeightMapJobBus* bus)
+    -> WorkflowController& {
+  heightMapJobBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setHeightMapResultBus(
+    core::events::HeightMapResultBus* bus) -> WorkflowController& {
+  heightMapResultBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setTintJobBus(core::events::TintJobBus* bus)
+    -> WorkflowController& {
+  tintJobBus_ = bus;
+  return *this;
+}
+
+auto WorkflowController::setTintResultBus(core::events::TintResultBus* bus)
+    -> WorkflowController& {
+  tintResultBus_ = bus;
+  return *this;
+}
+
 auto WorkflowController::createTextureLoadNode(const std::string& name)
     -> workflow::node::TextureLoadNode* {
   if (!workflow_ || !textureLoadBus_ || !textureReadyBus_ || !textureManager_)
@@ -57,6 +90,34 @@ auto WorkflowController::createNoiseGeneratorNode(const std::string& name)
 
   return workflow_->createNode<workflow::node::NoiseGeneratorNode>(
       name, *noiseJobBus_, *noiseResultBus_, *textureManager_);
+}
+
+auto WorkflowController::createSobelNode(const std::string& name)
+    -> workflow::node::SobelNode* {
+  if (!workflow_ || !sobelJobBus_ || !sobelResultBus_ || !textureManager_)
+    return nullptr;
+
+  return workflow_->createNode<workflow::node::SobelNode>(
+      name, *sobelJobBus_, *sobelResultBus_, *textureManager_);
+}
+
+auto WorkflowController::createHeightMapNode(const std::string& name)
+    -> workflow::node::HeightMapNode* {
+  if (!workflow_ || !heightMapJobBus_ || !heightMapResultBus_ ||
+      !textureManager_)
+    return nullptr;
+
+  return workflow_->createNode<workflow::node::HeightMapNode>(
+      name, *heightMapJobBus_, *heightMapResultBus_, *textureManager_);
+}
+
+auto WorkflowController::createTintNode(const std::string& name)
+    -> workflow::node::TintNode* {
+  if (!workflow_ || !tintJobBus_ || !tintResultBus_ || !textureManager_)
+    return nullptr;
+
+  return workflow_->createNode<workflow::node::TintNode>(
+      name, *tintJobBus_, *tintResultBus_, *textureManager_);
 }
 
 void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {

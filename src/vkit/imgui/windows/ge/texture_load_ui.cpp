@@ -36,10 +36,10 @@ void TextureLoadNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImGui::Dummy(ImVec2(node_width, 4.0F * zoom));
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Image",
-                    style::colors::kPinColorYellow, node_width);
+                    style::colors::kPinColorCyan, node_width);
   ImGui::Spacing();
   PinUI::DrawOutput(n->getOutputs()[1].get(), "Color",
-                    style::colors::kPinColorCyan, node_width);
+                    style::colors::kPinColorYellow, node_width);
   ImGui::Spacing();
 
   ImNodes::EndNode();
