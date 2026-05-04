@@ -10,7 +10,7 @@
 #include "vkit/graphics/command.hpp"
 #include "vkit/material/manager.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
-#include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
+#include "vkit/renderer/pipeline_layout/ray_sphere_material.hpp"
 #include "vkit/renderer/pipeline_layout/skybox.hpp"
 
 namespace vkit::renderer::cmd {
@@ -29,12 +29,17 @@ class DrawSkyboxCommand final : public graphics::Command {
 
   void record(vk::CommandBuffer cb) const override {
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, bindlessSet_};
+    std::array<vk::DescriptorSet, 2> sets = {
+        sceneSet_,
+        bindlessSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
-    pl::SkyboxPipelineLayout::PushConstants pcs{.baseColor = baseColor_,
-                                                .blurLevel = blurLevel_};
+    auto pcs = pl::SkyboxPipelineLayout::PushConstants{
+        .baseColor = baseColor_,
+        .blurLevel = blurLevel_,
+    };
     cb.pushConstants(layout_, vk::ShaderStageFlagBits::eFragment, 0,
                      sizeof(pcs), &pcs);
     cb.draw(6, 1, 0, 0);
@@ -69,12 +74,15 @@ class DrawRaySphereCommand final : public graphics::Command {
   void record(vk::CommandBuffer cb) const override {
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
 
-    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_};
+    std::array<vk::DescriptorSet, 3> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
-    pl::RaySphereDebugPipelineLayout::PushConstants pcs{
+    auto pcs = pl::RaySphereMaterialPipelineLayout::PushConstants{
         .model = model_,
         .materialType = materialType_,
         .materialIndex = materialIndex_,
@@ -181,8 +189,12 @@ class DrawAssetCommand final : public graphics::Command {
         traverse_node(traverse_node, node.get());
     }
 
-    std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_, primSet_};
+    std::array<vk::DescriptorSet, 4> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+        primSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 

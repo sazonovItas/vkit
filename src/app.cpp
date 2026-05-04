@@ -24,8 +24,8 @@
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
-#include "vkit/renderer/command/draw_commands.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
+#include "vkit/renderer/command/draw_scene.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/types.hpp"
@@ -37,6 +37,7 @@
 namespace vkit {
 
 namespace {
+
 void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
                         texture::TextureManager* texManager) {
   auto& registry = graphWindow.getRegistry();
@@ -55,6 +56,7 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
   registry.registerUI<workflow::node::op::MixNode>(
       std::make_unique<imgui::windows::ge::MixNodeUI>(texManager));
 }
+
 };  // namespace
 
 App::App() {
@@ -66,9 +68,9 @@ App::App() {
   initEnvironment();
   initAsset();
   initWorkflow();
+  initRendererSystems();
   initViewports();
   initImguiWindows();
-  initRendererSystems();
 }
 
 App::~App() {
@@ -435,7 +437,7 @@ void App::initImguiWindows() {
 
   ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
       "Configuration", engine_.assetController.get(),
-      engine_.environmentController.get());
+      engine_.environmentController.get(), rSys_.animator.get());
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -585,52 +587,6 @@ void App::mainLoop() {
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ui_.windowManager->drawWindows(currentFrame_);
-
-    if (current_asset && !current_asset->animations.empty()) {
-      ImGui::Begin("Animation Control");
-
-      static int selected_anim = 0;
-      if (selected_anim >= current_asset->animations.size()) {
-        selected_anim = 0;
-        rSys_.animator->setActiveAnimation(selected_anim);
-      }
-
-      const auto preview_name =
-          std::string{current_asset->animations[selected_anim]->getName()};
-      if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
-        for (int i = 0; i < current_asset->animations.size(); ++i) {
-          bool is_selected = (selected_anim == i);
-          if (ImGui::Selectable(preview_name.c_str(), is_selected)) {
-            selected_anim = i;
-            rSys_.animator->setActiveAnimation(selected_anim);
-            rSys_.animator->stop();
-            rSys_.animator->play();
-          }
-          if (is_selected) ImGui::SetItemDefaultFocus();
-        }
-        ImGui::EndCombo();
-      }
-
-      ImGui::Separator();
-
-      bool is_playing = rSys_.animator->isPlaying();
-      if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
-        rSys_.animator->togglePlayback();
-      }
-
-      ImGui::SameLine();
-
-      if (ImGui::Button("Stop", ImVec2(80, 0))) {
-        rSys_.animator->stop();
-      }
-
-      float speed = rSys_.animator->getTimeScale();
-      if (ImGui::SliderFloat("Speed", &speed, 0.0F, 3.0F, "%.2fx")) {
-        rSys_.animator->setTimeScale(speed);
-      }
-
-      ImGui::End();
-    }
     ui_.host->endFrame();
 
     auto task = renderer::RenderTask{};
@@ -666,8 +622,7 @@ void App::mainLoop() {
             .add<renderer::cmd::DrawRaySphereCommand>(
                 rSys_.sceneRenderer->raySpherePipeline,
                 rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
-                sys_.bindlessSet,  // 1. Bindless Set
-                mat_set, glm::mat4(1.0F), 0, 0)
+                sys_.bindlessSet, mat_set, glm::mat4(1.0F), 0, 0)
             .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
       }
     }

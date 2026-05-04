@@ -47,14 +47,14 @@ void main() {
     mat3 normalMatrix;
 
     if (pcs.enableSkinning == 1 && isAttributeExists(prim.jointIndices[0])) {
-        mat4 skinMat = mat4(0.0);
+        mat4 skinMatrix = mat4(0.0);
 
         for (uint i = 0; i < 2; ++i) {
             if (isAttributeExists(prim.jointIndices[i]) && isAttributeExists(prim.jointWeights[i])) {
                 uvec4 joints = getJoints(prim, i, gl_VertexIndex);
                 vec4 weights = getWeights(prim, i, gl_VertexIndex);
 
-                skinMat +=
+                skinMatrix +=
                     weights.x * jointData.joints[pcs.skinOffset + joints.x] +
                         weights.y * jointData.joints[pcs.skinOffset + joints.y] +
                         weights.z * jointData.joints[pcs.skinOffset + joints.z] +
@@ -62,8 +62,8 @@ void main() {
             }
         }
 
-        worldPos = skinMat * vec4(pos, 1.0);
-        normalMatrix = transpose(inverse(mat3(skinMat)));
+        worldPos = skinMatrix * vec4(pos, 1.0);
+        normalMatrix = transpose(inverse(mat3(skinMatrix)));
     } else {
         worldPos = pcs.model * vec4(pos, 1.0);
         normalMatrix = transpose(inverse(mat3(pcs.model)));

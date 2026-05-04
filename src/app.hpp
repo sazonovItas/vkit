@@ -5,12 +5,9 @@
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
-// --- CORE / ASSETS ---
+#include "vkit/animation/animator.hpp"
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
-#include "vkit/controller/asset.hpp"
-
-// --- COMPUTE ---
 #include "vkit/compute/async_compute.hpp"
 #include "vkit/compute/heightmap_dispatcher.hpp"
 #include "vkit/compute/mix_dispatcher.hpp"
@@ -18,17 +15,15 @@
 #include "vkit/compute/normalmap_dispatcher.hpp"
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
-
-// --- GRAPHICS / SCENE ---
+#include "vkit/controller/asset.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/environment.hpp"
 #include "vkit/controller/workflow.hpp"
+#include "vkit/environment/manager.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/instance.hpp"
 #include "vkit/graphics/surface.hpp"
 #include "vkit/graphics/swapchain.hpp"
-
-// --- IMGUI / UI ---
 #include "vkit/imgui/imgui_renderer.hpp"
 #include "vkit/imgui/imgui_window_manager.hpp"
 #include "vkit/imgui/window_imgui_host.hpp"
@@ -36,14 +31,8 @@
 #include "vkit/imgui/windows/ge/graph_editor.hpp"
 #include "vkit/imgui/windows/ge/graph_node_inspector.hpp"
 #include "vkit/imgui/windows/viewer.hpp"
-#include "vkit/platform/file_dialog.hpp"
-
-// --- ENVIRONMENT ---
-#include "vkit/environment/manager.hpp"
-
-// --- RENDERER / WORKFLOW / SYSTEMS ---
-#include "vkit/animation/animator.hpp"
 #include "vkit/material/manager.hpp"
+#include "vkit/platform/file_dialog.hpp"
 #include "vkit/renderer/asset_render_bridge.hpp"
 #include "vkit/renderer/descriptor_set_layout/bindless.hpp"
 #include "vkit/renderer/material_system.hpp"
@@ -75,9 +64,9 @@ class App {
   void initEnvironment();
   void initAsset();
   void initWorkflow();
+  void initRendererSystems();
   void initViewports();
   void initImguiWindows();
-  void initRendererSystems();
 
   void mainLoop();
   void recreateSwapchain() const;

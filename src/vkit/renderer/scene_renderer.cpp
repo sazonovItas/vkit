@@ -22,7 +22,7 @@ SceneRenderer::SceneRenderer(
                                  *materialSetLayout_, *primitiveSetLayout_));
   primitiveLayout = uPrimLayout_.get();
 
-  uRaySphereLayout_ = std::make_unique<pl::RaySphereDebugPipelineLayout>(
+  uRaySphereLayout_ = std::make_unique<pl::RaySphereMaterialPipelineLayout>(
       dev, std::forward_as_tuple(*sceneSetLayout_, bindlessLayout,
                                  *materialSetLayout_));
   raySphereLayout = uRaySphereLayout_.get();
@@ -33,11 +33,11 @@ SceneRenderer::SceneRenderer(
 
   auto prim_vert = graphics::SpirVShaderModule{
       dev,
-      shaders::shaderPath(shaders::kPrimitiveDebugVertShaderPath),
+      shaders::shaderPath(shaders::kPrimitiveVertShaderPath),
   };
   auto prim_frag = graphics::SpirVShaderModule{
       dev,
-      shaders::shaderPath(shaders::kPrimitiveDebugFragShaderPath),
+      shaders::shaderPath(shaders::kPrimitiveMaterialFragShaderPath),
   };
 
   auto opaque_builder =
@@ -76,7 +76,7 @@ SceneRenderer::SceneRenderer(
   };
   auto ray_frag = graphics::SpirVShaderModule{
       dev,
-      shaders::shaderPath(shaders::kRaySphereDebugFragShaderPath),
+      shaders::shaderPath(shaders::kRaySphereMaterialFragShaderPath),
   };
   auto ray_builder =
       graphics::pipeline::GraphicsPipelineBuilder{uRaySphereLayout_->get()};

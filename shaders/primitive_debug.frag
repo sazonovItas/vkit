@@ -18,6 +18,9 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint primIndex;
     uint skinOffset;
+    uint enableSkinning;
+    uint materialType;
+    uint materialIndex;
 } pcs;
 
 const vec3 LIGHT_DIR = -vec3(0.0, 0.0, -1.0);

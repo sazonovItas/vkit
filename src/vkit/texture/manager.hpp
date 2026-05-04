@@ -7,10 +7,11 @@
 
 namespace vkit::graphics {
 class BindlessTextureManager;
-}
+};
+
 namespace vkit::imgui {
 class ImguiRenderer;
-}
+};
 
 namespace vkit::texture {
 
@@ -23,9 +24,6 @@ class TextureManager : public vkit::Storage<Texture> {
   auto operator=(TextureManager&) -> TextureManager& = delete;
 
   ~TextureManager() override;
-
-  TextureManager(const TextureManager&) = delete;
-  auto operator=(const TextureManager&) -> TextureManager& = delete;
 
   auto add(const std::shared_ptr<Texture>& texture) -> std::uint32_t override;
   void remove(std::uint32_t storageId) override;

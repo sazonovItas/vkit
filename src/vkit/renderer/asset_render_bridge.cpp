@@ -6,12 +6,10 @@ AssetRenderBridge::AssetRenderBridge(graphics::GfxDevice& device,
                                      const dsl::PrimitiveSetLayout& layout,
                                      std::uint32_t framesInFlight)
     : device_{device} {
-  std::array<vk::DescriptorPoolSize, 1> pool_sizes = {
-      vk::DescriptorPoolSize{
-          vk::DescriptorType::eStorageBuffer,
-          framesInFlight * 2,
-      },
-  };
+  std::array<vk::DescriptorPoolSize, 1> pool_sizes = {vk::DescriptorPoolSize{
+      vk::DescriptorType::eStorageBuffer,
+      framesInFlight * 2,
+  }};
 
   vk::DescriptorPoolCreateInfo pool_info{};
   pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
@@ -67,8 +65,9 @@ AssetRenderBridge::AssetRenderBridge(graphics::GfxDevice& device,
 
 void AssetRenderBridge::update(std::uint32_t frameIndex,
                                asset::Asset* currentAsset) {
-  auto& frame = frames_[frameIndex];
   if (!currentAsset) return;
+
+  auto& frame = frames_[frameIndex];
 
   auto current_asset_id = currentAsset->getStorageId();
   bool descriptors_need_update = false;

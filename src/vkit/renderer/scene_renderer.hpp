@@ -12,7 +12,7 @@
 #include "vkit/renderer/descriptor_set_layout/primitive.hpp"
 #include "vkit/renderer/descriptor_set_layout/scene.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
-#include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
+#include "vkit/renderer/pipeline_layout/ray_sphere_material.hpp"
 #include "vkit/renderer/pipeline_layout/skybox.hpp"
 #include "vkit/renderer/types.hpp"
 
@@ -53,7 +53,7 @@ class SceneRenderer {
   vk::Pipeline skyboxPipeline;
 
   pl::PrimitiveMaterialPipelineLayout* primitiveLayout{nullptr};
-  pl::RaySphereDebugPipelineLayout* raySphereLayout{nullptr};
+  pl::RaySphereMaterialPipelineLayout* raySphereLayout{nullptr};
   pl::SkyboxPipelineLayout* skyboxLayout{nullptr};
 
  private:
@@ -64,7 +64,7 @@ class SceneRenderer {
   std::unique_ptr<dsl::MaterialSetLayout> materialSetLayout_;
 
   std::unique_ptr<pl::PrimitiveMaterialPipelineLayout> uPrimLayout_;
-  std::unique_ptr<pl::RaySphereDebugPipelineLayout> uRaySphereLayout_;
+  std::unique_ptr<pl::RaySphereMaterialPipelineLayout> uRaySphereLayout_;
   std::unique_ptr<pl::SkyboxPipelineLayout> uSkyboxLayout_;
 
   vk::UniquePipeline uOpaquePipeline_;

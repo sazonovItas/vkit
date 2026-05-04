@@ -21,8 +21,6 @@ static constexpr std::string_view kRaySphereMaterialFragShaderPath =
 
 static constexpr std::string_view kPrimitiveVertShaderPath =
     "shaders/primitive.vert";
-static constexpr std::string_view kPrimitiveDebugVertShaderPath =
-    "shaders/primitive_debug.vert";
 static constexpr std::string_view kPrimitiveDebugFragShaderPath =
     "shaders/primitive_debug.frag";
 static constexpr std::string_view kPrimitiveMaterialFragShaderPath =

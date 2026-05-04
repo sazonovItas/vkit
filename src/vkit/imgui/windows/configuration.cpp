@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 
+#include "vkit/animation/animator.hpp"
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/environment.hpp"
 
@@ -12,10 +13,12 @@ namespace vkit::imgui::windows {
 
 ConfigurationWindow::ConfigurationWindow(
     std::string_view title, controller::AssetController* assetController,
-    controller::EnvironmentController* envController)
+    controller::EnvironmentController* envController,
+    animation::Animator* animator)
     : ImguiWindow(title),
       assetController_{assetController},
-      envController_{envController} {
+      envController_{envController},
+      animator_{animator} {
   setMinSize(300.0F, 400.0F);
 }
 
@@ -34,6 +37,7 @@ void ConfigurationWindow::onDraw() {
                     ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
   drawAssetManagementSection();
+  drawAnimationManagementSection();
   drawEnvironmentManagementSection();
 
   ImGui::EndChild();
@@ -42,7 +46,6 @@ void ConfigurationWindow::onDraw() {
 void ConfigurationWindow::drawAssetManagementSection() {
   if (!assetController_) return;
 
-  // Removed ImGuiTreeNodeFlags_DefaultOpen so it starts closed
   if (ImGui::CollapsingHeader("GLTF Assets")) {
     ImGui::Spacing();
 
@@ -122,6 +125,62 @@ void ConfigurationWindow::drawAssetManagementSection() {
       }
     } else {
       lastSelectedAssetId_ = std::nullopt;
+    }
+
+    ImGui::Spacing();
+  }
+}
+
+void ConfigurationWindow::drawAnimationManagementSection() {
+  if (!assetController_ || !animator_) return;
+
+  auto current_asset = assetController_->getCurrentAsset();
+  if (!current_asset || current_asset->animations.empty()) return;
+
+  if (ImGui::CollapsingHeader("Animations", ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::Spacing();
+
+    static int selected_anim = 0;
+    if (selected_anim >= current_asset->animations.size()) {
+      selected_anim = 0;
+      animator_->setActiveAnimation(selected_anim);
+    }
+
+    const auto preview_name =
+        std::string{current_asset->animations[selected_anim]->getName()};
+
+    if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
+      for (int i = 0; i < current_asset->animations.size(); ++i) {
+        bool is_selected = (selected_anim == i);
+        if (ImGui::Selectable(preview_name.c_str(), is_selected)) {
+          selected_anim = i;
+          animator_->setActiveAnimation(selected_anim);
+          animator_->stop();
+          animator_->play();
+        }
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+      ImGui::EndCombo();
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    bool is_playing = animator_->isPlaying();
+    if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
+      animator_->togglePlayback();
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Stop", ImVec2(80, 0))) {
+      animator_->stop();
+    }
+
+    float speed = animator_->getTimeScale();
+    if (ImGui::SliderFloat("Speed", &speed, 0.0F, 10.0F, "%.2fx")) {
+      animator_->setTimeScale(speed);
     }
 
     ImGui::Spacing();

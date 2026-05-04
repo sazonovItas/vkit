@@ -7,7 +7,9 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
                                std::uint32_t framesInFlight)
     : device_{device} {
   std::array<vk::DescriptorPoolSize, 1> pool_sizes = {vk::DescriptorPoolSize{
-      vk::DescriptorType::eStorageBuffer, framesInFlight * 3}};
+      vk::DescriptorType::eStorageBuffer,
+      framesInFlight * 3,
+  }};
 
   vk::DescriptorPoolCreateInfo pool_info{};
   pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
@@ -42,8 +44,15 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
 
     std::array<vk::WriteDescriptorSet, 3> writes = {
         vk::WriteDescriptorSet{
-            frame.descriptorSet, dsl::MaterialSetLayout::kDiffuseBinding, 0, 1,
-            vk::DescriptorType::eStorageBuffer, nullptr, &diff_info, nullptr},
+            frame.descriptorSet,
+            dsl::MaterialSetLayout::kDiffuseBinding,
+            0,
+            1,
+            vk::DescriptorType::eStorageBuffer,
+            nullptr,
+            &diff_info,
+            nullptr,
+        },
         vk::WriteDescriptorSet{
             frame.descriptorSet,
             dsl::MaterialSetLayout::kDiffuseSpecularBinding,

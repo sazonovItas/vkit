@@ -10,6 +10,10 @@ class AssetController;
 class EnvironmentController;
 };  // namespace vkit::controller
 
+namespace vkit::animation {
+class Animator;
+};
+
 namespace vkit::imgui::windows {
 
 class ConfigurationWindow : public ImguiWindow {
@@ -17,13 +21,15 @@ class ConfigurationWindow : public ImguiWindow {
   explicit ConfigurationWindow(
       std::string_view title,
       controller::AssetController* assetController = nullptr,
-      controller::EnvironmentController* envController = nullptr);
+      controller::EnvironmentController* envController = nullptr,
+      animation::Animator* animator = nullptr);
 
   ~ConfigurationWindow() override = default;
 
   void setAssetController(controller::AssetController* assetController);
   void setEnvironmentController(
       controller::EnvironmentController* envController);
+  void setAnimator(animation::Animator* animator);
 
  protected:
   void onDraw() override;
@@ -31,6 +37,7 @@ class ConfigurationWindow : public ImguiWindow {
  private:
   controller::AssetController* assetController_{nullptr};
   controller::EnvironmentController* envController_{nullptr};
+  animation::Animator* animator_{nullptr};
 
   char assetNameBuffer_[256]{};
   std::optional<std::uint32_t> lastSelectedAssetId_{std::nullopt};
@@ -39,6 +46,7 @@ class ConfigurationWindow : public ImguiWindow {
   std::optional<std::uint32_t> lastSelectedEnvId_{std::nullopt};
 
   void drawAssetManagementSection();
+  void drawAnimationManagementSection();
   void drawEnvironmentManagementSection();
 };
 

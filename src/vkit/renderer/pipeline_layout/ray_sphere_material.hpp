@@ -1,7 +1,6 @@
 #pragma once
 
 #include <array>
-#include <cstdint>
 #include <tuple>
 
 #include "vkit/graphics/pipeline_layout.hpp"
@@ -11,7 +10,7 @@
 
 namespace vkit::renderer::pl {
 
-struct RaySphereDebugPipelineLayout final : graphics::PipelineLayout {
+struct RaySphereMaterialPipelineLayout final : graphics::PipelineLayout {
   struct PushConstants {
     glm::mat4 model;
     std::uint32_t materialType;
@@ -28,20 +27,21 @@ struct RaySphereDebugPipelineLayout final : graphics::PipelineLayout {
                                 const dsl::BindlessTextureSetLayout&,
                                 const dsl::MaterialSetLayout&>;
 
-  explicit RaySphereDebugPipelineLayout(vk::Device device,
-                                        SetLayouts setLayouts)
-      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+  explicit RaySphereMaterialPipelineLayout(vk::Device device,
+                                           SetLayouts setLayouts)
+      : RaySphereMaterialPipelineLayout(device,
+                                        std::array<vk::DescriptorSetLayout, 3>{
+                                            *std::get<0>(setLayouts),
+                                            *std::get<1>(setLayouts),
+                                            *std::get<2>(setLayouts),
+                                        }) {}
 
  private:
-  static auto createPipelineCreateInfo(SetLayouts setLayouts)
-      -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 3>{
-        *std::get<0>(setLayouts),
-        *std::get<1>(setLayouts),
-        *std::get<2>(setLayouts),
-    };
-
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
+  RaySphereMaterialPipelineLayout(
+      vk::Device device, const std::array<vk::DescriptorSetLayout, 3>& layouts)
+      : PipelineLayout{device, vk::PipelineLayoutCreateInfo{}
+                                   .setSetLayouts(layouts)
+                                   .setPushConstantRanges(kPushConstantRange)} {
   }
 };
 
