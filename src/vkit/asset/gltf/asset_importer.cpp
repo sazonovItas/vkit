@@ -53,6 +53,7 @@ void AssetImporter::resetState() {
   loadedMeshes_.clear();
   loadedNodes_.clear();
   loadedSkins_.clear();
+  loadedAnimations_.clear();
 }
 
 auto AssetImporter::load(const std::filesystem::path& filepath)
@@ -431,10 +432,7 @@ void AssetImporter::loadSkins(const fastgltf::Asset& asset) {
 }
 
 void AssetImporter::loadScenes(const fastgltf::Asset& asset) {
-  LOG_TRACE("Loading " << asset.scenes.size() << " scenes...");
-  for (std::size_t i = 0; i < asset.scenes.size(); ++i) {
-    LOG_TRACE("  Scene " << i);
-    const auto& gltf_scene = asset.scenes[i];
+  for (const auto& gltf_scene : asset.scenes) {
     auto new_scene = std::make_shared<scene::Scene>(gltf_scene.name.c_str());
 
     for (auto root_idx : gltf_scene.nodeIndices) {
@@ -442,19 +440,36 @@ void AssetImporter::loadScenes(const fastgltf::Asset& asset) {
         if (auto storage_id = loadedNodes_[root_idx]->getStorageId()) {
           new_scene->addRootNode(storage_id.value());
         }
-      } else {
-        std::cerr << "[glTF Error] Scene references out-of-bounds root node!"
-                  << std::endl;
       }
     }
-
     asset_->scenes.push_back(new_scene);
+  }
+
+  if (asset.scenes.empty() && !asset.nodes.empty()) {
+    auto synthetic_scene = std::make_shared<scene::Scene>("Default Scene");
+
+    std::vector<bool> is_child(asset.nodes.size(), false);
+    for (const auto& node : asset.nodes) {
+      for (auto child_idx : node.children) {
+        if (child_idx < is_child.size()) is_child[child_idx] = true;
+      }
+    }
+    for (std::size_t i = 0; i < asset.nodes.size(); ++i) {
+      if (!is_child[i]) {
+        if (auto storage_id = loadedNodes_[i]->getStorageId()) {
+          synthetic_scene->addRootNode(storage_id.value());
+        }
+      }
+    }
+    asset_->scenes.push_back(synthetic_scene);
   }
 
   if (asset.defaultScene.has_value() &&
       asset.defaultScene.value() < asset_->scenes.size()) {
     asset_->activeSceneIndex =
         static_cast<std::int32_t>(asset.defaultScene.value());
+  } else {
+    asset_->activeSceneIndex = 0;
   }
 }
 

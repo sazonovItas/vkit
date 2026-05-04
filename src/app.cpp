@@ -561,6 +561,9 @@ void App::mainLoop() {
     }
 
     auto current_asset = engine_.assetController->getCurrentAsset();
+    if (current_asset) {
+      current_asset->update();
+    }
 
     rSys_.animator->update(dt, current_asset.get());
     rSys_.materialSys->update(currentFrame_, *engine_.materialManager);

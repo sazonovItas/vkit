@@ -6,7 +6,6 @@
 
 #include "vkit/dataformat/vertex_format.hpp"
 #include "vkit/item/storage_item.hpp"
-#include "vkit/material/material.hpp"
 #include "vkit/primitive/buffers.hpp"
 #include "vkit/primitive/device_buffers.hpp"
 #include "vkit/primitive/enums.hpp"

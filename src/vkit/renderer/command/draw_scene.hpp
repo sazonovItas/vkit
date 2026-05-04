@@ -143,7 +143,7 @@ class DrawAssetCommand final : public graphics::Command {
                    vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
                    const asset::Asset* asset,
                    const material::MaterialManager* materialManager,
-                   bool enableSkinning = true)
+                   bool enableSkinning)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
         layout_{layout},
