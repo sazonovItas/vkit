@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "vkit/animation/animation.hpp"
 #include "vkit/asset/asset.hpp"
 #include "vkit/dataformat/vertex_format.hpp"
 #include "vkit/graphics/device.hpp"
@@ -28,6 +29,7 @@ class Importer {
   std::vector<std::shared_ptr<scene::Mesh>> loadedMeshes_;
   std::vector<std::shared_ptr<scene::Node>> loadedNodes_;
   std::vector<std::shared_ptr<scene::Skin>> loadedSkins_;
+  std::vector<std::shared_ptr<animation::Animation>> loadedAnimations_;
 
   void resetState();
   void loadBuffers(const fastgltf::Asset& asset,
@@ -35,6 +37,7 @@ class Importer {
   void loadMeshes(const fastgltf::Asset& asset);
   void loadNodes(const fastgltf::Asset& asset);
   void loadSkins(const fastgltf::Asset& asset);
+  void loadAnimations(const fastgltf::Asset& asset);
   void loadScenes(const fastgltf::Asset& asset);
 
   [[nodiscard]] static auto mapAttributeFormat(fastgltf::ComponentType compType,

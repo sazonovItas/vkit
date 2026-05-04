@@ -6,6 +6,7 @@
 
 #include "vkit/dataformat/vertex_format.hpp"
 #include "vkit/item/storage_item.hpp"
+#include "vkit/material/material.hpp"
 #include "vkit/primitive/buffers.hpp"
 #include "vkit/primitive/device_buffers.hpp"
 #include "vkit/primitive/enums.hpp"
@@ -65,10 +66,15 @@ class Primitive : public StorageItem {
   PolygonMode polygonMode{PolygonMode::eFill};
   DevicePrimitiveAttributes attrs;
 
-  [[nodiscard]] auto getMaterialSlot() const -> std::uint32_t {
-    return materialSlot_;
+  [[nodiscard]] auto getMaterialType() const -> material::Type {
+    return materialType_;
   }
-  void setMaterialSlot(const std::uint32_t slot) { materialSlot_ = slot; }
+  void setMaterialType(const material::Type type) { materialType_ = type; }
+
+  [[nodiscard]] auto getMaterialId() const -> std::uint32_t {
+    return materialId_;
+  }
+  void setMaterialId(const std::uint32_t id) { materialId_ = id; }
 
   template <typename T>
   [[nodiscard]] auto getAttachmentAs() const -> std::shared_ptr<T> {
@@ -129,7 +135,8 @@ class Primitive : public StorageItem {
   std::shared_ptr<DeviceBuffers> buffers_;
   std::vector<std::shared_ptr<Attachment>> attachments_;
 
-  std::uint32_t materialSlot_{0};
+  material::Type materialType_{material::Type::kNone};
+  std::uint32_t materialId_{0};
 
   [[nodiscard]] static auto createDeviceAttributes(
       const std::shared_ptr<DeviceBuffers>& buffers,

@@ -97,6 +97,9 @@ auto Importer::load(const std::filesystem::path& filepath)
   LOG_TRACE("Calling loadScenes...");
   loadScenes(gltf_asset);
 
+  LOG_TRACE("Calling animations...");
+  loadAnimations(gltf_asset);
+
   auto final_asset = std::move(asset_);
   resetState();
 
@@ -323,7 +326,6 @@ void Importer::loadMeshes(const fastgltf::Asset& asset) {
       }
 
       auto prim = std::make_shared<primitive::Primitive>(deviceBuffers_, attrs);
-      prim->setMaterialSlot(gltf_prim.materialIndex.value_or(0));
 
       asset_->primitives.add(prim);
       mesh->addPrimitive(prim);
@@ -452,6 +454,85 @@ void Importer::loadScenes(const fastgltf::Asset& asset) {
       asset.defaultScene.value() < asset_->scenes.size()) {
     asset_->activeSceneIndex =
         static_cast<std::int32_t>(asset.defaultScene.value());
+  }
+}
+
+void Importer::loadAnimations(const fastgltf::Asset& asset) {
+  for (const auto& gltf_anim : asset.animations) {
+    auto anim = std::make_shared<animation::Animation>(
+        gltf_anim.name.empty() ? "Animation" : gltf_anim.name.c_str());
+
+    for (const auto& gltf_sampler : gltf_anim.samplers) {
+      animation::AnimationSampler sampler;
+
+      if (gltf_sampler.interpolation ==
+          fastgltf::AnimationInterpolation::Linear) {
+        sampler.interpolation =
+            animation::AnimationSampler::Interpolation::kLinear;
+      } else if (gltf_sampler.interpolation ==
+                 fastgltf::AnimationInterpolation::Step) {
+        sampler.interpolation =
+            animation::AnimationSampler::Interpolation::kStep;
+      } else {
+        sampler.interpolation =
+            animation::AnimationSampler::Interpolation::kCubicSpline;
+      }
+
+      const auto& input_accessor = asset.accessors[gltf_sampler.inputAccessor];
+      sampler.inputs.resize(input_accessor.count);
+
+      fastgltf::iterateAccessorWithIndex<float>(
+          asset, input_accessor, [&](float value, std::size_t idx) {
+            sampler.inputs[idx] = value;
+            anim->start = std::min(anim->start, value);
+            anim->end = std::max(anim->end, value);
+          });
+
+      const auto& output_accessor =
+          asset.accessors[gltf_sampler.outputAccessor];
+      sampler.outputs.resize(output_accessor.count);
+
+      if (output_accessor.type == fastgltf::AccessorType::Vec3) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec3>(
+            asset, output_accessor,
+            [&](fastgltf::math::fvec3 value, std::size_t idx) {
+              sampler.outputs[idx] =
+                  glm::vec4(value.x(), value.y(), value.z(), 0.0F);
+            });
+      } else if (output_accessor.type == fastgltf::AccessorType::Vec4) {
+        fastgltf::iterateAccessorWithIndex<fastgltf::math::fvec4>(
+            asset, output_accessor,
+            [&](fastgltf::math::fvec4 value, std::size_t idx) {
+              sampler.outputs[idx] =
+                  glm::vec4(value.x(), value.y(), value.z(), value.w());
+            });
+      }
+
+      anim->samplers.push_back(std::move(sampler));
+    }
+
+    for (const auto& gltf_channel : gltf_anim.channels) {
+      if (!gltf_channel.nodeIndex.has_value()) continue;
+
+      animation::AnimationChannel channel;
+      channel.samplerIndex = gltf_channel.samplerIndex;
+      channel.targetNode = loadedNodes_[gltf_channel.nodeIndex.value()];
+
+      if (gltf_channel.path == fastgltf::AnimationPath::Translation) {
+        channel.path = animation::AnimationChannel::Path::kTranslation;
+      } else if (gltf_channel.path == fastgltf::AnimationPath::Rotation) {
+        channel.path = animation::AnimationChannel::Path::kRotation;
+      } else if (gltf_channel.path == fastgltf::AnimationPath::Scale) {
+        channel.path = animation::AnimationChannel::Path::kScale;
+      } else {
+        continue;
+      }
+
+      anim->channels.push_back(std::move(channel));
+    }
+
+    loadedAnimations_.push_back(anim);
+    asset_->animations.push_back(anim);
   }
 }
 

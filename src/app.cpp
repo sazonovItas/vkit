@@ -7,7 +7,6 @@
 #include <filesystem>
 #include <memory>
 #include <span>
-#include <tuple>
 
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
@@ -16,11 +15,8 @@
 #include "vkit/compute/sobel_dispatcher.hpp"
 #include "vkit/compute/tint_dispatcher.hpp"
 #include "vkit/controller/environment.hpp"
-#include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
-#include "vkit/graphics/pipeline/graphics.hpp"
-#include "vkit/graphics/shader_module.hpp"
 #include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
@@ -28,6 +24,7 @@
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
+#include "vkit/renderer/command/draw_commands.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
@@ -40,177 +37,29 @@
 namespace vkit {
 
 namespace {
-
-class DrawSkyboxCommand final : public graphics::Command {
- public:
-  DrawSkyboxCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
-                    vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
-                    glm::vec4 baseColor, float blurLevel)
-      : pipeline_{pipeline},
-        layout_{layout},
-        sceneSet_{sceneSet},
-        bindlessSet_{bindlessSet},
-        baseColor_{baseColor},
-        blurLevel_{blurLevel} {}
-
-  void record(vk::CommandBuffer cb) const override {
-    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-
-    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, bindlessSet_};
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
-                          nullptr);
-
-    renderer::pl::SkyboxPipelineLayout::PushConstants pcs{
-        .baseColor = baseColor_,
-        .blurLevel = blurLevel_,
-    };
-
-    cb.pushConstants(layout_, vk::ShaderStageFlagBits::eFragment, 0,
-                     sizeof(pcs), &pcs);
-
-    cb.draw(6, 1, 0, 0);
-  }
-
- private:
-  vk::Pipeline pipeline_;
-  vk::PipelineLayout layout_;
-  vk::DescriptorSet sceneSet_;
-  vk::DescriptorSet bindlessSet_;
-  glm::vec4 baseColor_;
-  float blurLevel_;
-};
-
-class DrawRaySphereCommand final : public graphics::Command {
- public:
-  DrawRaySphereCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
-                       vk::DescriptorSet set, glm::mat4 model)
-      : pipeline_{pipeline}, layout_{layout}, set_{set}, model_{model} {}
-
-  void record(vk::CommandBuffer cb) const override {
-    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, 1,
-                          &set_, 0, nullptr);
-
-    renderer::pl::RaySphereDebugPipelineLayout::PushConstants pcs{
-        .model = model_,
-    };
-    cb.pushConstants(
-        layout_,
-        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-        0, sizeof(renderer::pl::RaySphereDebugPipelineLayout::PushConstants),
-        &pcs);
-
-    cb.draw(36, 1, 0, 0);
-  }
-
- private:
-  vk::Pipeline pipeline_;
-  vk::PipelineLayout layout_;
-  vk::DescriptorSet set_;
-  glm::mat4 model_;
-};
-
-class DrawAssetCommand final : public graphics::Command {
- public:
-  DrawAssetCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
-                   vk::DescriptorSet sceneSet, vk::DescriptorSet primSet,
-                   const asset::Asset* asset)
-      : pipeline_{pipeline},
-        layout_{layout},
-        sceneSet_{sceneSet},
-        primSet_{primSet},
-        asset_{asset} {}
-
-  void record(vk::CommandBuffer cb) const override {
-    if (!asset_) return;
-
-    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-
-    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, primSet_};
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
-                          nullptr);
-
-    if (asset_->scenes.empty()) return;
-    auto active_scene = asset_->getActiveScene();
-    if (!active_scene) return;
-
-    for (std::uint32_t root_id : active_scene->rootNodes) {
-      if (auto node = asset_->nodes.get(root_id)) {
-        drawNode(cb, node.get());
-      }
-    }
-  }
-
- private:
-  void drawNode(vk::CommandBuffer cb, const scene::Node* node) const {
-    if (node->mesh) {
-      for (const auto& prim : node->mesh->getPrimitives()) {
-        if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
-          continue;
-
-        cb.bindIndexBuffer(prim->getIndexBuffer()->buffer,
-                           prim->getIndexBufferOffset(), prim->getIndexType());
-
-        renderer::pl::PrimitiveMaterialPipelineLayout::PushConstants pcs{
-            .model = node->getGlobalTransform().getMatrix(),
-            .primIndex = prim->getStorageId().value(),
-            .skinOffset = asset_->skins.getOffsetForNode(node),
-            .enableSkinning = (node->skin != nullptr) ? 1U : 0U,
-        };
-
-        cb.pushConstants(layout_,
-                         vk::ShaderStageFlagBits::eVertex |
-                             vk::ShaderStageFlagBits::eFragment,
-                         0, sizeof(pcs), &pcs);
-
-        cb.drawIndexed(prim->attrs.index.info.count, 1, 0, 0, 0);
-      }
-    }
-
-    for (const auto& child : node->getChildren()) {
-      drawNode(cb, child.get());
-    }
-  }
-
-  vk::Pipeline pipeline_;
-  vk::PipelineLayout layout_;
-  vk::DescriptorSet sceneSet_;
-  vk::DescriptorSet primSet_;
-  const asset::Asset* asset_;
-};
-
 void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
                         texture::TextureManager* texManager) {
   auto& registry = graphWindow.getRegistry();
-
   registry.registerUI<workflow::node::TextureLoadNode>(
       std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(texManager));
-
   registry.registerUI<workflow::node::proc::NoiseGeneratorNode>(
       std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(texManager));
-
   registry.registerUI<workflow::node::op::SobelNode>(
       std::make_unique<imgui::windows::ge::SobelNodeUI>(texManager));
-
   registry.registerUI<workflow::node::op::HeightMapNode>(
       std::make_unique<imgui::windows::ge::HeightMapNodeUI>(texManager));
-
   registry.registerUI<workflow::node::op::NormalMapNode>(
       std::make_unique<imgui::windows::ge::NormalMapNodeUI>(texManager));
-
   registry.registerUI<workflow::node::op::TintNode>(
       std::make_unique<imgui::windows::ge::TintNodeUI>(texManager));
-
   registry.registerUI<workflow::node::op::MixNode>(
       std::make_unique<imgui::windows::ge::MixNodeUI>(texManager));
 }
-
 };  // namespace
 
 App::App() {
   initWindow();
   initVulkan();
-
   initCore();
   initImguiCore();
   initCompute();
@@ -219,7 +68,7 @@ App::App() {
   initWorkflow();
   initViewports();
   initImguiWindows();
-  initDebugRendering();
+  initRendererSystems();
 }
 
 App::~App() {
@@ -228,18 +77,24 @@ App::~App() {
   }
 
   for (auto& frame : frames_) {
-    if (frame.sceneTextureId) {
+    if (frame.sceneTextureId)
       ui_.renderer->unregisterTexture(frame.sceneTextureId);
-    }
-    if (frame.materialTextureId) {
+    if (frame.materialTextureId)
       ui_.renderer->unregisterTexture(frame.materialTextureId);
-    }
   }
+
+  ui_.windowManager.reset();
+  ui_.graphWindow.reset();
+  ui_.graphInspector.reset();
+  ui_.configWindow.reset();
+  ui_.sceneViewer.reset();
+  ui_.materialViewer.reset();
 
   engine_.workflowController.reset();
   engine_.workflow.reset();
   engine_.assetController.reset();
   engine_.assetManager.reset();
+  engine_.environmentController.reset();
   engine_.environmentManager.reset();
 
   if (engine_.textureManager) {
@@ -332,6 +187,8 @@ void App::initCore() {
   engine_.textureManager =
       std::make_shared<texture::TextureManager>(kMaxFramesInFlight);
   engine_.textureManager->setBindlessManager(engine_.bindlessManager.get());
+
+  engine_.materialManager = std::make_unique<material::MaterialManager>();
 }
 
 void App::initImguiCore() {
@@ -356,13 +213,10 @@ void App::initImguiCore() {
       ImGuiID dock_main_id = root_id;
       ImGuiID dock_bottom_id = ImGui::DockBuilderSplitNode(
           dock_main_id, ImGuiDir_Down, 0.40F, nullptr, &dock_main_id);
-
       ImGuiID dock_top_right_id = ImGui::DockBuilderSplitNode(
           dock_main_id, ImGuiDir_Right, 0.30F, nullptr, &dock_main_id);
-
       ImGuiID dock_top_right_bottom_id = ImGui::DockBuilderSplitNode(
           dock_top_right_id, ImGuiDir_Down, 0.40F, nullptr, &dock_top_right_id);
-
       ImGuiID dock_bottom_left_id = ImGui::DockBuilderSplitNode(
           dock_bottom_id, ImGuiDir_Left, 0.20F, nullptr, &dock_bottom_id);
 
@@ -535,6 +389,7 @@ void App::initViewports() {
                                                 static_cast<float>(height));
         }
       });
+
   ui_.materialViewer->setOnManipulate([this](imgui::windows::Viewer& viewer) {
     auto& io = ImGui::GetIO();
     if (viewer.isHovered() && viewer.isFocused()) {
@@ -589,205 +444,19 @@ void App::initImguiWindows() {
   ui_.windowManager->addWindow(ui_.configWindow);
 }
 
-void App::initDebugRendering() {
-  vk::Device device = sys_.device->get();
+void App::initRendererSystems() {
+  rSys_.sceneRenderer = std::make_unique<renderer::SceneRenderer>(
+      *sys_.device, *sys_.bindlessSetLayout, kMaxFramesInFlight);
 
-  debug_.sceneSetLayout =
-      std::make_unique<renderer::dsl::SceneSetLayout>(device);
-  debug_.primitiveSetLayout =
-      std::make_unique<renderer::dsl::PrimitiveSetLayout>(device);
+  rSys_.materialSys = std::make_unique<renderer::MaterialSystem>(
+      *sys_.device, rSys_.sceneRenderer->getMaterialSetLayout(),
+      kMaxFramesInFlight);
 
-  debug_.raySphereLayout =
-      std::make_unique<renderer::pl::RaySphereDebugPipelineLayout>(
-          device, std::forward_as_tuple(*debug_.sceneSetLayout));
-  debug_.primitiveLayout =
-      std::make_unique<renderer::pl::PrimitiveMaterialPipelineLayout>(
-          device, std::forward_as_tuple(*debug_.sceneSetLayout,
-                                        *debug_.primitiveSetLayout));
+  rSys_.assetBridge = std::make_unique<renderer::AssetRenderBridge>(
+      *sys_.device, rSys_.sceneRenderer->getPrimitiveSetLayout(),
+      kMaxFramesInFlight);
 
-  auto vert_module = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kRaySphereVertShaderPath)};
-  auto frag_module = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kRaySphereDebugFragShaderPath)};
-
-  auto builder = graphics::pipeline::GraphicsPipelineBuilder{
-      debug_.raySphereLayout->get()};
-  builder
-      .addShaderStage(
-          vert_module.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
-      .addShaderStage(
-          frag_module.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
-      .setVertexInput({}, {})
-      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
-      .setDepthState(vk::True, vk::True)
-      .setCullMode(vk::CullModeFlagBits::eNone)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
-
-  debug_.raySpherePipeline = builder.build(device);
-
-  auto prim_vert = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kPrimitiveDebugVertShaderPath)};
-  auto prim_frag = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kPrimitiveDebugFragShaderPath)};
-
-  auto prim_builder = graphics::pipeline::GraphicsPipelineBuilder{
-      debug_.primitiveLayout->get()};
-  prim_builder
-      .addShaderStage(
-          prim_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
-      .addShaderStage(
-          prim_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
-      .setVertexInput({}, {})
-      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
-      .setDepthState(vk::True, vk::True)
-      .setCullMode(vk::CullModeFlagBits::eBack)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
-
-  debug_.primitivePipeline = prim_builder.build(device);
-
-  debug_.skyboxLayout = std::make_unique<renderer::pl::SkyboxPipelineLayout>(
-      device,
-      std::forward_as_tuple(*debug_.sceneSetLayout, *sys_.bindlessSetLayout));
-
-  auto sky_vert = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kSkyboxVertShaderPath)};
-  auto sky_frag = graphics::SpirVShaderModule{
-      device, shaders::shaderPath(shaders::kSkyboxFragShaderPath)};
-
-  auto sky_builder =
-      graphics::pipeline::GraphicsPipelineBuilder{debug_.skyboxLayout->get()};
-  sky_builder
-      .addShaderStage(
-          sky_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
-      .addShaderStage(
-          sky_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
-      .setVertexInput({}, {})
-      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
-      .setDepthState(vk::False, vk::False)
-      .setCullMode(vk::CullModeFlagBits::eNone)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
-
-  debug_.skyboxPipeline = sky_builder.build(device);
-
-  vk::DescriptorPoolSize pool_sizes[] = {
-      {vk::DescriptorType::eUniformBuffer, kMaxFramesInFlight * 2},
-      {vk::DescriptorType::eStorageBuffer, kMaxFramesInFlight * 2}};
-
-  vk::DescriptorPoolCreateInfo pool_info{};
-  pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
-      .setMaxSets(kMaxFramesInFlight * 4)
-      .setPoolSizes(pool_sizes);
-  debug_.descriptorPool = device.createDescriptorPoolUnique(pool_info);
-
-  for (auto& frame : frames_) {
-    frame.sceneCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
-        sys_.device->allocator, static_cast<dataformat::BufferUsageFlags>(
-                                    vk::BufferUsageFlagBits::eUniformBuffer));
-
-    frame.materialCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
-        sys_.device->allocator, static_cast<dataformat::BufferUsageFlags>(
-                                    vk::BufferUsageFlagBits::eUniformBuffer));
-
-    frame.environmentBuffer = std::make_unique<graphics::DescriptorBuffer>(
-        sys_.device->allocator, static_cast<dataformat::BufferUsageFlags>(
-                                    vk::BufferUsageFlagBits::eUniformBuffer));
-
-    frame.primitiveSSBO = std::make_unique<graphics::DescriptorBuffer>(
-        sys_.device->allocator,
-        static_cast<dataformat::BufferUsageFlags>(
-            vk::BufferUsageFlagBits::eStorageBuffer),
-        sizeof(primitive::PrimitiveData) * 1000);
-
-    frame.jointSSBO = std::make_unique<graphics::DescriptorBuffer>(
-        sys_.device->allocator,
-        static_cast<dataformat::BufferUsageFlags>(
-            vk::BufferUsageFlagBits::eStorageBuffer),
-        sizeof(glm::mat4) * 1000);
-
-    vk::DescriptorSetAllocateInfo cam_alloc_info{*debug_.descriptorPool, 1,
-                                                 &debug_.sceneSetLayout->get()};
-    frame.sceneDescriptorSet = device.allocateDescriptorSets(cam_alloc_info)[0];
-    frame.materialDescriptorSet =
-        device.allocateDescriptorSets(cam_alloc_info)[0];
-
-    auto scene_buffer_info = frame.sceneCameraBuffer->descriptorInfo();
-    auto mat_buffer_info = frame.materialCameraBuffer->descriptorInfo();
-    auto env_buffer_info = frame.environmentBuffer->descriptorInfo();
-
-    std::array<vk::WriteDescriptorSet, 4> scene_writes = {
-        vk::WriteDescriptorSet{
-            frame.sceneDescriptorSet,
-            renderer::dsl::SceneSetLayout::kCameraBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &scene_buffer_info,
-            nullptr,
-        },
-        vk::WriteDescriptorSet{
-            frame.sceneDescriptorSet,
-            renderer::dsl::SceneSetLayout::kEnvironmentBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &env_buffer_info,
-            nullptr,
-        },
-        vk::WriteDescriptorSet{
-            frame.materialDescriptorSet,
-            renderer::dsl::SceneSetLayout::kCameraBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &mat_buffer_info,
-            nullptr,
-        },
-        vk::WriteDescriptorSet{
-            frame.materialDescriptorSet,
-            renderer::dsl::SceneSetLayout::kEnvironmentBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &env_buffer_info,
-            nullptr,
-        },
-    };
-
-    vk::DescriptorSetAllocateInfo prim_alloc_info{
-        *debug_.descriptorPool, 1, &debug_.primitiveSetLayout->get()};
-    frame.primitiveDescriptorSet =
-        device.allocateDescriptorSets(prim_alloc_info)[0];
-
-    auto prim_info = frame.primitiveSSBO->descriptorInfo();
-    auto joint_info = frame.jointSSBO->descriptorInfo();
-
-    vk::WriteDescriptorSet prim_write{
-        frame.primitiveDescriptorSet,
-        renderer::dsl::PrimitiveSetLayout::kPrimitiveBinding,
-        0,
-        1,
-        vk::DescriptorType::eStorageBuffer,
-        nullptr,
-        &prim_info,
-        nullptr};
-
-    vk::WriteDescriptorSet joint_write{
-        frame.primitiveDescriptorSet,
-        renderer::dsl::PrimitiveSetLayout::kJointBinding,
-        0,
-        1,
-        vk::DescriptorType::eStorageBuffer,
-        nullptr,
-        &joint_info,
-        nullptr};
-
-    device.updateDescriptorSets(scene_writes, nullptr);
-    device.updateDescriptorSets({prim_write, joint_write}, nullptr);
-  }
+  rSys_.animator = std::make_unique<animation::Animator>();
 }
 
 void App::ensureViewportSize(renderer::Viewport& viewport,
@@ -860,7 +529,6 @@ void App::mainLoop() {
     }
 
     const auto image_index = image_index_opt.value();
-
     auto& frame = frames_[currentFrame_];
 
     if (ui_.sceneViewer->isVisible()) {
@@ -868,7 +536,6 @@ void App::mainLoop() {
                          ui_.sceneViewer->getWidth(),
                          ui_.sceneViewer->getHeight(), 1);
       ui_.sceneViewer->setCurrentTexture(frame.sceneTextureId);
-
       scene_.sceneController.update(*scene_.sceneCamera);
     }
 
@@ -877,34 +544,14 @@ void App::mainLoop() {
                          ui_.materialViewer->getWidth(),
                          ui_.materialViewer->getHeight(), 1);
       ui_.materialViewer->setCurrentTexture(frame.materialTextureId);
-
       scene_.materialController.update(*scene_.materialCamera);
     }
 
-    checkAndUpdateAssetDescriptors(currentFrame_);
-
-    static float time = 0.0F;
-    time += dt;
-
     auto current_asset = engine_.assetController->getCurrentAsset();
-    if (current_asset) {
-      for (const auto& skin : current_asset->skins.getItems()) {
-        if (!skin) continue;
-        std::size_t joints_to_wiggle =
-            std::min<std::size_t>(3, skin->joints.size());
-        for (std::size_t i = 0; i < joints_to_wiggle; ++i) {
-          if (auto joint = skin->joints[i]) {
-            auto local = joint->getLocalTransform();
-            float angle = std::sin(time * 2.0F) * 0.5F;
-            glm::quat spin = glm::angleAxis(angle, glm::vec3(0.0F, 1.0F, 0.0F));
-            local.setRotation(spin);
-            joint->setLocalTransform(local);
-          }
-        }
-      }
 
-      current_asset->update();
-    }
+    rSys_.animator->update(dt, current_asset.get());
+    rSys_.materialSys->update(currentFrame_, *engine_.materialManager);
+    rSys_.assetBridge->update(currentFrame_, current_asset.get());
 
     env::EnvironmentParams env_params{};
     auto current_env = engine_.environmentController->getCurrentEnvironment();
@@ -922,54 +569,107 @@ void App::mainLoop() {
       env_params.brdfLutTexIdx = -1;
     }
 
-    std::ignore = frame.environmentBuffer->writeAt(
-        std::as_bytes(std::span{&env_params, 1}));
-
-    auto scene_ubo = renderer::types::CameraUBO{
+    renderer::types::CameraUBO scene_ubo{
         .view = scene_.sceneCamera->getViewMatrix(),
         .proj = scene_.sceneCamera->getProjectionMatrix(),
         .position = scene_.sceneCamera->getPosition(),
     };
-    std::ignore = frame.sceneCameraBuffer->writeAt(
-        std::as_bytes(std::span{&scene_ubo, 1}));
-
-    auto mat_ubo = renderer::types::CameraUBO{
+    renderer::types::CameraUBO mat_ubo{
         .view = scene_.materialCamera->getViewMatrix(),
         .proj = scene_.materialCamera->getProjectionMatrix(),
         .position = scene_.materialCamera->getPosition(),
     };
-    std::ignore = frame.materialCameraBuffer->writeAt(
-        std::as_bytes(std::span{&mat_ubo, 1}));
+
+    rSys_.sceneRenderer->updateUniforms(currentFrame_, scene_ubo, mat_ubo,
+                                        env_params);
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ui_.windowManager->drawWindows(currentFrame_);
+
+    if (current_asset && !current_asset->animations.empty()) {
+      ImGui::Begin("Animation Control");
+
+      static int selected_anim = 0;
+      if (selected_anim >= current_asset->animations.size()) {
+        selected_anim = 0;
+        rSys_.animator->setActiveAnimation(selected_anim);
+      }
+
+      const auto preview_name =
+          std::string{current_asset->animations[selected_anim]->getName()};
+      if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
+        for (int i = 0; i < current_asset->animations.size(); ++i) {
+          bool is_selected = (selected_anim == i);
+          if (ImGui::Selectable(preview_name.c_str(), is_selected)) {
+            selected_anim = i;
+            rSys_.animator->setActiveAnimation(selected_anim);
+            rSys_.animator->stop();
+            rSys_.animator->play();
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+      }
+
+      ImGui::Separator();
+
+      bool is_playing = rSys_.animator->isPlaying();
+      if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
+        rSys_.animator->togglePlayback();
+      }
+
+      ImGui::SameLine();
+
+      if (ImGui::Button("Stop", ImVec2(80, 0))) {
+        rSys_.animator->stop();
+      }
+
+      float speed = rSys_.animator->getTimeScale();
+      if (ImGui::SliderFloat("Speed", &speed, 0.0F, 3.0F, "%.2fx")) {
+        rSys_.animator->setTimeScale(speed);
+      }
+
+      ImGui::End();
+    }
     ui_.host->endFrame();
 
     auto task = renderer::RenderTask{};
 
+    auto scene_set = rSys_.sceneRenderer->getSceneDescriptorSet(currentFrame_);
+    auto mat_scene_set =
+        rSys_.sceneRenderer->getMaterialDescriptorSet(currentFrame_);
+    auto mat_set = rSys_.materialSys->getDescriptorSet(currentFrame_);
+    auto prim_set = rSys_.assetBridge->getDescriptorSet(currentFrame_);
+
     if (ui_.sceneViewer->isVisible()) {
       task.add<renderer::rp::BeginViewportPass>(frame.sceneViewport, 0, 1)
-          .add<DrawSkyboxCommand>(*debug_.skyboxPipeline,
-                                  debug_.skyboxLayout->get(),
-                                  frame.sceneDescriptorSet, sys_.bindlessSet,
-                                  env_base_color, env_blur)
-          .add<DrawAssetCommand>(
-              *debug_.primitivePipeline, debug_.primitiveLayout->get(),
-              frame.sceneDescriptorSet, frame.primitiveDescriptorSet,
-              current_asset.get())
+          .add<renderer::cmd::DrawSkyboxCommand>(
+              rSys_.sceneRenderer->skyboxPipeline,
+              rSys_.sceneRenderer->skyboxLayout->get(), scene_set,
+              sys_.bindlessSet, env_base_color, env_blur)
+          .add<renderer::cmd::DrawAssetCommand>(
+              rSys_.sceneRenderer->opaquePipeline,
+              rSys_.sceneRenderer->transparentPipeline,
+              rSys_.sceneRenderer->primitiveLayout->get(), scene_set,
+              sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
+              engine_.materialManager.get())
           .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
     }
 
     if (ui_.materialViewer->isVisible()) {
-      task.add<renderer::rp::BeginViewportPass>(frame.materialViewport, 0, 1)
-          .add<DrawSkyboxCommand>(*debug_.skyboxPipeline,
-                                  debug_.skyboxLayout->get(),
-                                  frame.materialDescriptorSet, sys_.bindlessSet,
-                                  env_base_color, env_blur)
-          .add<DrawRaySphereCommand>(
-              *debug_.raySpherePipeline, debug_.raySphereLayout->get(),
-              frame.materialDescriptorSet, glm::mat4(1.0F))
-          .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
+      if (ui_.materialViewer->isVisible()) {
+        task.add<renderer::rp::BeginViewportPass>(frame.materialViewport, 0, 1)
+            .add<renderer::cmd::DrawSkyboxCommand>(
+                rSys_.sceneRenderer->skyboxPipeline,
+                rSys_.sceneRenderer->skyboxLayout->get(), mat_scene_set,
+                sys_.bindlessSet, env_base_color, env_blur)
+            .add<renderer::cmd::DrawRaySphereCommand>(
+                rSys_.sceneRenderer->raySpherePipeline,
+                rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
+                sys_.bindlessSet,  // 1. Bindless Set
+                mat_set, glm::mat4(1.0F), 0, 0)
+            .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
+      }
     }
 
     task.add<renderer::rp::BeginSwapchainPass>(
@@ -990,62 +690,6 @@ void App::mainLoop() {
     }
 
     currentFrame_ = (currentFrame_ + 1) % kMaxFramesInFlight;
-  }
-}
-
-void App::checkAndUpdateAssetDescriptors(std::uint32_t frameIndex) {
-  auto& frame = frames_[frameIndex];
-  auto current_asset_id = engine_.assetController->getCurrentAssetId();
-
-  bool descriptors_need_update = false;
-
-  if (frame.lastRenderedAssetId != current_asset_id) {
-    descriptors_need_update = true;
-    frame.lastRenderedAssetId = current_asset_id;
-  }
-
-  auto current_asset = engine_.assetController->getCurrentAsset();
-  if (!current_asset) return;
-
-  auto prim_data = current_asset->primitives.getData();
-  if (!prim_data.empty()) {
-    if (frame.primitiveSSBO->writeAt(std::as_bytes(std::span{prim_data}))) {
-      descriptors_need_update = true;
-    }
-  }
-
-  auto joint_data = current_asset->skins.getData();
-  if (!joint_data.empty()) {
-    if (frame.jointSSBO->writeAt(std::as_bytes(std::span{joint_data}))) {
-      descriptors_need_update = true;
-    }
-  }
-
-  if (descriptors_need_update && frame.primitiveDescriptorSet) {
-    auto prim_info = frame.primitiveSSBO->descriptorInfo();
-    auto joint_info = frame.jointSSBO->descriptorInfo();
-
-    vk::WriteDescriptorSet prim_write{
-        frame.primitiveDescriptorSet,
-        renderer::dsl::PrimitiveSetLayout::kPrimitiveBinding,
-        0,
-        1,
-        vk::DescriptorType::eStorageBuffer,
-        nullptr,
-        &prim_info,
-        nullptr};
-
-    vk::WriteDescriptorSet joint_write{
-        frame.primitiveDescriptorSet,
-        renderer::dsl::PrimitiveSetLayout::kJointBinding,
-        0,
-        1,
-        vk::DescriptorType::eStorageBuffer,
-        nullptr,
-        &joint_info,
-        nullptr};
-
-    sys_.device->get().updateDescriptorSets({prim_write, joint_write}, nullptr);
   }
 }
 

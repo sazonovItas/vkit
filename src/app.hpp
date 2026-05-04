@@ -2,12 +2,10 @@
 
 #include <array>
 #include <memory>
-#include <optional>
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
 // --- CORE / ASSETS ---
-#include "vkit/asset/asset.hpp"
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
 #include "vkit/controller/asset.hpp"
@@ -25,7 +23,6 @@
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/environment.hpp"
 #include "vkit/controller/workflow.hpp"
-#include "vkit/graphics/descriptor_buffer.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/graphics/instance.hpp"
 #include "vkit/graphics/surface.hpp"
@@ -44,14 +41,14 @@
 // --- ENVIRONMENT ---
 #include "vkit/environment/manager.hpp"
 
-// --- RENDERER / WORKFLOW ---
+// --- RENDERER / WORKFLOW / SYSTEMS ---
+#include "vkit/animation/animator.hpp"
+#include "vkit/material/manager.hpp"
+#include "vkit/renderer/asset_render_bridge.hpp"
 #include "vkit/renderer/descriptor_set_layout/bindless.hpp"
-#include "vkit/renderer/descriptor_set_layout/primitive.hpp"
-#include "vkit/renderer/descriptor_set_layout/scene.hpp"
-#include "vkit/renderer/pipeline_layout/primitive_debug.hpp"
-#include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
-#include "vkit/renderer/pipeline_layout/skybox.hpp"
+#include "vkit/renderer/material_system.hpp"
 #include "vkit/renderer/renderer.hpp"
+#include "vkit/renderer/scene_renderer.hpp"
 #include "vkit/renderer/viewport.hpp"
 #include "vkit/scene/camera.hpp"
 #include "vkit/texture/manager.hpp"
@@ -80,12 +77,10 @@ class App {
   void initWorkflow();
   void initViewports();
   void initImguiWindows();
-  void initDebugRendering();
+  void initRendererSystems();
 
   void mainLoop();
   void recreateSwapchain() const;
-
-  void checkAndUpdateAssetDescriptors(std::uint32_t frameIndex);
 
   static constexpr int kMaxFramesInFlight = 3;
   std::uint32_t currentFrame_{0};
@@ -127,13 +122,13 @@ class App {
     std::unique_ptr<controller::AssetController> assetController;
     std::shared_ptr<env::EnvironmentManager> environmentManager;
     std::unique_ptr<controller::EnvironmentController> environmentController;
+    std::unique_ptr<material::MaterialManager> materialManager;
     std::unique_ptr<workflow::Workflow> workflow;
     std::unique_ptr<controller::WorkflowController> workflowController;
 
     void update() {
       if (workflow) workflow->execute();
       if (executionContext) executionContext->update();
-
       if (textureUploader) textureUploader->update();
 
       if (noiseDispatcher) noiseDispatcher->update();
@@ -142,8 +137,17 @@ class App {
       if (normalMapDispatcher) normalMapDispatcher->update();
       if (tintDispatcher) tintDispatcher->update();
       if (mixDispatcher) mixDispatcher->update();
+
+      if (materialManager) materialManager->update();
     }
   } engine_;
+
+  struct RenderSystems {
+    std::unique_ptr<animation::Animator> animator;
+    std::unique_ptr<renderer::MaterialSystem> materialSys;
+    std::unique_ptr<renderer::AssetRenderBridge> assetBridge;
+    std::unique_ptr<renderer::SceneRenderer> sceneRenderer;
+  } rSys_;
 
   struct UIContext {
     std::unique_ptr<imgui::ImguiRenderer> renderer;
@@ -166,43 +170,12 @@ class App {
     controller::OrbitalCameraController materialController;
   } scene_;
 
-  struct DebugRenderContext {
-    std::shared_ptr<asset::Asset> loadedAsset;
-    std::unique_ptr<renderer::dsl::SceneSetLayout> sceneSetLayout;
-    std::unique_ptr<renderer::dsl::PrimitiveSetLayout> primitiveSetLayout;
-
-    std::unique_ptr<renderer::pl::RaySphereDebugPipelineLayout> raySphereLayout;
-    vk::UniquePipeline raySpherePipeline;
-
-    std::unique_ptr<renderer::pl::PrimitiveMaterialPipelineLayout>
-        primitiveLayout;
-    vk::UniquePipeline primitivePipeline;
-
-    std::unique_ptr<renderer::pl::SkyboxPipelineLayout> skyboxLayout;
-    vk::UniquePipeline skyboxPipeline;
-
-    vk::UniqueDescriptorPool descriptorPool;
-  } debug_;
-
   struct Frame {
     renderer::Viewport sceneViewport;
     ImTextureID sceneTextureId{0};
 
     renderer::Viewport materialViewport;
     ImTextureID materialTextureId{0};
-
-    vk::DescriptorSet sceneDescriptorSet;
-    vk::DescriptorSet materialDescriptorSet;
-    vk::DescriptorSet primitiveDescriptorSet;
-
-    std::unique_ptr<graphics::DescriptorBuffer> sceneCameraBuffer;
-    std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
-    std::unique_ptr<graphics::DescriptorBuffer> environmentBuffer;
-
-    std::unique_ptr<graphics::DescriptorBuffer> primitiveSSBO;
-    std::unique_ptr<graphics::DescriptorBuffer> jointSSBO;
-
-    std::optional<std::uint32_t> lastRenderedAssetId{std::nullopt};
   };
 
   std::array<Frame, kMaxFramesInFlight> frames_;

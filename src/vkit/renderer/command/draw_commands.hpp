@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <glm/glm.hpp>
 #include <memory>
 #include <vector>
 #include <vulkan/vulkan.hpp>
@@ -8,10 +9,94 @@
 #include "vkit/asset/asset.hpp"
 #include "vkit/graphics/command.hpp"
 #include "vkit/material/manager.hpp"
-#include "vkit/material/material.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
+#include "vkit/renderer/pipeline_layout/ray_sphere_debug.hpp"
+#include "vkit/renderer/pipeline_layout/skybox.hpp"
 
 namespace vkit::renderer::cmd {
+
+class DrawSkyboxCommand final : public graphics::Command {
+ public:
+  DrawSkyboxCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+                    vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
+                    glm::vec4 baseColor, float blurLevel)
+      : pipeline_{pipeline},
+        layout_{layout},
+        sceneSet_{sceneSet},
+        bindlessSet_{bindlessSet},
+        baseColor_{baseColor},
+        blurLevel_{blurLevel} {}
+
+  void record(vk::CommandBuffer cb) const override {
+    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, bindlessSet_};
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
+                          nullptr);
+
+    pl::SkyboxPipelineLayout::PushConstants pcs{.baseColor = baseColor_,
+                                                .blurLevel = blurLevel_};
+    cb.pushConstants(layout_, vk::ShaderStageFlagBits::eFragment, 0,
+                     sizeof(pcs), &pcs);
+    cb.draw(6, 1, 0, 0);
+  }
+
+ private:
+  vk::Pipeline pipeline_;
+  vk::PipelineLayout layout_;
+  vk::DescriptorSet sceneSet_;
+  vk::DescriptorSet bindlessSet_;
+  glm::vec4 baseColor_;
+  float blurLevel_;
+};
+
+class DrawRaySphereCommand final : public graphics::Command {
+ public:
+  DrawRaySphereCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+                       vk::DescriptorSet sceneSet,
+                       vk::DescriptorSet bindlessSet,
+                       vk::DescriptorSet materialSet, glm::mat4 model,
+                       std::uint32_t materialType = 0,
+                       std::uint32_t materialIndex = 0)
+      : pipeline_{pipeline},
+        layout_{layout},
+        sceneSet_{sceneSet},
+        bindlessSet_{bindlessSet},
+        materialSet_{materialSet},
+        model_{model},
+        materialType_{materialType},
+        materialIndex_{materialIndex} {}
+
+  void record(vk::CommandBuffer cb) const override {
+    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+
+    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_,
+                                             materialSet_};
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
+                          nullptr);
+
+    pl::RaySphereDebugPipelineLayout::PushConstants pcs{
+        .model = model_,
+        .materialType = materialType_,
+        .materialIndex = materialIndex_,
+    };
+
+    cb.pushConstants(
+        layout_,
+        vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+        0, sizeof(pcs), &pcs);
+    cb.draw(36, 1, 0, 0);
+  }
+
+ private:
+  vk::Pipeline pipeline_;
+  vk::PipelineLayout layout_;
+  vk::DescriptorSet sceneSet_;
+  vk::DescriptorSet bindlessSet_;
+  vk::DescriptorSet materialSet_;
+  glm::mat4 model_;
+  std::uint32_t materialType_;
+  std::uint32_t materialIndex_;
+};
 
 class DrawAssetCommand final : public graphics::Command {
  private:
@@ -42,7 +127,6 @@ class DrawAssetCommand final : public graphics::Command {
 
   void record(vk::CommandBuffer cb) const override {
     if (!asset_ || asset_->scenes.empty() || !materialManager_) return;
-
     auto active_scene = asset_->getActiveScene();
     if (!active_scene) return;
 
@@ -52,13 +136,11 @@ class DrawAssetCommand final : public graphics::Command {
     auto traverse_node = [&](auto& self, const scene::Node* node) -> void {
       if (node->mesh) {
         for (const auto& prim : node->mesh->getPrimitives()) {
-          if (!prim->attrs.index.isValid() ||
-              !prim->getStorageId().has_value()) {
+          if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
             continue;
-          }
 
-          auto mat = materialManager_->getMaterial(material::Type::kNone, 0);
-
+          auto mat = materialManager_->getMaterial(prim->getMaterialType(),
+                                                   prim->getMaterialId());
           auto final_mat_type =
               static_cast<std::uint32_t>(material::Type::kNone);
           std::uint32_t final_mat_index = 0;
@@ -91,16 +173,12 @@ class DrawAssetCommand final : public graphics::Command {
           }
         }
       }
-
-      for (const auto& child : node->getChildren()) {
-        self(self, child.get());
-      }
+      for (const auto& child : node->getChildren()) self(self, child.get());
     };
 
     for (std::uint32_t root_id : active_scene->rootNodes) {
-      if (auto node = asset_->nodes.get(root_id)) {
+      if (auto node = asset_->nodes.get(root_id))
         traverse_node(traverse_node, node.get());
-      }
     }
 
     std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,

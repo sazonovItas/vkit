@@ -26,17 +26,16 @@ struct SkyboxPipelineLayout final : graphics::PipelineLayout {
                                 const dsl::BindlessTextureSetLayout&>;
 
   explicit SkyboxPipelineLayout(vk::Device device, SetLayouts setLayouts)
-      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+      : SkyboxPipelineLayout(
+            device, std::array<vk::DescriptorSetLayout, 2>{
+                        *std::get<0>(setLayouts), *std::get<1>(setLayouts)}) {}
 
  private:
-  static auto createPipelineCreateInfo(SetLayouts setLayouts)
-      -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 2>{
-        *std::get<0>(setLayouts),
-        *std::get<1>(setLayouts),
-    };
-
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
+  SkyboxPipelineLayout(vk::Device device,
+                       const std::array<vk::DescriptorSetLayout, 2>& layouts)
+      : PipelineLayout{device, vk::PipelineLayoutCreateInfo{}
+                                   .setSetLayouts(layouts)
+                                   .setPushConstantRanges(kPushConstantRange)} {
   }
 };
 
