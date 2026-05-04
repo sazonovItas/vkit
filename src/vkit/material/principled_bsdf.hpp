@@ -97,51 +97,57 @@ class PrincipledBSDF : public Material {
 
   Params params;
 
-  void setBaseColorTexture(std::shared_ptr<vkit::texture::Texture> tex) {
-    baseColorTexture_ = std::move(tex);
+  void setBaseColorTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
+    baseColorTexture_ = tex;
   }
-  void setNormalTexture(std::shared_ptr<vkit::texture::Texture> tex) {
-    normalTexture_ = std::move(tex);
+  void setNormalTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
+    normalTexture_ = tex;
   }
   void setMetallicRoughnessTexture(
-      std::shared_ptr<vkit::texture::Texture> tex) {
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     metallicRoughnessTexture_ = std::move(tex);
   }
-  void setEmissiveTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setEmissiveTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
     emissiveTexture_ = std::move(tex);
   }
-  void setClearcoatTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setClearcoatTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
     clearcoatTexture_ = std::move(tex);
   }
-  void setClearcoatNormalTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setClearcoatNormalTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     clearcoatNormalTexture_ = std::move(tex);
   }
-  void setOcclusionTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setOcclusionTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
     occlusionTexture_ = std::move(tex);
   }
-  void setSpecularTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setSpecularTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
     specularTexture_ = std::move(tex);
   }
-  void setSpecularColorTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setSpecularColorTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     specularColorTexture_ = std::move(tex);
   }
-  void setThicknessTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setThicknessTexture(const std::shared_ptr<vkit::texture::Texture>& tex) {
     thicknessTexture_ = std::move(tex);
   }
-  void setSheenColorTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setSheenColorTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     sheenColorTexture_ = std::move(tex);
   }
-  void setSheenRoughnessTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setSheenRoughnessTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     sheenRoughnessTexture_ = std::move(tex);
   }
-  void setAnisotropyTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setAnisotropyTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     anisotropyTexture_ = std::move(tex);
   }
-  void setIridescenceTexture(std::shared_ptr<vkit::texture::Texture> tex) {
+  void setIridescenceTexture(
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     iridescenceTexture_ = std::move(tex);
   }
   void setIridescenceThicknessTexture(
-      std::shared_ptr<vkit::texture::Texture> tex) {
+      const std::shared_ptr<vkit::texture::Texture>& tex) {
     iridescenceThicknessTexture_ = std::move(tex);
   }
 

@@ -29,10 +29,7 @@ class DrawSkyboxCommand final : public graphics::Command {
 
   void record(vk::CommandBuffer cb) const override {
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-    std::array<vk::DescriptorSet, 2> sets = {
-        sceneSet_,
-        bindlessSet_,
-    };
+    std::array<vk::DescriptorSet, 2> sets = {sceneSet_, bindlessSet_};
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
@@ -56,36 +53,58 @@ class DrawSkyboxCommand final : public graphics::Command {
 
 class DrawRaySphereCommand final : public graphics::Command {
  public:
-  DrawRaySphereCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
-                       vk::DescriptorSet sceneSet,
-                       vk::DescriptorSet bindlessSet,
-                       vk::DescriptorSet materialSet, glm::mat4 model,
-                       std::uint32_t materialType = 0,
-                       std::uint32_t materialIndex = 0)
-      : pipeline_{pipeline},
+  DrawRaySphereCommand(
+      vk::Pipeline opaquePipeline,
+      vk::Pipeline transparentPipeline,  // <-- Added Transparent
+      vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
+      vk::DescriptorSet bindlessSet, vk::DescriptorSet materialSet,
+      glm::mat4 model, std::uint32_t materialSlot,
+      const material::MaterialManager* materialManager)
+      : opaquePipeline_{opaquePipeline},
+        transparentPipeline_{transparentPipeline},
         layout_{layout},
         sceneSet_{sceneSet},
         bindlessSet_{bindlessSet},
         materialSet_{materialSet},
         model_{model},
-        materialType_{materialType},
-        materialIndex_{materialIndex} {}
+        materialSlot_{materialSlot},
+        materialManager_{materialManager} {}
 
   void record(vk::CommandBuffer cb) const override {
-    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+    std::uint32_t mat_type = 0;
+    std::uint32_t mat_idx = 0;
+    vk::Pipeline active_pipeline = opaquePipeline_;
 
-    std::array<vk::DescriptorSet, 3> sets = {
-        sceneSet_,
-        bindlessSet_,
-        materialSet_,
-    };
+    if (materialManager_) {
+      auto slot = materialManager_->getSlot(materialSlot_);
+
+      if (slot && slot->getMaterialType() != material::Type::kNone) {
+        auto m_type = slot->getMaterialType();
+        auto m_id = slot->getMaterialId();
+
+        auto mat = materialManager_->getMaterial(m_type, m_id);
+        if (mat) {
+          mat_type = static_cast<std::uint32_t>(m_type);
+          mat_idx = m_id;
+
+          if (mat->getAlphaMode() == material::AlphaMode::kBlend) {
+            active_pipeline = transparentPipeline_;
+          }
+        }
+      }
+    }
+
+    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, active_pipeline);
+
+    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_,
+                                             materialSet_};
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
     auto pcs = pl::RaySphereMaterialPipelineLayout::PushConstants{
         .model = model_,
-        .materialType = materialType_,
-        .materialIndex = materialIndex_,
+        .materialType = mat_type,
+        .materialIndex = mat_idx,
     };
 
     cb.pushConstants(
@@ -96,14 +115,15 @@ class DrawRaySphereCommand final : public graphics::Command {
   }
 
  private:
-  vk::Pipeline pipeline_;
+  vk::Pipeline opaquePipeline_;
+  vk::Pipeline transparentPipeline_;
   vk::PipelineLayout layout_;
   vk::DescriptorSet sceneSet_;
   vk::DescriptorSet bindlessSet_;
   vk::DescriptorSet materialSet_;
   glm::mat4 model_;
-  std::uint32_t materialType_;
-  std::uint32_t materialIndex_;
+  std::uint32_t materialSlot_;
+  const material::MaterialManager* materialManager_;
 };
 
 class DrawAssetCommand final : public graphics::Command {
@@ -147,17 +167,23 @@ class DrawAssetCommand final : public graphics::Command {
           if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
             continue;
 
-          auto mat = materialManager_->getMaterial(prim->getMaterialType(),
-                                                   prim->getMaterialId());
-          auto final_mat_type =
-              static_cast<std::uint32_t>(material::Type::kNone);
+          std::uint32_t final_mat_type = 0;
           std::uint32_t final_mat_index = 0;
           material::AlphaMode alpha_mode = material::AlphaMode::kOpaque;
 
-          if (mat) {
-            final_mat_type = static_cast<std::uint32_t>(mat->getType());
-            final_mat_index = mat->getStorageId().value_or(0);
-            alpha_mode = mat->getAlphaMode();
+          auto slot = materialManager_->getSlot(prim->getMaterialSlot());
+
+          // Strict Existence Check
+          if (slot && slot->getMaterialType() != material::Type::kNone) {
+            auto m_type = slot->getMaterialType();
+            auto m_id = slot->getMaterialId();
+
+            auto mat = materialManager_->getMaterial(m_type, m_id);
+            if (mat) {
+              alpha_mode = mat->getAlphaMode();
+              final_mat_type = static_cast<std::uint32_t>(m_type);
+              final_mat_index = m_id;
+            }
           }
 
           PrimitiveDrawInfo draw_info{
@@ -189,12 +215,8 @@ class DrawAssetCommand final : public graphics::Command {
         traverse_node(traverse_node, node.get());
     }
 
-    std::array<vk::DescriptorSet, 4> sets = {
-        sceneSet_,
-        bindlessSet_,
-        materialSet_,
-        primSet_,
-    };
+    std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
+                                             materialSet_, primSet_};
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 

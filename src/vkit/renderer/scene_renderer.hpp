@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <vector>
-#include <vulkan/vulkan.hpp>
 
 #include "vkit/environment/environment.hpp"
 #include "vkit/graphics/descriptor_buffer.hpp"
@@ -49,7 +48,8 @@ class SceneRenderer {
 
   vk::Pipeline opaquePipeline;
   vk::Pipeline transparentPipeline;
-  vk::Pipeline raySpherePipeline;
+  vk::Pipeline opaqueRaySpherePipeline;
+  vk::Pipeline transparentRaySpherePipeline;
   vk::Pipeline skyboxPipeline;
 
   pl::PrimitiveMaterialPipelineLayout* primitiveLayout{nullptr};
@@ -69,7 +69,8 @@ class SceneRenderer {
 
   vk::UniquePipeline uOpaquePipeline_;
   vk::UniquePipeline uTransparentPipeline_;
-  vk::UniquePipeline uRaySpherePipeline_;
+  vk::UniquePipeline uRaySphereOpaquePipeline_;
+  vk::UniquePipeline uRaySphereTransparentPipeline_;
   vk::UniquePipeline uSkyboxPipeline_;
 
   vk::UniqueDescriptorPool descriptorPool_;

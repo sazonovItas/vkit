@@ -8,7 +8,7 @@ AssetController::AssetController(asset::AssetManager* assetManager)
 auto AssetController::loadAssetFromFile() -> std::optional<std::uint32_t> {
   if (!assetManager_) return std::nullopt;
 
-  auto asset = assetManager_->promptAndLoadGltf();
+  auto asset = assetManager_->promptAndLoadGltfAsset();
 
   if (asset) {
     auto id = asset->getStorageId();
@@ -63,7 +63,7 @@ auto AssetController::getLoadedAssets() const
 void AssetController::removeAsset(std::uint32_t id) {
   if (!assetManager_) return;
 
-  assetManager_->removeGltf(id);
+  assetManager_->removeGltfAsset(id);
 }
 
 };  // namespace vkit::controller

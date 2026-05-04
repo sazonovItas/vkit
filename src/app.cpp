@@ -21,6 +21,8 @@
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/principled_bsdf_ui.hpp"
+#include "vkit/imgui/windows/ge/node/slot_output_ui.hpp"
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
@@ -55,6 +57,10 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
       std::make_unique<imgui::windows::ge::TintNodeUI>(texManager));
   registry.registerUI<workflow::node::op::MixNode>(
       std::make_unique<imgui::windows::ge::MixNodeUI>(texManager));
+  registry.registerUI<workflow::node::mat::PrincipledBSDFNode>(
+      std::make_unique<imgui::windows::ge::PrincipledBSDFNodeUI>());
+  registry.registerUI<workflow::node::mat::SlotOutputNode>(
+      std::make_unique<imgui::windows::ge::SlotOutputNodeUI>());
 }
 
 };  // namespace
@@ -300,7 +306,7 @@ void App::initAsset() {
   std::filesystem::path asset_path =
       asset::assetPath("models/mechdrone/scene.gltf");
   if (std::filesystem::exists(asset_path)) {
-    auto default_asset = engine_.assetManager->loadGltf(asset_path);
+    auto default_asset = engine_.assetManager->loadGltfAsset(asset_path);
     if (default_asset) {
       engine_.assetController->setCurrentAsset(
           default_asset->getStorageId().value());
@@ -328,7 +334,8 @@ void App::initWorkflow() {
       .setTintJobBus(&engine_.executionContext->tintJobBus)
       .setTintResultBus(&engine_.executionContext->tintResultBus)
       .setMixJobBus(&engine_.executionContext->mixJobBus)
-      .setMixResultBus(&engine_.executionContext->mixResultBus);
+      .setMixResultBus(&engine_.executionContext->mixResultBus)
+      .setMaterialManager(engine_.materialManager.get());
 }
 
 void App::initViewports() {
@@ -620,9 +627,11 @@ void App::mainLoop() {
                 rSys_.sceneRenderer->skyboxLayout->get(), mat_scene_set,
                 sys_.bindlessSet, env_base_color, env_blur)
             .add<renderer::cmd::DrawRaySphereCommand>(
-                rSys_.sceneRenderer->raySpherePipeline,
+                rSys_.sceneRenderer->opaqueRaySpherePipeline,
+                rSys_.sceneRenderer->transparentRaySpherePipeline,
                 rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
-                sys_.bindlessSet, mat_set, glm::mat4(1.0F), 0, 0)
+                sys_.bindlessSet, mat_set, glm::mat4(1.0F), 0,
+                engine_.materialManager.get())
             .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
       }
     }

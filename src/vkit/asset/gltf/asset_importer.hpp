@@ -13,9 +13,9 @@
 
 namespace vkit::asset::gltf {
 
-class Importer {
+class AssetImporter {
  public:
-  explicit Importer(const graphics::GfxDevice& gfxDevice);
+  explicit AssetImporter(const graphics::GfxDevice& gfxDevice);
 
   [[nodiscard]] auto load(const std::filesystem::path& filepath)
       -> std::shared_ptr<Asset>;

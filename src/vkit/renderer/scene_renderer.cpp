@@ -66,6 +66,7 @@ SceneRenderer::SceneRenderer(
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::True, vk::False)
       .setCullMode(vk::CullModeFlagBits::eNone)
+      .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
       .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
   uTransparentPipeline_ = trans_builder.build(dev);
   transparentPipeline = *uTransparentPipeline_;
@@ -78,9 +79,9 @@ SceneRenderer::SceneRenderer(
       dev,
       shaders::shaderPath(shaders::kRaySphereMaterialFragShaderPath),
   };
-  auto ray_builder =
+  auto opaque_ray_builder =
       graphics::pipeline::GraphicsPipelineBuilder{uRaySphereLayout_->get()};
-  ray_builder
+  opaque_ray_builder
       .addShaderStage(
           ray_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
       .addShaderStage(
@@ -90,8 +91,24 @@ SceneRenderer::SceneRenderer(
       .setDepthState(vk::True, vk::True)
       .setCullMode(vk::CullModeFlagBits::eNone)
       .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
-  uRaySpherePipeline_ = ray_builder.build(dev);
-  raySpherePipeline = *uRaySpherePipeline_;
+  uRaySphereOpaquePipeline_ = opaque_ray_builder.build(dev);
+  opaqueRaySpherePipeline = *uRaySphereOpaquePipeline_;
+
+  auto trans_ray_builder =
+      graphics::pipeline::GraphicsPipelineBuilder{uRaySphereLayout_->get()};
+  trans_ray_builder
+      .addShaderStage(
+          ray_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          ray_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::True, vk::True)
+      .setCullMode(vk::CullModeFlagBits::eNone)
+      .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
+      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+  uRaySphereTransparentPipeline_ = trans_ray_builder.build(dev);
+  transparentRaySpherePipeline = *uRaySphereTransparentPipeline_;
 
   auto sky_vert = graphics::SpirVShaderModule{
       dev,

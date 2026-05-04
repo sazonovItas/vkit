@@ -137,7 +137,7 @@ void ConfigurationWindow::drawAnimationManagementSection() {
   auto current_asset = assetController_->getCurrentAsset();
   if (!current_asset || current_asset->animations.empty()) return;
 
-  if (ImGui::CollapsingHeader("Animations", ImGuiTreeNodeFlags_DefaultOpen)) {
+  if (ImGui::CollapsingHeader("Animations")) {
     ImGui::Spacing();
 
     static int selected_anim = 0;

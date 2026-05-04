@@ -100,6 +100,12 @@ auto WorkflowController::setMixResultBus(core::events::MixResultBus* bus)
   return *this;
 }
 
+auto WorkflowController::setMaterialManager(
+    material::MaterialManager* materialManager) -> WorkflowController& {
+  materialManager_ = materialManager;
+  return *this;
+}
+
 auto WorkflowController::createTextureLoadNode(const std::string& name)
     -> workflow::node::TextureLoadNode* {
   if (!workflow_ || !textureLoadBus_ || !textureReadyBus_ || !textureManager_)
@@ -170,6 +176,26 @@ void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {
   for (int id : nodeIds) {
     workflow_->destroyNode(id);
   }
+}
+
+auto WorkflowController::createPrincipledBSDFNode(const std::string& name)
+    -> workflow::node::mat::PrincipledBSDFNode* {
+  if (!workflow_ || !materialManager_ || !textureManager_) {
+    return nullptr;
+  }
+
+  return workflow_->createNode<workflow::node::mat::PrincipledBSDFNode>(
+      name, *materialManager_, *textureManager_);
+}
+
+auto WorkflowController::createSlotOutputNode(const std::string& name)
+    -> workflow::node::mat::SlotOutputNode* {
+  if (!workflow_ || !materialManager_) {
+    return nullptr;
+  }
+
+  return workflow_->createNode<workflow::node::mat::SlotOutputNode>(
+      name, *materialManager_);
 }
 
 auto WorkflowController::canConnectPins(int pinIdA, int pinIdB) const -> bool {

@@ -7,10 +7,29 @@
 #define DIFFUSE_SPECULAR_MATERIAL 2
 #define PRINCIPLED_MATERIAL       3
 
-const vec4 FALLBACK_COLOR = vec4(1.0, 0.0, 0.0, 1.0);
-
 const vec3 LIGHT_COLOR = vec3(1.0, 1.0, 1.0);
 const vec3 AMBIENT_COLOR = vec3(0.05, 0.05, 0.05);
+const vec3 LIGHT_DIR = normalize(vec3(-1.0, -1.0, -1.0));
+
+vec4 evaluateFallback(vec3 vertNormal, vec3 vertTangent, vec2 uv) {
+    vec3 normal = normalize(vertNormal);
+    
+    if (length(normal) < 0.1) {
+        normal = vec3(0.0, 1.0, 0.0);
+    }
+
+    float diff = max(dot(normal, -LIGHT_DIR), 0.0);
+    
+    vec3 albedo = vec3(0.2, 0.5, 0.8);
+    vec3 ambient = albedo * 0.1;
+    vec3 finalColor = ambient + (albedo * diff);
+
+    // finalColor = vec3(uv, 0.0); 
+    // finalColor = normal * 0.5 + 0.5; 
+    // finalColor = normalize(vertTangent) * 0.5 + 0.5;
+
+    return vec4(finalColor, 1.0);
+}
 
 vec4 evaluateDiffuse(DiffuseData mat, vec2 uv, mat3 baseTBN, vec3 L) {
     vec4 albedo = mat.params.diffuseFactor;

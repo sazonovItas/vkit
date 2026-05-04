@@ -9,6 +9,8 @@
 
 namespace vkit::material {
 
+static constexpr std::uint32_t kItemInvalidId = kStorageItemInvalidId;
+
 enum class Type : std::uint32_t {
   kNone = 0,
   kDiffuse = 1,
@@ -38,7 +40,7 @@ class Material : public Item<Material>, public StorageItem {
   [[nodiscard]] auto isDoubleSided() const -> bool { return doubleSided_; }
   void setDoubleSided(bool doubleSided) { doubleSided_ = doubleSided; }
 
-  ~Material() override;
+  ~Material() override = default;
 
  private:
   bool isDirty_{true};

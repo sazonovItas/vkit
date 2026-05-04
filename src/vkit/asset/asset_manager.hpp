@@ -4,10 +4,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <optional>
 #include <vector>
 
-#include "vkit/asset/gltf/importer.hpp"
+#include "vkit/asset/gltf/asset_importer.hpp"
 #include "vkit/asset/gltf_storage.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/platform/file_dialog.hpp"
@@ -26,9 +25,9 @@ class AssetManager {
   AssetManager(const AssetManager&) = delete;
   auto operator=(const AssetManager&) -> AssetManager& = delete;
 
-  [[nodiscard]] auto loadGltf(const std::filesystem::path& filepath)
+  [[nodiscard]] auto loadGltfAsset(const std::filesystem::path& filepath)
       -> std::shared_ptr<Asset> {
-    gltf::Importer importer(gfxDevice_);
+    gltf::AssetImporter importer(gfxDevice_);
     auto asset = importer.load(filepath);
 
     if (asset && gltfStorage_) {
@@ -38,20 +37,20 @@ class AssetManager {
     return asset;
   }
 
-  [[nodiscard]] auto promptAndLoadGltf() -> std::shared_ptr<Asset> {
+  [[nodiscard]] auto promptAndLoadGltfAsset() -> std::shared_ptr<Asset> {
     std::array<platform::FileFilter, 1> filters = {
         platform::FileFilter{.name = "glTF Models", .spec = "gltf"}};
 
     auto selected_path = platform::openFileDialog(filters, "");
 
     if (selected_path.has_value()) {
-      return loadGltf(selected_path.value());
+      return loadGltfAsset(selected_path.value());
     }
 
     return nullptr;
   }
 
-  void removeGltf(std::uint32_t id) {
+  void removeGltfAsset(std::uint32_t id) {
     if (!gltfStorage_) return;
 
     auto asset = gltfStorage_->get(id);

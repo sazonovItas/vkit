@@ -5,7 +5,10 @@
 
 #include "vkit/core/events/noise.hpp"
 #include "vkit/core/events/operators.hpp"
+#include "vkit/material/manager.hpp"
 #include "vkit/texture/manager.hpp"
+#include "vkit/workflow/node/material/principled_bsdf.hpp"
+#include "vkit/workflow/node/material/slot_output.hpp"
 #include "vkit/workflow/node/operators/heightmap.hpp"
 #include "vkit/workflow/node/operators/mix.hpp"
 #include "vkit/workflow/node/operators/normalmap.hpp"
@@ -57,6 +60,9 @@ class WorkflowController {
   auto setMixJobBus(core::events::MixJobBus* bus) -> WorkflowController&;
   auto setMixResultBus(core::events::MixResultBus* bus) -> WorkflowController&;
 
+  auto setMaterialManager(material::MaterialManager* materialManager)
+      -> WorkflowController&;
+
   auto createTextureLoadNode(const std::string& name = "Texture Load")
       -> workflow::node::TextureLoadNode*;
   auto createNoiseGeneratorNode(const std::string& name = "Noise Generator")
@@ -72,6 +78,11 @@ class WorkflowController {
   auto createMixNode(const std::string& name = "Mix")
       -> workflow::node::op::MixNode*;
 
+  auto createPrincipledBSDFNode(const std::string& name = "Principled BSDF")
+      -> workflow::node::mat::PrincipledBSDFNode*;
+  auto createSlotOutputNode(const std::string& name = "Material Slot")
+      -> workflow::node::mat::SlotOutputNode*;
+
   void deleteNodes(const std::vector<int>& nodeIds);
 
   [[nodiscard]] auto canConnectPins(int pinIdA, int pinIdB) const -> bool;
@@ -86,6 +97,7 @@ class WorkflowController {
  private:
   workflow::Workflow* workflow_{nullptr};
   texture::TextureManager* textureManager_{nullptr};
+  material::MaterialManager* materialManager_{nullptr};
 
   core::events::TextureLoadBus* textureLoadBus_{nullptr};
   core::events::TextureReadyBus* textureReadyBus_{nullptr};

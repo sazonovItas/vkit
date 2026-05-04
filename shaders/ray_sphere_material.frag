@@ -59,6 +59,6 @@ void main() {
         outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params);
     }
     else {
-        outColor = FALLBACK_COLOR;
+        outColor = evaluateFallback(hit.normal, hit.tangent, hit.uv);
     }
 }

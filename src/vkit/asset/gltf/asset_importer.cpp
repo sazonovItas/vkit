@@ -1,4 +1,4 @@
-#include "vkit/asset/gltf/importer.hpp"
+#include "vkit/asset/gltf/asset_importer.hpp"
 
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
@@ -44,10 +44,10 @@ template <std::move_constructible T>
 
 };  // namespace
 
-Importer::Importer(const graphics::GfxDevice& gfxDevice)
+AssetImporter::AssetImporter(const graphics::GfxDevice& gfxDevice)
     : gfxDevice_{gfxDevice} {}
 
-void Importer::resetState() {
+void AssetImporter::resetState() {
   asset_ = nullptr;
   deviceBuffers_ = nullptr;
   loadedMeshes_.clear();
@@ -55,7 +55,7 @@ void Importer::resetState() {
   loadedSkins_.clear();
 }
 
-auto Importer::load(const std::filesystem::path& filepath)
+auto AssetImporter::load(const std::filesystem::path& filepath)
     -> std::shared_ptr<Asset> {
   LOG_TRACE("=== Starting to load asset: " << filepath.string() << " ===");
   resetState();
@@ -106,8 +106,8 @@ auto Importer::load(const std::filesystem::path& filepath)
   return final_asset;
 }
 
-auto Importer::mapAttributeFormat(fastgltf::ComponentType compType,
-                                  fastgltf::AccessorType accType)
+auto AssetImporter::mapAttributeFormat(fastgltf::ComponentType compType,
+                                       fastgltf::AccessorType accType)
     -> dataformat::AttributeFormat {
   using AttributeFormat = dataformat::AttributeFormat;
 
@@ -176,9 +176,9 @@ auto Importer::mapAttributeFormat(fastgltf::ComponentType compType,
   return AttributeFormat::kInvalid;
 }
 
-void Importer::populateAttribute(primitive::Attribute& attr,
-                                 const fastgltf::Asset& asset,
-                                 std::size_t accessorIdx) {
+void AssetImporter::populateAttribute(primitive::Attribute& attr,
+                                      const fastgltf::Asset& asset,
+                                      std::size_t accessorIdx) {
   if (accessorIdx >= asset.accessors.size()) {
     std::cerr << "[glTF Error] Accessor index out of bounds: " << accessorIdx
               << std::endl;
@@ -213,8 +213,8 @@ void Importer::populateAttribute(primitive::Attribute& attr,
   }
 }
 
-void Importer::loadBuffers(const fastgltf::Asset& asset,
-                           const std::filesystem::path& directory) {
+void AssetImporter::loadBuffers(const fastgltf::Asset& asset,
+                                const std::filesystem::path& directory) {
   LOG_TRACE("Loading " << asset.buffers.size() << " buffers...");
   auto cpu_buffers = std::make_shared<primitive::Buffers>();
 
@@ -276,7 +276,7 @@ void Importer::loadBuffers(const fastgltf::Asset& asset,
   LOG_TRACE("DeviceBuffers created.");
 }
 
-void Importer::loadMeshes(const fastgltf::Asset& asset) {
+void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
   LOG_TRACE("Loading " << asset.meshes.size() << " meshes...");
   loadedMeshes_.reserve(asset.meshes.size());
 
@@ -326,6 +326,7 @@ void Importer::loadMeshes(const fastgltf::Asset& asset) {
       }
 
       auto prim = std::make_shared<primitive::Primitive>(deviceBuffers_, attrs);
+      prim->setMaterialSlot(gltf_prim.materialIndex.value_or(0));
 
       asset_->primitives.add(prim);
       mesh->addPrimitive(prim);
@@ -336,7 +337,7 @@ void Importer::loadMeshes(const fastgltf::Asset& asset) {
   }
 }
 
-void Importer::loadNodes(const fastgltf::Asset& asset) {
+void AssetImporter::loadNodes(const fastgltf::Asset& asset) {
   LOG_TRACE("Loading " << asset.nodes.size() << " nodes...");
   loadedNodes_.resize(asset.nodes.size());
 
@@ -387,7 +388,7 @@ void Importer::loadNodes(const fastgltf::Asset& asset) {
   }
 }
 
-void Importer::loadSkins(const fastgltf::Asset& asset) {
+void AssetImporter::loadSkins(const fastgltf::Asset& asset) {
   LOG_TRACE("Loading " << asset.skins.size() << " skins...");
   loadedSkins_.reserve(asset.skins.size());
 
@@ -429,7 +430,7 @@ void Importer::loadSkins(const fastgltf::Asset& asset) {
   }
 }
 
-void Importer::loadScenes(const fastgltf::Asset& asset) {
+void AssetImporter::loadScenes(const fastgltf::Asset& asset) {
   LOG_TRACE("Loading " << asset.scenes.size() << " scenes...");
   for (std::size_t i = 0; i < asset.scenes.size(); ++i) {
     LOG_TRACE("  Scene " << i);
@@ -457,7 +458,7 @@ void Importer::loadScenes(const fastgltf::Asset& asset) {
   }
 }
 
-void Importer::loadAnimations(const fastgltf::Asset& asset) {
+void AssetImporter::loadAnimations(const fastgltf::Asset& asset) {
   for (const auto& gltf_anim : asset.animations) {
     auto anim = std::make_shared<animation::Animation>(
         gltf_anim.name.empty() ? "Animation" : gltf_anim.name.c_str());

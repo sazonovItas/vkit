@@ -97,7 +97,6 @@ void TextureLoadNode::setUseMipmaps(bool useMipmaps) {
   outputColorId = std::nullopt;
   outputF32Id = std::nullopt;
 
-  // Wipe pins clean
   if (outColor_) outColor_->clearData();
   if (outImageF32_) outImageF32_->clearData();
 
