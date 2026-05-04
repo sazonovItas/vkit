@@ -1,11 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <memory>
-#include <string>
-
-#include "vkit/message_bus/message_bus.hpp"
-#include "vkit/texture/texture.hpp"
 
 namespace vkit::core::events {
 
@@ -24,21 +19,4 @@ struct NoisePushConstants {
   float worleyJitter{1.0F};
 };
 
-struct NoiseJobRequest {
-  std::uint64_t requestId{0};
-  NoisePushConstants params;
-};
-
-struct NoiseJobResult {
-  std::uint64_t requestId{0};
-  std::shared_ptr<texture::Texture> imageF32;
-  std::shared_ptr<texture::Texture> imageUnorm;
-  std::string error;
-};
-
-using NoiseJobBus = message_bus::MessageBus<NoiseJobRequest,
-                                            message_bus::DispatchPolicy::kBoth>;
-using NoiseResultBus =
-    message_bus::MessageBus<NoiseJobResult, message_bus::DispatchPolicy::kBoth>;
-
-};  // namespace vkit::core::events
+}  // namespace vkit::core::events

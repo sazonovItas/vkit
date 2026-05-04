@@ -30,6 +30,8 @@ class ComputeImageBarrierCommand final : public graphics::Command {
   void record(vk::CommandBuffer cb) const override {
     vk::ImageMemoryBarrier2 barrier{};
     barrier.setImage(image_)
+        .setSrcQueueFamilyIndex(vk::QueueFamilyIgnored)
+        .setDstQueueFamilyIndex(vk::QueueFamilyIgnored)
         .setOldLayout(oldLayout_)
         .setNewLayout(newLayout_)
         .setSrcStageMask(srcStage_)

@@ -21,6 +21,7 @@ glslc:
 	glslc ./shaders/ibl/specular_ibl.comp -o ./assets/shaders/ibl/specular_ibl.comp
 
 	glslc ./shaders/procedural/noise.comp -o ./assets/shaders/procedural/noise.comp
+	glslc ./shaders/procedural/pattern.comp -o ./assets/shaders/procedural/pattern.comp
 
 	glslc ./shaders/operators/sobel.comp -o ./assets/shaders/operators/sobel.comp
 	glslc ./shaders/operators/heightmap.comp -o ./assets/shaders/operators/heightmap.comp

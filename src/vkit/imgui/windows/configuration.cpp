@@ -8,17 +8,21 @@
 #include "vkit/animation/animator.hpp"
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/material/manager.hpp"
 
 namespace vkit::imgui::windows {
 
 ConfigurationWindow::ConfigurationWindow(
     std::string_view title, controller::AssetController* assetController,
     controller::EnvironmentController* envController,
-    animation::Animator* animator)
+    animation::Animator* animator, material::MaterialManager* matManager,
+    std::uint32_t* previewSlot)
     : ImguiWindow(title),
       assetController_{assetController},
       envController_{envController},
-      animator_{animator} {
+      animator_{animator},
+      matManager_{matManager},
+      previewSlot_{previewSlot} {
   setMinSize(300.0F, 400.0F);
 }
 
@@ -32,6 +36,12 @@ void ConfigurationWindow::setEnvironmentController(
   envController_ = envController;
 }
 
+void ConfigurationWindow::setMaterialPreviewData(
+    material::MaterialManager* matManager, std::uint32_t* previewSlot) {
+  matManager_ = matManager;
+  previewSlot_ = previewSlot;
+}
+
 void ConfigurationWindow::onDraw() {
   ImGui::BeginChild("ConfigScrollRegion", ImVec2(0, 0), 0,
                     ImGuiWindowFlags_AlwaysVerticalScrollbar);
@@ -39,6 +49,7 @@ void ConfigurationWindow::onDraw() {
   drawAssetManagementSection();
   drawAnimationManagementSection();
   drawEnvironmentManagementSection();
+  drawMaterialPreivewSection();
 
   ImGui::EndChild();
 }
@@ -293,6 +304,43 @@ void ConfigurationWindow::drawEnvironmentManagementSection() {
     }
 
     ImGui::Spacing();
+  }
+}
+
+void ConfigurationWindow::drawMaterialPreivewSection() {
+  if (!matManager_ || !previewSlot_) return;
+
+  if (ImGui::CollapsingHeader("Material Preview")) {
+    int current_slot = static_cast<int>(*previewSlot_);
+    if (ImGui::InputInt("Preview Slot ID", &current_slot)) {
+      *previewSlot_ = static_cast<std::uint32_t>(std::max(0, current_slot));
+    }
+
+    ImGui::Spacing();
+    ImGui::TextDisabled("Available Active Slots:");
+
+    ImGui::BeginChild("SlotList", ImVec2(0, 120), 1);
+    auto slots = matManager_->getSlots();
+    if (slots.empty()) {
+      ImGui::TextDisabled("No slots created yet.");
+    } else {
+      for (const auto& slot : slots) {
+        if (!slot || !slot->getStorageId().has_value()) continue;
+
+        std::uint32_t id = slot->getStorageId().value();
+
+        char label[64];
+        snprintf(label, sizeof(label), "Slot %u", id);
+
+        bool is_selected = (*previewSlot_ == id);
+        if (ImGui::Selectable(label, is_selected)) {
+          *previewSlot_ = id;
+        }
+
+        if (is_selected) ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndChild();
   }
 }
 

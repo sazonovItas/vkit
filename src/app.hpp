@@ -9,12 +9,7 @@
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
 #include "vkit/compute/async_compute.hpp"
-#include "vkit/compute/heightmap_dispatcher.hpp"
-#include "vkit/compute/mix_dispatcher.hpp"
-#include "vkit/compute/noise_dispatcher.hpp"
-#include "vkit/compute/normalmap_dispatcher.hpp"
-#include "vkit/compute/sobel_dispatcher.hpp"
-#include "vkit/compute/tint_dispatcher.hpp"
+#include "vkit/compute/compute_output_dispatcher.hpp"
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/environment.hpp"
@@ -99,12 +94,7 @@ class App {
     std::shared_ptr<compute::AsyncCompute> asyncCompute;
 
     std::shared_ptr<workflow::ExecutionContext> executionContext;
-    std::shared_ptr<compute::NoiseDispatcher> noiseDispatcher;
-    std::shared_ptr<compute::SobelDispatcher> sobelDispatcher;
-    std::shared_ptr<compute::HeightMapDispatcher> heightMapDispatcher;
-    std::shared_ptr<compute::NormalMapDispatcher> normalMapDispatcher;
-    std::shared_ptr<compute::TintDispatcher> tintDispatcher;
-    std::shared_ptr<compute::MixDispatcher> mixDispatcher;
+    std::shared_ptr<compute::ComputeOutputDispatcher> computeOutputDispatcher;
 
     std::shared_ptr<asset::GltfStorage> gltfStorage;
     std::shared_ptr<asset::AssetManager> assetManager;
@@ -120,12 +110,7 @@ class App {
       if (executionContext) executionContext->update();
       if (textureUploader) textureUploader->update();
 
-      if (noiseDispatcher) noiseDispatcher->update();
-      if (sobelDispatcher) sobelDispatcher->update();
-      if (heightMapDispatcher) heightMapDispatcher->update();
-      if (normalMapDispatcher) normalMapDispatcher->update();
-      if (tintDispatcher) tintDispatcher->update();
-      if (mixDispatcher) mixDispatcher->update();
+      if (computeOutputDispatcher) computeOutputDispatcher->update();
 
       if (materialManager) materialManager->update();
     }
@@ -144,7 +129,10 @@ class App {
     std::unique_ptr<imgui::ImguiWindowManager> windowManager;
 
     std::shared_ptr<imgui::windows::Viewer> sceneViewer;
+
+    std::uint32_t previewMaterialSlot{0};
     std::shared_ptr<imgui::windows::Viewer> materialViewer;
+
     std::shared_ptr<imgui::windows::ge::GraphEditorWindow> graphWindow;
     std::shared_ptr<imgui::windows::ge::GraphNodeInspectorWindow>
         graphInspector;

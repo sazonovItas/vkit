@@ -1,222 +1,128 @@
 #include "vkit/controller/workflow.hpp"
 
-#include "vkit/core/events/operators.hpp"
-
 namespace vkit::controller {
 
-auto WorkflowController::setWorkflow(workflow::Workflow* workflow)
+auto WorkflowController::setWorkflow(workflow::Workflow* w)
     -> WorkflowController& {
-  workflow_ = workflow;
+  workflow_ = w;
   return *this;
 }
-
-auto WorkflowController::setTextureManager(
-    texture::TextureManager* textureManager) -> WorkflowController& {
-  textureManager_ = textureManager;
-  return *this;
-}
-
-auto WorkflowController::setTextureLoadBus(core::events::TextureLoadBus* bus)
+auto WorkflowController::setTextureManager(texture::TextureManager* m)
     -> WorkflowController& {
-  textureLoadBus_ = bus;
+  textureManager_ = m;
   return *this;
 }
-
-auto WorkflowController::setTextureReadyBus(core::events::TextureReadyBus* bus)
+auto WorkflowController::setMaterialManager(material::MaterialManager* m)
     -> WorkflowController& {
-  textureReadyBus_ = bus;
+  materialManager_ = m;
   return *this;
 }
-
-auto WorkflowController::setNoiseJobBus(core::events::NoiseJobBus* bus)
+auto WorkflowController::setExecutionContext(workflow::ExecutionContext* ctx)
     -> WorkflowController& {
-  noiseJobBus_ = bus;
+  ctx_ = ctx;
   return *this;
 }
-
-auto WorkflowController::setNoiseResultBus(core::events::NoiseResultBus* bus)
-    -> WorkflowController& {
-  noiseResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setSobelJobBus(core::events::SobelJobBus* bus)
-    -> WorkflowController& {
-  sobelJobBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setSobelResultBus(core::events::SobelResultBus* bus)
-    -> WorkflowController& {
-  sobelResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setHeightMapJobBus(core::events::HeightMapJobBus* bus)
-    -> WorkflowController& {
-  heightMapJobBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setHeightMapResultBus(
-    core::events::HeightMapResultBus* bus) -> WorkflowController& {
-  heightMapResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setNormalMapJobBus(core::events::NormalMapJobBus* bus)
-    -> WorkflowController& {
-  normalMapJobBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setNormalMapResultBus(
-    core::events::NormalMapResultBus* bus) -> WorkflowController& {
-  normalMapResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setTintJobBus(core::events::TintJobBus* bus)
-    -> WorkflowController& {
-  tintJobBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setTintResultBus(core::events::TintResultBus* bus)
-    -> WorkflowController& {
-  tintResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setMixJobBus(core::events::MixJobBus* bus)
-    -> WorkflowController& {
-  mixJobBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setMixResultBus(core::events::MixResultBus* bus)
-    -> WorkflowController& {
-  mixResultBus_ = bus;
-  return *this;
-}
-
-auto WorkflowController::setMaterialManager(
-    material::MaterialManager* materialManager) -> WorkflowController& {
-  materialManager_ = materialManager;
+auto WorkflowController::setComputeDispatcher(
+    compute::ComputeOutputDispatcher* d) -> WorkflowController& {
+  dispatcher_ = d;
   return *this;
 }
 
 auto WorkflowController::createTextureLoadNode(const std::string& name)
     -> workflow::node::TextureLoadNode* {
-  if (!workflow_ || !textureLoadBus_ || !textureReadyBus_ || !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::TextureLoadNode>(
-      name, *textureLoadBus_, *textureReadyBus_, *textureManager_);
+      name, ctx_->texLoadBus, ctx_->texReadyBus, *textureManager_);
 }
 
 auto WorkflowController::createNoiseGeneratorNode(const std::string& name)
     -> workflow::node::proc::NoiseGeneratorNode* {
-  if (!workflow_ || !noiseJobBus_ || !noiseResultBus_ || !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::proc::NoiseGeneratorNode>(
-      name, *noiseJobBus_, *noiseResultBus_, *textureManager_);
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("noise"));
+}
+
+auto WorkflowController::createPatternGeneratorNode(const std::string& name)
+    -> workflow::node::proc::PatternGeneratorNode* {
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::proc::PatternGeneratorNode>(
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("pattern"));
 }
 
 auto WorkflowController::createSobelNode(const std::string& name)
     -> workflow::node::op::SobelNode* {
-  if (!workflow_ || !sobelJobBus_ || !sobelResultBus_ || !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::op::SobelNode>(
-      name, *sobelJobBus_, *sobelResultBus_, *textureManager_);
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("sobel"));
 }
 
 auto WorkflowController::createHeightMapNode(const std::string& name)
     -> workflow::node::op::HeightMapNode* {
-  if (!workflow_ || !heightMapJobBus_ || !heightMapResultBus_ ||
-      !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::op::HeightMapNode>(
-      name, *heightMapJobBus_, *heightMapResultBus_, *textureManager_);
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("heightmap"));
 }
 
 auto WorkflowController::createNormalMapNode(const std::string& name)
     -> workflow::node::op::NormalMapNode* {
-  if (!workflow_ || !normalMapJobBus_ || !normalMapResultBus_ ||
-      !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::op::NormalMapNode>(
-      name, *normalMapJobBus_, *normalMapResultBus_, *textureManager_);
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("normalmap"));
 }
 
 auto WorkflowController::createTintNode(const std::string& name)
     -> workflow::node::op::TintNode* {
-  if (!workflow_ || !tintJobBus_ || !tintResultBus_ || !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::op::TintNode>(
-      name, *tintJobBus_, *tintResultBus_, *textureManager_);
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("tint"));
 }
 
 auto WorkflowController::createMixNode(const std::string& name)
     -> workflow::node::op::MixNode* {
-  if (!workflow_ || !mixJobBus_ || !mixResultBus_ || !textureManager_)
-    return nullptr;
-
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::op::MixNode>(
-      name, *mixJobBus_, *mixResultBus_, *textureManager_);
-}
-
-void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {
-  if (!workflow_) return;
-  for (int id : nodeIds) {
-    workflow_->destroyNode(id);
-  }
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("mix"));
 }
 
 auto WorkflowController::createPrincipledBSDFNode(const std::string& name)
     -> workflow::node::mat::PrincipledBSDFNode* {
-  if (!workflow_ || !materialManager_ || !textureManager_) {
-    return nullptr;
-  }
-
+  if (!workflow_ || !materialManager_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::mat::PrincipledBSDFNode>(
       name, *materialManager_, *textureManager_);
 }
 
 auto WorkflowController::createSlotOutputNode(const std::string& name)
     -> workflow::node::mat::SlotOutputNode* {
-  if (!workflow_ || !materialManager_) {
-    return nullptr;
-  }
-
+  if (!workflow_ || !materialManager_) return nullptr;
   return workflow_->createNode<workflow::node::mat::SlotOutputNode>(
       name, *materialManager_);
 }
 
-auto WorkflowController::canConnectPins(int pinIdA, int pinIdB) const -> bool {
-  if (!workflow_) return false;
-
-  auto* pin_a = workflow_->findPin(pinIdA);
-  auto* pin_b = workflow_->findPin(pinIdB);
-
-  if (!pin_a || !pin_b) return false;
-
-  return workflow_->canConnect(pin_a, pin_b);
+void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {
+  if (!workflow_) return;
+  for (int id : nodeIds) workflow_->destroyNode(id);
 }
 
-void WorkflowController::connectPins(int sourcePinId, int targetPinId) {
+auto WorkflowController::canConnectPins(int a, int b) const -> bool {
+  if (!workflow_) return false;
+  auto* pa = workflow_->findPin(a);
+  auto* pb = workflow_->findPin(b);
+  return (pa != nullptr) && (pb != nullptr) && workflow_->canConnect(pa, pb);
+}
+
+void WorkflowController::connectPins(int src, int dst) {
   if (!workflow_) return;
-
-  auto* src = workflow_->findPin(sourcePinId);
-  auto* dst = workflow_->findPin(targetPinId);
-
-  if (src && dst && workflow_->canConnect(src, dst)) {
-    workflow_->connect(src, dst);
+  auto* ps = workflow_->findPin(src);
+  auto* pd = workflow_->findPin(dst);
+  if (ps && pd && workflow_->canConnect(ps, pd)) {
+    workflow_->connect(ps, pd);
     workflow_->markDirty();
   }
 }
@@ -230,4 +136,4 @@ void WorkflowController::disconnectLink(int linkId) {
   }
 }
 
-};  // namespace vkit::controller
+}  // namespace vkit::controller

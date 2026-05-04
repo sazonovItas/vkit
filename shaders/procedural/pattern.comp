@@ -1,0 +1,122 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PushConstants {
+    uint width;
+    uint height;
+    uint patternType;
+    
+    float scale;
+    float thickness;
+    float smoothness;
+    
+    float param1;
+    float param2;
+} pcs;
+
+float smoothStepEdge(float edge, float x, float smoothing) {
+    return smoothstep(edge - smoothing, edge + smoothing, x);
+}
+
+vec2 hash22(vec2 p) {
+    vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xx + p3.yz) * p3.zy);
+}
+
+float valueNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    
+    float a = hash22(i + vec2(0.0, 0.0)).x;
+    float b = hash22(i + vec2(1.0, 0.0)).x;
+    float c = hash22(i + vec2(0.0, 1.0)).x;
+    float d = hash22(i + vec2(1.0, 1.0)).x;
+    
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+float generateBrick(vec2 uv) {
+    uv *= pcs.scale;
+    
+    if (pcs.param2 > 0.0) {
+        uv += (valueNoise(uv * 5.0) - 0.5) * pcs.param2;
+    }
+    
+    float row = floor(uv.y);
+    uv.x += mod(row, 2.0) * pcs.param1;
+    
+    vec2 cellUV = fract(uv);
+    
+    vec2 distToEdge = min(cellUV, 1.0 - cellUV);
+    
+    float edgeDist = min(distToEdge.x, distToEdge.y);
+    float brick = smoothStepEdge(pcs.thickness * 0.5, edgeDist, pcs.smoothness);
+    
+    return brick;
+}
+
+float generateWood(vec2 uv) {
+    uv = (uv - 0.5) * pcs.scale;
+    
+    float noise = valueNoise(uv * 2.0) * pcs.param2;
+    
+    float dist = length(uv) + noise;
+    
+    float ringPattern = sin(dist * pcs.param1 * 10.0);
+    
+    float wood = smoothStepEdge(-1.0 + pcs.thickness * 2.0, ringPattern, pcs.smoothness * 2.0);
+    
+    return wood;
+}
+
+float generateChain(vec2 uv) {
+    uv *= pcs.scale;
+    vec2 cell = floor(uv);
+    vec2 localUV = fract(uv) - 0.5;
+    
+    bool isVertical = mod(cell.x + cell.y, 2.0) < 0.5;
+    
+    float linkWidth = pcs.param1 * 0.5; 
+    
+    float dist;
+    if (isVertical) {
+        localUV.y = max(0.0, abs(localUV.y) - pcs.param2); 
+        dist = length(max(abs(localUV) - vec2(linkWidth, 0.0), 0.0));
+    } else {
+        localUV.x = max(0.0, abs(localUV.x) - pcs.param2);
+        dist = length(max(abs(localUV) - vec2(0.0, linkWidth), 0.0));
+    }
+    
+    float chainMask = abs(dist - pcs.thickness);
+    float chain = 1.0 - smoothStepEdge(pcs.thickness * 0.5, chainMask, pcs.smoothness);
+    
+    return chain;
+}
+
+void main() {
+    ivec2 texelCoord = ivec2(gl_GlobalInvocationID.xy);
+    if (texelCoord.x >= pcs.width || texelCoord.y >= pcs.height) return;
+
+    vec2 uv = vec2(texelCoord) / vec2(pcs.width, pcs.height);
+    
+    float outputValue = 0.0;
+    
+    if (pcs.patternType == 0) {
+        outputValue = generateBrick(uv);
+    } else if (pcs.patternType == 1) {
+        outputValue = generateWood(uv);
+    } else if (pcs.patternType == 2) {
+        outputValue = generateChain(uv);
+    }
+
+    vec4 finalColor = vec4(vec3(outputValue), 1.0);
+
+    imageStore(outImageF32, texelCoord, finalColor);
+    imageStore(outImageUnorm, texelCoord, finalColor);
+}

@@ -1,55 +1,35 @@
 #pragma once
 
-#include <atomic>
-#include <optional>
 #include <string_view>
 
+#include "vkit/core/events/compute_output.hpp"
 #include "vkit/core/events/operators.hpp"
-#include "vkit/message_bus/message_bus.hpp"
-#include "vkit/texture/manager.hpp"
-#include "vkit/workflow/workflow_node.hpp"
+#include "vkit/workflow/compute_output_node.hpp"
 
 namespace vkit::workflow::node::op {
 
-enum class TintMode : uint32_t {
-  kMix = 0,
-  kMultiply = 1,
-  kAdd = 2,
-  kScreen = 3,
-};
+enum class TintMode : uint32_t { kMix = 0, kMultiply = 1, kAdd = 2, kScreen = 3 };
 
 struct TintParams {
-  float color[4] = {1.0F, 1.0F, 1.0F, 1.0F};
-  float factor{1.0F};
+  float    color[4]{1.0F, 1.0F, 1.0F, 1.0F};
+  float    factor{1.0F};
   TintMode mode{TintMode::kMultiply};
 };
 
-class TintNode : public WorkflowNode {
+class TintNode : public workflow::ComputeOutputNode {
  public:
-  TintNode(std::string_view name, core::events::TintJobBus& jobBus,
-           core::events::TintResultBus& resultBus,
-           texture::TextureManager& textureManager);
-  ~TintNode() override;
+  TintNode(std::string_view name, texture::TextureManager& mgr,
+           core::events::ComputeOutputBus&       bus,
+           core::events::ComputeOutputResultBus& resultBus,
+           core::events::ComputeHandles          handles);
 
   void execute() override;
-  void setParams(TintParams params);
+  void setParams(TintParams p);
   [[nodiscard]] auto getParams() const -> const TintParams& { return params_; }
 
-  std::optional<std::uint32_t> outputF32Id;
-  std::optional<std::uint32_t> outputColorId;
-
  private:
-  core::events::TintJobBus& jobBus_;
-  texture::TextureManager& textureManager_;
-  message_bus::Subscription<core::events::TintJobResult> resultSub_;
-  TintParams params_;
-  std::uint64_t pendingRequestId_{0};
-
+  TintParams  params_;
   graph::Pin* inImage_{nullptr};
-  graph::Pin* outImageF32_{nullptr};
-  graph::Pin* outColor_{nullptr};
-
-  static std::atomic<std::uint64_t> request_counter_;
 };
 
-};  // namespace vkit::workflow::node::op
+}  // namespace vkit::workflow::node::op

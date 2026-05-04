@@ -11,16 +11,18 @@
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
 #include "vkit/asset/util.hpp"
-#include "vkit/compute/heightmap_dispatcher.hpp"
-#include "vkit/compute/sobel_dispatcher.hpp"
-#include "vkit/compute/tint_dispatcher.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/core/events/noise.hpp"
+#include "vkit/core/events/operators.hpp"
+#include "vkit/core/events/pattern.hpp"
+#include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
 #include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/pattern_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/principled_bsdf_ui.hpp"
 #include "vkit/imgui/windows/ge/node/slot_output_ui.hpp"
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
@@ -47,6 +49,8 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
       std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(texManager));
   registry.registerUI<workflow::node::proc::NoiseGeneratorNode>(
       std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(texManager));
+  registry.registerUI<workflow::node::proc::PatternGeneratorNode>(
+      std::make_unique<imgui::windows::ge::PatternGeneratorNodeUI>(texManager));
   registry.registerUI<workflow::node::op::SobelNode>(
       std::make_unique<imgui::windows::ge::SobelNodeUI>(texManager));
   registry.registerUI<workflow::node::op::HeightMapNode>(
@@ -260,29 +264,39 @@ void App::initCompute() {
       sys_.device->get(), sys_.device->queues.compute,
       sys_.device->queueFamilies.compute);
 
-  engine_.noiseDispatcher = std::make_shared<compute::NoiseDispatcher>(
-      *sys_.device, engine_.executionContext->noiseJobBus,
-      engine_.executionContext->noiseResultBus, engine_.asyncCompute);
+  using BL = core::events::ComputeBindingLayout;
+  engine_.computeOutputDispatcher =
+      std::make_shared<compute::ComputeOutputDispatcher>(
+          *sys_.device, engine_.executionContext->computeOutputBus,
+          engine_.executionContext->computeOutputResultBus,
+          engine_.asyncCompute);
 
-  engine_.sobelDispatcher = std::make_shared<compute::SobelDispatcher>(
-      *sys_.device, engine_.executionContext->sobelJobBus,
-      engine_.executionContext->sobelResultBus, engine_.asyncCompute);
-
-  engine_.heightMapDispatcher = std::make_shared<compute::HeightMapDispatcher>(
-      *sys_.device, engine_.executionContext->heightMapJobBus,
-      engine_.executionContext->heightMapResultBus, engine_.asyncCompute);
-
-  engine_.normalMapDispatcher = std::make_shared<compute::NormalMapDispatcher>(
-      *sys_.device, engine_.executionContext->normalMapJobBus,
-      engine_.executionContext->normalMapResultBus, engine_.asyncCompute);
-
-  engine_.tintDispatcher = std::make_shared<compute::TintDispatcher>(
-      *sys_.device, engine_.executionContext->tintJobBus,
-      engine_.executionContext->tintResultBus, engine_.asyncCompute);
-
-  engine_.mixDispatcher = std::make_shared<compute::MixDispatcher>(
-      *sys_.device, engine_.executionContext->mixJobBus,
-      engine_.executionContext->mixResultBus, engine_.asyncCompute);
+  auto& d = *engine_.computeOutputDispatcher;
+  auto dev = sys_.device->get();
+  d.registerPipeline("noise", dev,
+                     shaders::shaderPath(shaders::kProceduralNoiceShaderPath),
+                     BL::kGenerator, sizeof(core::events::NoisePushConstants));
+  d.registerPipeline("pattern", dev,
+                     shaders::shaderPath(shaders::kProceduralPatternShaderPath),
+                     BL::kGenerator,
+                     sizeof(core::events::PatternPushConstants));
+  d.registerPipeline(
+      "sobel", dev, shaders::shaderPath(shaders::kOperatorsSobelShaderPath),
+      BL::kSingleInput, sizeof(core::events::SobelPushConstants));
+  d.registerPipeline(
+      "heightmap", dev,
+      shaders::shaderPath(shaders::kOperatorsHeightMapShaderPath),
+      BL::kSingleInput, sizeof(core::events::HeightMapPushConstants));
+  d.registerPipeline(
+      "normalmap", dev,
+      shaders::shaderPath(shaders::kOperatorsNormalMapShaderPath),
+      BL::kSingleInput, sizeof(core::events::NormalMapPushConstants));
+  d.registerPipeline("tint", dev,
+                     shaders::shaderPath(shaders::kOperatorsTintShaderPath),
+                     BL::kSingleInput, sizeof(core::events::TintPushConstants));
+  d.registerPipeline("mix", dev,
+                     shaders::shaderPath(shaders::kOperatorsMixShaderPath),
+                     BL::kDualInput, sizeof(core::events::MixPushConstants));
 }
 
 void App::initEnvironment() {
@@ -321,20 +335,8 @@ void App::initWorkflow() {
       std::make_unique<controller::WorkflowController>();
   engine_.workflowController->setWorkflow(engine_.workflow.get())
       .setTextureManager(engine_.textureManager.get())
-      .setTextureLoadBus(&engine_.executionContext->texLoadBus)
-      .setTextureReadyBus(&engine_.executionContext->texReadyBus)
-      .setNoiseJobBus(&engine_.executionContext->noiseJobBus)
-      .setNoiseResultBus(&engine_.executionContext->noiseResultBus)
-      .setSobelJobBus(&engine_.executionContext->sobelJobBus)
-      .setSobelResultBus(&engine_.executionContext->sobelResultBus)
-      .setHeightMapJobBus(&engine_.executionContext->heightMapJobBus)
-      .setHeightMapResultBus(&engine_.executionContext->heightMapResultBus)
-      .setNormalMapJobBus(&engine_.executionContext->normalMapJobBus)
-      .setNormalMapResultBus(&engine_.executionContext->normalMapResultBus)
-      .setTintJobBus(&engine_.executionContext->tintJobBus)
-      .setTintResultBus(&engine_.executionContext->tintResultBus)
-      .setMixJobBus(&engine_.executionContext->mixJobBus)
-      .setMixResultBus(&engine_.executionContext->mixResultBus)
+      .setExecutionContext(engine_.executionContext.get())
+      .setComputeDispatcher(engine_.computeOutputDispatcher.get())
       .setMaterialManager(engine_.materialManager.get());
 }
 
@@ -444,7 +446,8 @@ void App::initImguiWindows() {
 
   ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
       "Configuration", engine_.assetController.get(),
-      engine_.environmentController.get(), rSys_.animator.get());
+      engine_.environmentController.get(), rSys_.animator.get(),
+      engine_.materialManager.get(), &ui_.previewMaterialSlot);
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -630,8 +633,8 @@ void App::mainLoop() {
                 rSys_.sceneRenderer->opaqueRaySpherePipeline,
                 rSys_.sceneRenderer->transparentRaySpherePipeline,
                 rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
-                sys_.bindlessSet, mat_set, glm::mat4(1.0F), 0,
-                engine_.materialManager.get())
+                sys_.bindlessSet, mat_set, glm::mat4(1.0F),
+                ui_.previewMaterialSlot, engine_.materialManager.get())
             .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
       }
     }

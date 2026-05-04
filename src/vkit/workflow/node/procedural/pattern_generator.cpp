@@ -1,11 +1,11 @@
-#include "vkit/workflow/node/procedural/noise_generator.hpp"
+#include "vkit/workflow/node/procedural/pattern_generator.hpp"
 
-#include "vkit/core/events/noise.hpp"
+#include "vkit/core/events/pattern.hpp"
 #include "vkit/workflow/pin_type.hpp"
 
 namespace vkit::workflow::node::proc {
 
-NoiseGeneratorNode::NoiseGeneratorNode(
+PatternGeneratorNode::PatternGeneratorNode(
     std::string_view name, texture::TextureManager& mgr,
     core::events::ComputeOutputBus& bus,
     core::events::ComputeOutputResultBus& resultBus,
@@ -15,27 +15,25 @@ NoiseGeneratorNode::NoiseGeneratorNode(
   outColor_ = addOutputPin(pinKeyType(PinType::kColorTexture2D), "Color");
 }
 
-void NoiseGeneratorNode::execute() {
+void PatternGeneratorNode::execute() {
   if (hasPendingJob()) return;
   clearOutputs();
-  core::events::NoisePushConstants pc{
+
+  core::events::PatternPushConstants pc{
       .width = params_.width,
       .height = params_.height,
-      .noiseType = static_cast<uint32_t>(params_.type),
-      .worleyMode = static_cast<uint32_t>(params_.worleyMode),
+      .patternType = static_cast<uint32_t>(params_.type),
       .scale = params_.scale,
-      .offsetX = params_.offsetX,
-      .offsetY = params_.offsetY,
-      .seed = params_.seed,
-      .octaves = params_.octaves,
-      .persistence = params_.persistence,
-      .lacunarity = params_.lacunarity,
-      .worleyJitter = params_.worleyJitter,
+      .thickness = params_.thickness,
+      .smoothness = params_.smoothness,
+      .param1 = params_.param1,
+      .param2 = params_.param2,
   };
+
   submitJob(pc.width, pc.height, &pc, sizeof(pc));
 }
 
-void NoiseGeneratorNode::setParams(NoiseParams params) {
+void PatternGeneratorNode::setParams(PatternParams params) {
   params_ = params;
   markStale();
 }

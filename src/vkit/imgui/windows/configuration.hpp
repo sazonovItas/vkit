@@ -4,6 +4,7 @@
 #include <string_view>
 
 #include "vkit/imgui/imgui_window.hpp"
+#include "vkit/material/manager.hpp"
 
 namespace vkit::controller {
 class AssetController;
@@ -22,7 +23,9 @@ class ConfigurationWindow : public ImguiWindow {
       std::string_view title,
       controller::AssetController* assetController = nullptr,
       controller::EnvironmentController* envController = nullptr,
-      animation::Animator* animator = nullptr);
+      animation::Animator* animator = nullptr,
+      material::MaterialManager* matManager = nullptr,
+      std::uint32_t* previewSlot = nullptr);
 
   ~ConfigurationWindow() override = default;
 
@@ -30,6 +33,8 @@ class ConfigurationWindow : public ImguiWindow {
   void setEnvironmentController(
       controller::EnvironmentController* envController);
   void setAnimator(animation::Animator* animator);
+  void setMaterialPreviewData(material::MaterialManager* matManager,
+                              std::uint32_t* previewSlot);
 
  protected:
   void onDraw() override;
@@ -38,6 +43,9 @@ class ConfigurationWindow : public ImguiWindow {
   controller::AssetController* assetController_{nullptr};
   controller::EnvironmentController* envController_{nullptr};
   animation::Animator* animator_{nullptr};
+
+  material::MaterialManager* matManager_{nullptr};
+  std::uint32_t* previewSlot_{nullptr};
 
   char assetNameBuffer_[256]{};
   std::optional<std::uint32_t> lastSelectedAssetId_{std::nullopt};
@@ -48,6 +56,7 @@ class ConfigurationWindow : public ImguiWindow {
   void drawAssetManagementSection();
   void drawAnimationManagementSection();
   void drawEnvironmentManagementSection();
+  void drawMaterialPreivewSection();
 };
 
 };  // namespace vkit::imgui::windows
