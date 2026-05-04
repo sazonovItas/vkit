@@ -23,7 +23,7 @@ class ConfigurationWindow : public ImguiWindow {
       std::string_view title,
       controller::AssetController* assetController = nullptr,
       controller::EnvironmentController* envController = nullptr,
-      animation::Animator* animator = nullptr,
+      animation::Animator* animator = nullptr, bool* enableSkinning = nullptr,
       material::MaterialManager* matManager = nullptr,
       std::uint32_t* previewSlot = nullptr);
 
@@ -33,6 +33,7 @@ class ConfigurationWindow : public ImguiWindow {
   void setEnvironmentController(
       controller::EnvironmentController* envController);
   void setAnimator(animation::Animator* animator);
+  void setEnableSkinning(bool* enableSkinning);
   void setMaterialPreviewData(material::MaterialManager* matManager,
                               std::uint32_t* previewSlot);
 
@@ -42,7 +43,9 @@ class ConfigurationWindow : public ImguiWindow {
  private:
   controller::AssetController* assetController_{nullptr};
   controller::EnvironmentController* envController_{nullptr};
+
   animation::Animator* animator_{nullptr};
+  bool* enableSkinning_{nullptr};
 
   material::MaterialManager* matManager_{nullptr};
   std::uint32_t* previewSlot_{nullptr};

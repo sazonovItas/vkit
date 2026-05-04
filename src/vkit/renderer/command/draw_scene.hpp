@@ -142,7 +142,8 @@ class DrawAssetCommand final : public graphics::Command {
                    vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
                    vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
                    const asset::Asset* asset,
-                   const material::MaterialManager* materialManager)
+                   const material::MaterialManager* materialManager,
+                   bool enableSkinning = true)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
         layout_{layout},
@@ -151,7 +152,8 @@ class DrawAssetCommand final : public graphics::Command {
         materialSet_{materialSet},
         primSet_{primSet},
         asset_{asset},
-        materialManager_{materialManager} {}
+        materialManager_{materialManager},
+        enableSkinning_{enableSkinning} {}
 
   void record(vk::CommandBuffer cb) const override {
     if (!asset_ || asset_->scenes.empty() || !materialManager_) return;
@@ -173,7 +175,6 @@ class DrawAssetCommand final : public graphics::Command {
 
           auto slot = materialManager_->getSlot(prim->getMaterialSlot());
 
-          // Strict Existence Check
           if (slot && slot->getMaterialType() != material::Type::kNone) {
             auto m_type = slot->getMaterialType();
             auto m_id = slot->getMaterialId();
@@ -195,7 +196,8 @@ class DrawAssetCommand final : public graphics::Command {
                   .model = node->getGlobalTransform().getMatrix(),
                   .primIndex = prim->getStorageId().value(),
                   .skinOffset = asset_->skins.getOffsetForNode(node),
-                  .enableSkinning = (node->skin != nullptr) ? 1U : 0U,
+                  .enableSkinning =
+                      (node->skin != nullptr && enableSkinning_) ? 1U : 0U,
                   .materialType = final_mat_type,
                   .materialIndex = final_mat_index,
               }};
@@ -255,6 +257,7 @@ class DrawAssetCommand final : public graphics::Command {
   vk::DescriptorSet primSet_;
   const asset::Asset* asset_;
   const material::MaterialManager* materialManager_;
+  const bool enableSkinning_;
 };
 
 };  // namespace vkit::renderer::cmd

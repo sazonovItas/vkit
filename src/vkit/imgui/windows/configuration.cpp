@@ -15,12 +15,13 @@ namespace vkit::imgui::windows {
 ConfigurationWindow::ConfigurationWindow(
     std::string_view title, controller::AssetController* assetController,
     controller::EnvironmentController* envController,
-    animation::Animator* animator, material::MaterialManager* matManager,
-    std::uint32_t* previewSlot)
+    animation::Animator* animator, bool* enableSkinning,
+    material::MaterialManager* matManager, std::uint32_t* previewSlot)
     : ImguiWindow(title),
       assetController_{assetController},
       envController_{envController},
       animator_{animator},
+      enableSkinning_{enableSkinning},
       matManager_{matManager},
       previewSlot_{previewSlot} {
   setMinSize(300.0F, 400.0F);
@@ -34,6 +35,14 @@ void ConfigurationWindow::setAssetController(
 void ConfigurationWindow::setEnvironmentController(
     controller::EnvironmentController* envController) {
   envController_ = envController;
+}
+
+void ConfigurationWindow::setAnimator(animation::Animator* animator) {
+  animator_ = animator;
+}
+
+void ConfigurationWindow::setEnableSkinning(bool* enableSkinning) {
+  enableSkinning_ = enableSkinning;
 }
 
 void ConfigurationWindow::setMaterialPreviewData(
@@ -143,7 +152,7 @@ void ConfigurationWindow::drawAssetManagementSection() {
 }
 
 void ConfigurationWindow::drawAnimationManagementSection() {
-  if (!assetController_ || !animator_) return;
+  if (!assetController_ || !animator_ || !enableSkinning_) return;
 
   auto current_asset = assetController_->getCurrentAsset();
   if (!current_asset || current_asset->animations.empty()) return;
@@ -151,47 +160,61 @@ void ConfigurationWindow::drawAnimationManagementSection() {
   if (ImGui::CollapsingHeader("Animations")) {
     ImGui::Spacing();
 
-    static int selected_anim = 0;
-    if (selected_anim >= current_asset->animations.size()) {
-      selected_anim = 0;
-      animator_->setActiveAnimation(selected_anim);
-    }
-
-    const auto preview_name =
-        std::string{current_asset->animations[selected_anim]->getName()};
-
-    if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
-      for (int i = 0; i < current_asset->animations.size(); ++i) {
-        bool is_selected = (selected_anim == i);
-        if (ImGui::Selectable(preview_name.c_str(), is_selected)) {
-          selected_anim = i;
-          animator_->setActiveAnimation(selected_anim);
-          animator_->stop();
-          animator_->play();
-        }
-        if (is_selected) ImGui::SetItemDefaultFocus();
+    if (ImGui::Checkbox("Enable Skinning & Animation", enableSkinning_)) {
+      if (!*enableSkinning_) {
+        animator_->stop();
       }
-      ImGui::EndCombo();
     }
 
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
+    if (*enableSkinning_) {
+      ImGui::Spacing();
+      ImGui::Separator();
+      ImGui::Spacing();
 
-    bool is_playing = animator_->isPlaying();
-    if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
-      animator_->togglePlayback();
-    }
+      static int selected_anim = 0;
+      if (selected_anim >= current_asset->animations.size()) {
+        selected_anim = 0;
+        animator_->setActiveAnimation(selected_anim);
+      }
 
-    ImGui::SameLine();
+      const auto preview_name =
+          std::string{current_asset->animations[selected_anim]->getName()};
 
-    if (ImGui::Button("Stop", ImVec2(80, 0))) {
-      animator_->stop();
-    }
+      if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
+        for (int i = 0; i < current_asset->animations.size(); ++i) {
+          bool is_selected = (selected_anim == i);
 
-    float speed = animator_->getTimeScale();
-    if (ImGui::SliderFloat("Speed", &speed, 0.0F, 10.0F, "%.2fx")) {
-      animator_->setTimeScale(speed);
+          const auto item_name =
+              std::string{current_asset->animations[i]->getName()};
+
+          if (ImGui::Selectable(item_name.c_str(), is_selected)) {
+            selected_anim = i;
+            animator_->setActiveAnimation(selected_anim);
+            animator_->stop();
+            animator_->play();
+          }
+          if (is_selected) ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+      }
+
+      ImGui::Spacing();
+
+      bool is_playing = animator_->isPlaying();
+      if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
+        animator_->togglePlayback();
+      }
+
+      ImGui::SameLine();
+
+      if (ImGui::Button("Stop", ImVec2(80, 0))) {
+        animator_->stop();
+      }
+
+      float speed = animator_->getTimeScale();
+      if (ImGui::SliderFloat("Speed", &speed, 0.0F, 10.0F, "%.2fx")) {
+        animator_->setTimeScale(speed);
+      }
     }
 
     ImGui::Spacing();

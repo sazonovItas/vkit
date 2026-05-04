@@ -447,7 +447,8 @@ void App::initImguiWindows() {
   ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
       "Configuration", engine_.assetController.get(),
       engine_.environmentController.get(), rSys_.animator.get(),
-      engine_.materialManager.get(), &ui_.previewMaterialSlot);
+      &ui_.enableSkinning, engine_.materialManager.get(),
+      &ui_.previewMaterialSlot);
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -618,7 +619,7 @@ void App::mainLoop() {
               rSys_.sceneRenderer->transparentPipeline,
               rSys_.sceneRenderer->primitiveLayout->get(), scene_set,
               sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
-              engine_.materialManager.get())
+              engine_.materialManager.get(), ui_.enableSkinning)
           .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
     }
 
