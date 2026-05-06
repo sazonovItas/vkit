@@ -3,6 +3,7 @@
 #include <imgui.h>
 
 #include <cstring>
+#include <limits>
 #include <string>
 
 #include "vkit/animation/animator.hpp"
@@ -57,6 +58,7 @@ void ConfigurationWindow::onDraw() {
 
   drawAssetManagementSection();
   drawAnimationManagementSection();
+  drawPrimitiveMaterialSection();
   drawEnvironmentManagementSection();
   drawMaterialPreivewSection();
 
@@ -219,6 +221,131 @@ void ConfigurationWindow::drawAnimationManagementSection() {
 
     ImGui::Spacing();
   }
+}
+
+void ConfigurationWindow::drawPrimitiveMaterialSection() {
+  if (!assetController_ || !matManager_) return;
+  auto asset = assetController_->getCurrentAsset();
+  if (!asset) return;
+
+  if (!ImGui::CollapsingHeader("Primitive Materials")) return;
+
+  ImGui::Spacing();
+
+  auto slots = matManager_->getSlots();
+  auto meshes = asset->meshes.getItems();
+
+  if (meshes.empty()) {
+    ImGui::TextDisabled("No meshes in current asset.");
+    ImGui::Spacing();
+    return;
+  }
+
+  if (slots.empty()) {
+    ImGui::TextDisabled("No material slots available.");
+    ImGui::TextDisabled("Create slots via the workflow graph first.");
+    ImGui::Spacing();
+  }
+
+  static constexpr std::uint32_t kNoSlot =
+      std::numeric_limits<std::uint32_t>::max();
+
+  auto slot_label = [&](std::uint32_t slotId) -> std::string {
+    auto s = matManager_->getSlot(slotId);
+    if (!s) return "Slot " + std::to_string(slotId) + "  (unresolved)";
+    const char* type_name = "None";
+    switch (s->getMaterialType()) {
+      case material::Type::kDiffuse:
+        type_name = "Diffuse";
+        break;
+      case material::Type::kDiffuseSpecular:
+        type_name = "Diffuse Specular";
+        break;
+      case material::Type::kPrincipledBSDF:
+        type_name = "Principled BSDF";
+        break;
+      default:
+        type_name = "None";
+        break;
+    }
+    return "Slot " + std::to_string(slotId) + "  (" + type_name + ")";
+  };
+
+  int mesh_idx = 0;
+  for (const auto& mesh : meshes) {
+    if (!mesh) {
+      ++mesh_idx;
+      continue;
+    }
+
+    const auto& prims = mesh->getPrimitives();
+    if (prims.empty()) {
+      ++mesh_idx;
+      continue;
+    }
+
+    std::string mesh_name{mesh->getName()};
+    if (mesh_name.empty()) mesh_name = "Mesh " + std::to_string(mesh_idx);
+    mesh_name += "  (" + std::to_string(prims.size()) + " primitives)";
+
+    ImGui::PushID(mesh_idx);
+    if (ImGui::TreeNodeEx(mesh_name.c_str(), ImGuiTreeNodeFlags_None)) {
+      ImGui::Spacing();
+
+      int prim_idx = 0;
+      for (const auto& prim : prims) {
+        if (!prim) {
+          ++prim_idx;
+          continue;
+        }
+
+        std::uint32_t cur_slot = prim->getMaterialSlot();
+
+        std::string preview =
+            (cur_slot == kNoSlot) ? "-- None --" : slot_label(cur_slot);
+
+        ImGui::PushID(prim_idx);
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextDisabled("Primitive %d", prim_idx);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(-FLT_MIN);
+
+        if (ImGui::BeginCombo("##matslot", preview.c_str())) {
+          {
+            const bool is_none = (cur_slot == kNoSlot);
+            if (ImGui::Selectable("-- None --", is_none))
+              prim->setMaterialSlot(kNoSlot);
+            if (is_none) ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::Separator();
+
+          for (const auto& slot : slots) {
+            if (!slot || !slot->getStorageId().has_value()) continue;
+            const std::uint32_t slot_id = slot->getStorageId().value();
+            const std::string label = slot_label(slot_id);
+            const bool is_sel = (cur_slot == slot_id);
+            if (ImGui::Selectable(label.c_str(), is_sel))
+              prim->setMaterialSlot(slot_id);
+            if (is_sel) ImGui::SetItemDefaultFocus();
+          }
+
+          ImGui::EndCombo();
+        }
+
+        ImGui::PopID();
+        ++prim_idx;
+      }
+
+      ImGui::Spacing();
+      ImGui::TreePop();
+    }
+    ImGui::PopID();
+    ++mesh_idx;
+  }
+
+  ImGui::Spacing();
 }
 
 void ConfigurationWindow::drawEnvironmentManagementSection() {

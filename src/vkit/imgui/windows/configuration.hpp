@@ -58,6 +58,7 @@ class ConfigurationWindow : public ImguiWindow {
 
   void drawAssetManagementSection();
   void drawAnimationManagementSection();
+  void drawPrimitiveMaterialSection();
   void drawEnvironmentManagementSection();
   void drawMaterialPreivewSection();
 };
