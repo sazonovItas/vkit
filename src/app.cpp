@@ -12,6 +12,7 @@
 #include "vkit/asset/gltf_storage.hpp"
 #include "vkit/asset/util.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/core/events/fractal.hpp"
 #include "vkit/core/events/noise.hpp"
 #include "vkit/core/events/operators.hpp"
 #include "vkit/core/events/pattern.hpp"
@@ -20,6 +21,7 @@
 #include "vkit/graphics/device.hpp"
 #include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
+#include "vkit/imgui/windows/ge/node/fractal_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/pattern_generator_ui.hpp"
@@ -35,6 +37,7 @@
 #include "vkit/renderer/types.hpp"
 #include "vkit/renderer/viewport.hpp"
 #include "vkit/workflow/node/operators/tint.hpp"
+#include "vkit/workflow/node/procedural/fractal_generator.hpp"
 #include "vkit/workflow/node/procedural/noise_generator.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
 
@@ -47,6 +50,8 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
   auto& registry = graphWindow.getRegistry();
   registry.registerUI<workflow::node::TextureLoadNode>(
       std::make_unique<imgui::windows::ge::TextureLoadNodeUI>(texManager));
+  registry.registerUI<workflow::node::proc::FractalGeneratorNode>(
+      std::make_unique<imgui::windows::ge::FractalGeneratorNodeUI>(texManager));
   registry.registerUI<workflow::node::proc::NoiseGeneratorNode>(
       std::make_unique<imgui::windows::ge::NoiseGeneratorNodeUI>(texManager));
   registry.registerUI<workflow::node::proc::PatternGeneratorNode>(
@@ -273,6 +278,10 @@ void App::initCompute() {
 
   auto& d = *engine_.computeOutputDispatcher;
   auto dev = sys_.device->get();
+  d.registerPipeline(
+      "fractal", dev,
+      shaders::shaderPath(shaders::kProceduralFractalShaderPath),
+      BL::kGenerator, sizeof(core::events::FractalPushConstants));
   d.registerPipeline("noise", dev,
                      shaders::shaderPath(shaders::kProceduralNoiceShaderPath),
                      BL::kGenerator, sizeof(core::events::NoisePushConstants));

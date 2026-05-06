@@ -1,0 +1,65 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 1, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    uint  fractalType;   // 0=Mandelbrot, 1=Julia, 2=BurningShip
+    int   maxIterations;
+    float centerX;
+    float centerY;
+    float zoom;
+    float juliaRe;
+    float juliaIm;
+} pc;
+
+// Smooth escape-time: returns [0,1]; 0 means inside the set.
+float iterateEscape(vec2 z0, vec2 c) {
+    vec2 z = z0;
+    int i = 0;
+    for (; i < pc.maxIterations; ++i) {
+        if (dot(z, z) > 4.0) break;
+        if (pc.fractalType == 2u) z = vec2(abs(z.x), abs(z.y));
+        z = vec2(z.x * z.x - z.y * z.y + c.x,
+                 2.0 * z.x * z.y          + c.y);
+    }
+    if (i == pc.maxIterations) return 0.0;
+
+    // Continuous (smooth) iteration count avoids banding.
+    float log2z = log2(dot(z, z)) * 0.5;
+    float nu    = log2(log2z);
+    return clamp((float(i) + 1.0 - nu) / float(pc.maxIterations), 0.0, 1.0);
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    float aspect   = float(pc.width) / float(pc.height);
+    vec2  uv       = (vec2(coord) + 0.5) / vec2(pc.width, pc.height);
+    float halfRange = 2.0 / pc.zoom;
+
+    // Map pixel to the complex plane.
+    vec2 p;
+    p.x = (uv.x - 0.5) * 2.0 * halfRange * aspect + pc.centerX;
+    p.y = (uv.y - 0.5) * 2.0 * halfRange           + pc.centerY;
+
+    vec2 z, c;
+    if (pc.fractalType == 1u) {   // Julia
+        z = p;
+        c = vec2(pc.juliaRe, pc.juliaIm);
+    } else {                      // Mandelbrot / Burning Ship
+        z = vec2(0.0);
+        c = p;
+    }
+
+    float t = iterateEscape(z, c);
+
+    vec4 col = vec4(t, t, t, 1.0);
+    imageStore(outImageF32,   coord, col);
+    imageStore(outImageUnorm, coord, col);
+}

@@ -35,6 +35,14 @@ auto WorkflowController::createTextureLoadNode(const std::string& name)
       name, ctx_->texLoadBus, ctx_->texReadyBus, *textureManager_);
 }
 
+auto WorkflowController::createFractalGeneratorNode(const std::string& name)
+    -> workflow::node::proc::FractalGeneratorNode* {
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::proc::FractalGeneratorNode>(
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("fractal"));
+}
+
 auto WorkflowController::createNoiseGeneratorNode(const std::string& name)
     -> workflow::node::proc::NoiseGeneratorNode* {
   if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;

@@ -40,6 +40,8 @@ static constexpr std::string_view kProceduralNoiceShaderPath =
     "shaders/procedural/noise.comp";
 static constexpr std::string_view kProceduralPatternShaderPath =
     "shaders/procedural/pattern.comp";
+static constexpr std::string_view kProceduralFractalShaderPath =
+    "shaders/procedural/fractal.comp";
 
 static constexpr std::string_view kOperatorsSobelShaderPath =
     "shaders/operators/sobel.comp";

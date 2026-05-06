@@ -14,6 +14,7 @@
 #include "vkit/workflow/node/operators/normalmap.hpp"
 #include "vkit/workflow/node/operators/sobel.hpp"
 #include "vkit/workflow/node/operators/tint.hpp"
+#include "vkit/workflow/node/procedural/fractal_generator.hpp"
 #include "vkit/workflow/node/procedural/noise_generator.hpp"
 #include "vkit/workflow/node/procedural/pattern_generator.hpp"
 #include "vkit/workflow/node/texture_load.hpp"
@@ -35,6 +36,8 @@ class WorkflowController {
 
   auto createTextureLoadNode(const std::string& name = "Texture Load")
       -> workflow::node::TextureLoadNode*;
+  auto createFractalGeneratorNode(const std::string& name = "Fractal Generator")
+      -> workflow::node::proc::FractalGeneratorNode*;
   auto createNoiseGeneratorNode(const std::string& name = "Noise Generator")
       -> workflow::node::proc::NoiseGeneratorNode*;
   auto createPatternGeneratorNode(const std::string& name = "Pattern Generator")
