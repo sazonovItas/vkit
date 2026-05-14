@@ -11,7 +11,7 @@ struct SphereHit {
     vec2 uv;
 };
 
-SphereHit calculateSphereHit(vec3 inLocalPos, vec3 camWorldPos, mat4 model, mat4 view, mat4 proj) {
+SphereHit calculateSphereHit(vec3 inLocalPos, vec3 camWorldPos, mat4 model, mat4 view, mat4 proj, uint depthWrite) {
     mat4 invModel = inverse(model);
     vec3 camLocalPos = (invModel * vec4(camWorldPos, 1.0)).xyz;
 
@@ -56,7 +56,9 @@ SphereHit calculateSphereHit(vec3 inLocalPos, vec3 camWorldPos, mat4 model, mat4
     hit.bitangent = cross(hit.normal, hit.tangent);
 
     vec4 clipSpacePos = proj * view * hitWorld4;
-    gl_FragDepth = clipSpacePos.z / clipSpacePos.w;
+    if (depthWrite == 1) {
+      gl_FragDepth = clipSpacePos.z / clipSpacePos.w;
+    }
 
     return hit;
 }

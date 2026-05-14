@@ -9,6 +9,7 @@
 #include "vkit/asset/asset.hpp"
 #include "vkit/graphics/command.hpp"
 #include "vkit/material/manager.hpp"
+#include "vkit/material/material.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
 #include "vkit/renderer/pipeline_layout/ray_sphere_material.hpp"
 #include "vkit/renderer/pipeline_layout/skybox.hpp"
@@ -53,13 +54,13 @@ class DrawSkyboxCommand final : public graphics::Command {
 
 class DrawRaySphereCommand final : public graphics::Command {
  public:
-  DrawRaySphereCommand(
-      vk::Pipeline opaquePipeline,
-      vk::Pipeline transparentPipeline,  // <-- Added Transparent
-      vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
-      vk::DescriptorSet bindlessSet, vk::DescriptorSet materialSet,
-      glm::mat4 model, std::uint32_t materialSlot,
-      const material::MaterialManager* materialManager)
+  DrawRaySphereCommand(vk::Pipeline opaquePipeline,
+                       vk::Pipeline transparentPipeline,
+                       vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
+                       vk::DescriptorSet bindlessSet,
+                       vk::DescriptorSet materialSet, glm::mat4 model,
+                       std::uint32_t materialSlot,
+                       const material::MaterialManager* materialManager)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
         layout_{layout},
@@ -75,6 +76,7 @@ class DrawRaySphereCommand final : public graphics::Command {
     std::uint32_t mat_idx = 0;
     vk::Pipeline active_pipeline = opaquePipeline_;
 
+    auto enable_depth_write = true;
     if (materialManager_) {
       auto slot = materialManager_->getSlot(materialSlot_);
 
@@ -96,8 +98,11 @@ class DrawRaySphereCommand final : public graphics::Command {
 
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, active_pipeline);
 
-    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_};
+    std::array<vk::DescriptorSet, 3> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
@@ -105,6 +110,7 @@ class DrawRaySphereCommand final : public graphics::Command {
         .model = model_,
         .materialType = mat_type,
         .materialIndex = mat_idx,
+        .enableDepthWrite = static_cast<std::uint32_t>(enable_depth_write),
     };
 
     cb.pushConstants(
@@ -217,8 +223,12 @@ class DrawAssetCommand final : public graphics::Command {
         traverse_node(traverse_node, node.get());
     }
 
-    std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_, primSet_};
+    std::array<vk::DescriptorSet, 4> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+        primSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 

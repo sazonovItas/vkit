@@ -1,5 +1,6 @@
 #include "vkit/asset/gltf/asset_importer.hpp"
 
+#include <cmath>
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fstream>
@@ -68,6 +69,18 @@ auto AssetImporter::load(const std::filesystem::path& filepath)
 
   auto parser = fastgltf::Parser{
       fastgltf::Extensions::KHR_mesh_quantization |
+          fastgltf::Extensions::KHR_materials_ior |
+          fastgltf::Extensions::KHR_materials_specular |
+          fastgltf::Extensions::KHR_materials_transmission |
+          fastgltf::Extensions::KHR_materials_volume |
+          fastgltf::Extensions::KHR_materials_sheen |
+          fastgltf::Extensions::KHR_materials_clearcoat |
+          fastgltf::Extensions::KHR_materials_emissive_strength |
+          fastgltf::Extensions::KHR_materials_iridescence |
+          fastgltf::Extensions::KHR_materials_anisotropy |
+          fastgltf::Extensions::KHR_materials_unlit |
+
+          // enable deprectated extensinons for models compatibility
           fastgltf::Extensions::KHR_materials_pbrSpecularGlossiness,
   };
 
@@ -85,6 +98,9 @@ auto AssetImporter::load(const std::filesystem::path& filepath)
 
   LOG_TRACE("Calling loadBuffers...");
   loadBuffers(gltf_asset, directory);
+
+  LOG_TRACE("Calling loadMaterials...");
+  loadMaterials(gltf_asset, directory);
 
   LOG_TRACE("Calling loadMeshes...");
   loadMeshes(gltf_asset);
@@ -275,6 +291,157 @@ void AssetImporter::loadBuffers(const fastgltf::Asset& asset,
   deviceBuffers_ = std::make_shared<primitive::DeviceBuffers>(
       cpu_buffers, gfxDevice_.allocator, rs_info);
   LOG_TRACE("DeviceBuffers created.");
+}
+
+void AssetImporter::loadMaterials(const fastgltf::Asset& asset,
+                                  const std::filesystem::path& directory) {
+  LOG_TRACE("Loading " << asset.materials.size() << " materials...");
+  asset_->gltfMaterials.clear();
+  asset_->gltfMaterials.reserve(asset.materials.size());
+
+  auto getImagePath =
+      [&](std::size_t texIdx) -> std::optional<std::filesystem::path> {
+    if (texIdx >= asset.textures.size()) return std::nullopt;
+    auto imgIdx = asset.textures[texIdx].imageIndex;
+    if (!imgIdx.has_value() || imgIdx.value() >= asset.images.size())
+      return std::nullopt;
+
+    std::filesystem::path result;
+    std::visit(fastgltf::visitor{[&](const fastgltf::sources::URI& uri) {
+                                   if (uri.uri.isLocalPath())
+                                     result = directory / uri.uri.fspath();
+                                 },
+                                 [](const auto&) {}},
+               asset.images[imgIdx.value()].data);
+
+    return result.empty() ? std::nullopt : std::optional{result};
+  };
+
+  auto texRef = [&](const fastgltf::Optional<fastgltf::TextureInfo>& ti)
+      -> std::optional<GltfTextureRef> {
+    if (!ti.has_value()) return std::nullopt;
+    auto p = getImagePath(ti->textureIndex);
+    return p ? std::optional{GltfTextureRef{*p}} : std::nullopt;
+  };
+
+  for (const auto& mat : asset.materials) {
+    GltfMaterialInfo info;
+    info.name = std::string{mat.name};
+
+    // Alpha
+    switch (mat.alphaMode) {
+      case fastgltf::AlphaMode::Opaque:
+        info.alphaMode = 0;
+        break;
+      case fastgltf::AlphaMode::Mask:
+        info.alphaMode = 1;
+        break;
+      case fastgltf::AlphaMode::Blend:
+        info.alphaMode = 2;
+        break;
+    }
+    info.alphaCutoff = mat.alphaCutoff;
+    info.doubleSided = mat.doubleSided;
+
+    // Base PBR textures
+    info.baseColorTexture = texRef(mat.pbrData.baseColorTexture);
+    info.metallicRoughnessTexture =
+        texRef(mat.pbrData.metallicRoughnessTexture);
+    info.emissiveTexture = texRef(mat.emissiveTexture);
+
+    if (mat.normalTexture.has_value()) {
+      if (auto p = getImagePath(mat.normalTexture->textureIndex))
+        info.normalTexture = GltfTextureRef{*p};
+    }
+    if (mat.occlusionTexture.has_value()) {
+      if (auto p = getImagePath(mat.occlusionTexture->textureIndex))
+        info.occlusionTexture = GltfTextureRef{*p};
+      info.occlusionStrength = mat.occlusionTexture->strength;
+    }
+
+    // Base PBR factors
+    const auto& bc = mat.pbrData.baseColorFactor;
+    info.baseColorFactor = {bc[0], bc[1], bc[2], bc[3]};
+    info.metallicFactor = mat.pbrData.metallicFactor;
+    info.roughnessFactor = mat.pbrData.roughnessFactor;
+
+    // Emissive: bake emissiveStrength into the factor
+    // (KHR_materials_emissive_strength)
+    const auto& em = mat.emissiveFactor;
+    info.emissiveFactor = glm::vec3{em[0], em[1], em[2]} * mat.emissiveStrength;
+
+    // KHR_materials_ior
+    info.ior = mat.ior;
+
+    // KHR_materials_specular
+    if (mat.specular) {
+      info.specularFactor = mat.specular->specularFactor;
+      const auto& sc = mat.specular->specularColorFactor;
+      info.specularColorFactor = {sc[0], sc[1], sc[2]};
+      info.specularTexture = texRef(mat.specular->specularTexture);
+      info.specularColorTexture = texRef(mat.specular->specularColorTexture);
+    }
+
+    // KHR_materials_transmission
+    if (mat.transmission) {
+      info.transmissionFactor = mat.transmission->transmissionFactor;
+    }
+
+    // KHR_materials_volume
+    if (mat.volume) {
+      info.thicknessFactor = mat.volume->thicknessFactor;
+      info.attenuationDistance = mat.volume->attenuationDistance;
+      const auto& ac = mat.volume->attenuationColor;
+      info.attenuationColor = {ac[0], ac[1], ac[2]};
+      info.thicknessTexture = texRef(mat.volume->thicknessTexture);
+    }
+
+    // KHR_materials_clearcoat
+    if (mat.clearcoat) {
+      info.clearcoatFactor = mat.clearcoat->clearcoatFactor;
+      info.clearcoatRoughnessFactor = mat.clearcoat->clearcoatRoughnessFactor;
+      info.clearcoatTexture = texRef(mat.clearcoat->clearcoatTexture);
+      info.clearcoatRoughnessTexture =
+          texRef(mat.clearcoat->clearcoatRoughnessTexture);
+      if (mat.clearcoat->clearcoatNormalTexture.has_value()) {
+        if (auto p = getImagePath(
+                mat.clearcoat->clearcoatNormalTexture->textureIndex))
+          info.clearcoatNormalTexture = GltfTextureRef{*p};
+      }
+    }
+
+    // KHR_materials_sheen
+    if (mat.sheen) {
+      const auto& sc = mat.sheen->sheenColorFactor;
+      info.sheenColorFactor = {sc[0], sc[1], sc[2]};
+      info.sheenRoughnessFactor = mat.sheen->sheenRoughnessFactor;
+      info.sheenColorTexture = texRef(mat.sheen->sheenColorTexture);
+      info.sheenRoughnessTexture = texRef(mat.sheen->sheenRoughnessTexture);
+    }
+
+    // KHR_materials_anisotropy
+    if (mat.anisotropy) {
+      info.anisotropyStrength = mat.anisotropy->anisotropyStrength;
+      const float angle = mat.anisotropy->anisotropyRotation;
+      info.anisotropyRotation = {std::cos(angle), std::sin(angle)};
+      info.anisotropyTexture = texRef(mat.anisotropy->anisotropyTexture);
+    }
+
+    // KHR_materials_iridescence
+    if (mat.iridescence) {
+      info.iridescenceFactor = mat.iridescence->iridescenceFactor;
+      info.iridescenceIor = mat.iridescence->iridescenceIor;
+      info.iridescenceThicknessMin =
+          mat.iridescence->iridescenceThicknessMinimum;
+      info.iridescenceThicknessMax =
+          mat.iridescence->iridescenceThicknessMaximum;
+      info.iridescenceTexture = texRef(mat.iridescence->iridescenceTexture);
+      info.iridescenceThicknessTexture =
+          texRef(mat.iridescence->iridescenceThicknessTexture);
+    }
+
+    asset_->gltfMaterials.push_back(std::move(info));
+  }
 }
 
 void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {

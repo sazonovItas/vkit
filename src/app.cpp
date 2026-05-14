@@ -19,9 +19,9 @@
 #include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
+#include "vkit/imgui/windows/ge/node/fractal_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
-#include "vkit/imgui/windows/ge/node/fractal_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/pattern_generator_ui.hpp"
@@ -70,6 +70,97 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
       std::make_unique<imgui::windows::ge::PrincipledBSDFNodeUI>());
   registry.registerUI<workflow::node::mat::SlotOutputNode>(
       std::make_unique<imgui::windows::ge::SlotOutputNodeUI>());
+}
+
+void applyBlenderStyle() {
+  ImGuiStyle& s = ImGui::GetStyle();
+
+  // Spacing / sizing
+  s.WindowPadding     = ImVec2(8.0F, 8.0F);
+  s.FramePadding      = ImVec2(5.0F, 3.0F);
+  s.CellPadding       = ImVec2(4.0F, 2.0F);
+  s.ItemSpacing       = ImVec2(6.0F, 4.0F);
+  s.ItemInnerSpacing  = ImVec2(4.0F, 4.0F);
+  s.IndentSpacing     = 14.0F;
+  s.ScrollbarSize     = 10.0F;
+  s.GrabMinSize       = 10.0F;
+
+  // Rounding
+  s.WindowRounding    = 4.0F;
+  s.ChildRounding     = 4.0F;
+  s.FrameRounding     = 3.0F;
+  s.PopupRounding     = 4.0F;
+  s.ScrollbarRounding = 3.0F;
+  s.GrabRounding      = 3.0F;
+  s.TabRounding       = 3.0F;
+
+  // Borders
+  s.WindowBorderSize  = 1.0F;
+  s.FrameBorderSize   = 0.0F;
+  s.PopupBorderSize   = 1.0F;
+  s.ChildBorderSize   = 1.0F;
+
+  // Blender accent: #1F7FC4
+  const ImVec4 kBlue      = ImVec4(0.122F, 0.498F, 0.769F, 1.00F);
+  const ImVec4 kBlueDim   = ImVec4(0.122F, 0.498F, 0.769F, 0.70F);
+  const ImVec4 kBlueFaint = ImVec4(0.122F, 0.498F, 0.769F, 0.35F);
+
+  ImVec4* c = s.Colors;
+  c[ImGuiCol_Text]                  = ImVec4(0.835F, 0.835F, 0.835F, 1.00F);
+  c[ImGuiCol_TextDisabled]          = ImVec4(0.400F, 0.400F, 0.400F, 1.00F);
+  c[ImGuiCol_WindowBg]              = ImVec4(0.153F, 0.153F, 0.153F, 1.00F);
+  c[ImGuiCol_ChildBg]               = ImVec4(0.153F, 0.153F, 0.153F, 1.00F);
+  c[ImGuiCol_PopupBg]               = ImVec4(0.180F, 0.180F, 0.180F, 1.00F);
+  c[ImGuiCol_Border]                = ImVec4(0.082F, 0.082F, 0.082F, 1.00F);
+  c[ImGuiCol_BorderShadow]          = ImVec4(0.00F,  0.00F,  0.00F,  0.00F);
+  c[ImGuiCol_FrameBg]               = ImVec4(0.220F, 0.220F, 0.220F, 1.00F);
+  c[ImGuiCol_FrameBgHovered]        = ImVec4(0.275F, 0.275F, 0.275F, 1.00F);
+  c[ImGuiCol_FrameBgActive]         = kBlue;
+  c[ImGuiCol_TitleBg]               = ImVec4(0.102F, 0.102F, 0.102F, 1.00F);
+  c[ImGuiCol_TitleBgActive]         = ImVec4(0.153F, 0.153F, 0.153F, 1.00F);
+  c[ImGuiCol_TitleBgCollapsed]      = ImVec4(0.102F, 0.102F, 0.102F, 1.00F);
+  c[ImGuiCol_MenuBarBg]             = ImVec4(0.188F, 0.188F, 0.188F, 1.00F);
+  c[ImGuiCol_ScrollbarBg]           = ImVec4(0.102F, 0.102F, 0.102F, 1.00F);
+  c[ImGuiCol_ScrollbarGrab]         = ImVec4(0.275F, 0.275F, 0.275F, 1.00F);
+  c[ImGuiCol_ScrollbarGrabHovered]  = ImVec4(0.345F, 0.345F, 0.345F, 1.00F);
+  c[ImGuiCol_ScrollbarGrabActive]   = kBlue;
+  c[ImGuiCol_CheckMark]             = kBlue;
+  c[ImGuiCol_SliderGrab]            = ImVec4(0.345F, 0.345F, 0.345F, 1.00F);
+  c[ImGuiCol_SliderGrabActive]      = kBlue;
+  c[ImGuiCol_Button]                = ImVec4(0.275F, 0.275F, 0.275F, 1.00F);
+  c[ImGuiCol_ButtonHovered]         = ImVec4(0.345F, 0.345F, 0.345F, 1.00F);
+  c[ImGuiCol_ButtonActive]          = kBlue;
+  c[ImGuiCol_Header]                = ImVec4(0.227F, 0.227F, 0.227F, 1.00F);
+  c[ImGuiCol_HeaderHovered]         = kBlueDim;
+  c[ImGuiCol_HeaderActive]          = kBlue;
+  c[ImGuiCol_Separator]             = ImVec4(0.082F, 0.082F, 0.082F, 1.00F);
+  c[ImGuiCol_SeparatorHovered]      = kBlueDim;
+  c[ImGuiCol_SeparatorActive]       = kBlue;
+  c[ImGuiCol_ResizeGrip]            = ImVec4(0.275F, 0.275F, 0.275F, 0.50F);
+  c[ImGuiCol_ResizeGripHovered]     = kBlueDim;
+  c[ImGuiCol_ResizeGripActive]      = kBlue;
+  c[ImGuiCol_Tab]                   = ImVec4(0.180F, 0.180F, 0.180F, 1.00F);
+  c[ImGuiCol_TabHovered]            = kBlueDim;
+  c[ImGuiCol_TabActive]             = ImVec4(0.227F, 0.227F, 0.227F, 1.00F);
+  c[ImGuiCol_TabUnfocused]          = ImVec4(0.153F, 0.153F, 0.153F, 1.00F);
+  c[ImGuiCol_TabUnfocusedActive]    = ImVec4(0.188F, 0.188F, 0.188F, 1.00F);
+  c[ImGuiCol_DockingPreview]        = kBlueDim;
+  c[ImGuiCol_DockingEmptyBg]        = ImVec4(0.082F, 0.082F, 0.082F, 1.00F);
+  c[ImGuiCol_PlotLines]             = ImVec4(0.610F, 0.610F, 0.610F, 1.00F);
+  c[ImGuiCol_PlotLinesHovered]      = kBlue;
+  c[ImGuiCol_PlotHistogram]         = ImVec4(0.800F, 0.600F, 0.000F, 1.00F);
+  c[ImGuiCol_PlotHistogramHovered]  = ImVec4(1.000F, 0.700F, 0.000F, 1.00F);
+  c[ImGuiCol_TableHeaderBg]         = ImVec4(0.220F, 0.220F, 0.220F, 1.00F);
+  c[ImGuiCol_TableBorderStrong]     = ImVec4(0.082F, 0.082F, 0.082F, 1.00F);
+  c[ImGuiCol_TableBorderLight]      = ImVec4(0.153F, 0.153F, 0.153F, 1.00F);
+  c[ImGuiCol_TableRowBg]            = ImVec4(0.00F,  0.00F,  0.00F,  0.00F);
+  c[ImGuiCol_TableRowBgAlt]         = ImVec4(1.00F,  1.00F,  1.00F,  0.04F);
+  c[ImGuiCol_TextSelectedBg]        = kBlueFaint;
+  c[ImGuiCol_DragDropTarget]        = ImVec4(1.00F,  1.00F,  0.00F,  0.90F);
+  c[ImGuiCol_NavHighlight]          = kBlue;
+  c[ImGuiCol_NavWindowingHighlight] = ImVec4(1.00F,  1.00F,  1.00F,  0.70F);
+  c[ImGuiCol_NavWindowingDimBg]     = ImVec4(0.00F,  0.00F,  0.00F,  0.50F);
+  c[ImGuiCol_ModalWindowDimBg]      = ImVec4(0.00F,  0.00F,  0.00F,  0.50F);
 }
 
 };  // namespace
@@ -146,6 +237,13 @@ void App::initVulkan() {
     sys_.imageAvailableSemaphores.push_back(
         sys_.device->get().createSemaphoreUnique({}));
   }
+
+  const auto image_count = sys_.swapchain->getImageCount();
+  sys_.renderFinishedSemaphores.reserve(image_count);
+  for (std::uint32_t i = 0; i < image_count; ++i) {
+    sys_.renderFinishedSemaphores.push_back(
+        sys_.device->get().createSemaphoreUnique({}));
+  }
 }
 
 void App::initCore() {
@@ -218,6 +316,8 @@ void App::initImguiCore() {
   ui_.host = std::make_unique<imgui::WindowImguiHost>(
       sys_.window.get(), *ui_.renderer, "vkit", "");
 
+  applyBlenderStyle();
+
   ui_.host->setDockLayoutCallback([](vkit::imgui::WindowImguiHost& host,
                                      ImVec2 availableSize) {
     ImGuiID root_id = host.getRootDockId();
@@ -278,10 +378,10 @@ void App::initCompute() {
 
   auto& d = *engine_.computeOutputDispatcher;
   auto dev = sys_.device->get();
-  d.registerPipeline(
-      "fractal", dev,
-      shaders::shaderPath(shaders::kProceduralFractalShaderPath),
-      BL::kGenerator, sizeof(core::events::FractalPushConstants));
+  d.registerPipeline("fractal", dev,
+                     shaders::shaderPath(shaders::kProceduralFractalShaderPath),
+                     BL::kGenerator,
+                     sizeof(core::events::FractalPushConstants));
   d.registerPipeline("noise", dev,
                      shaders::shaderPath(shaders::kProceduralNoiceShaderPath),
                      BL::kGenerator, sizeof(core::events::NoisePushConstants));
@@ -453,11 +553,16 @@ void App::initImguiWindows() {
       std::make_shared<imgui::windows::ge::GraphNodeInspectorWindow>(
           "Graph Node Inspector", ui_.graphWindow.get());
 
-  ui_.configWindow = std::make_shared<imgui::windows::ConfigurationWindow>(
-      "Configuration", engine_.assetController.get(),
-      engine_.environmentController.get(), rSys_.animator.get(),
-      &ui_.enableSkinning, engine_.materialManager.get(),
-      &ui_.previewMaterialSlot);
+  ui_.configWindow =
+      std::make_shared<imgui::windows::ConfigurationWindow>("Configuration");
+  ui_.configWindow->setAssetController(engine_.assetController.get());
+  ui_.configWindow->setEnvironmentController(
+      engine_.environmentController.get());
+  ui_.configWindow->setAnimator(rSys_.animator.get());
+  ui_.configWindow->setEnableSkinning(&ui_.enableSkinning);
+  ui_.configWindow->setMaterialPreviewData(engine_.materialManager.get(),
+                                           &ui_.previewMaterialSlot);
+  ui_.configWindow->setWorkflowController(engine_.workflowController.get());
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -488,23 +593,37 @@ void App::ensureViewportSize(renderer::Viewport& viewport,
   const auto target_width = std::max(1U, width);
   const auto target_height = std::max(1U, height);
 
-  viewport.ensureSize(sys_.device->get(), sys_.device->allocator, target_width,
-                      target_height);
+  const bool resized = viewport.ensureSize(sys_.device->get(),
+                                           sys_.device->allocator,
+                                           target_width, target_height);
 
-  if (viewport.colorTargets.size() > displayTargetIndex &&
+  // Only update the descriptor set when the view was recreated or first created.
+  // Updating every frame races against in-flight command buffers that hold the set.
+  if ((resized || textureId == 0) &&
+      viewport.colorTargets.size() > displayTargetIndex &&
       viewport.colorTargets[displayTargetIndex].view) {
     textureId = ui_.renderer->updateOrRegisterTexture(
         textureId, *viewport.colorTargets[displayTargetIndex].view);
   }
 }
 
-void App::recreateSwapchain() const {
+void App::recreateSwapchain() {
   auto width = sys_.window->getWidth();
   auto height = sys_.window->getHeight();
 
   if (width > 0 && height > 0) {
     sys_.device->get().waitIdle();
     sys_.swapchain->recreate(glm::ivec2{width, height});
+
+    const auto image_count = sys_.swapchain->getImageCount();
+    if (image_count != sys_.renderFinishedSemaphores.size()) {
+      sys_.renderFinishedSemaphores.clear();
+      sys_.renderFinishedSemaphores.reserve(image_count);
+      for (std::uint32_t i = 0; i < image_count; ++i) {
+        sys_.renderFinishedSemaphores.push_back(
+            sys_.device->get().createSemaphoreUnique({}));
+      }
+    }
   }
 }
 
@@ -515,8 +634,6 @@ void App::mainLoop() {
   auto swapchain_needs_recreation = false;
 
   while (!sys_.window->shouldClose()) {
-    engine_.update();
-
     sys_.window->pollEvents();
 
     auto current_time = std::chrono::steady_clock::now();
@@ -540,6 +657,7 @@ void App::mainLoop() {
 
     sys_.renderer->beginFrame(currentFrame_);
 
+    engine_.update();
     engine_.assetManager->processGC();
     engine_.textureManager->processGC();
 
@@ -660,8 +778,10 @@ void App::mainLoop() {
         .add<renderer::rp::EndSwapchainPass>(
             sys_.swapchain->getImage(image_index));
 
+    auto& render_finished = *sys_.renderFinishedSemaphores[image_index];
     auto result = sys_.renderer->submit(
-        currentFrame_, task, *sys_.imageAvailableSemaphores[currentFrame_]);
+        currentFrame_, task, *sys_.imageAvailableSemaphores[currentFrame_],
+        render_finished);
 
     const auto presented =
         sys_.swapchain->present(image_index, result.renderFinishedSemaphore);

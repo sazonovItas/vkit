@@ -31,7 +31,6 @@ class Renderer {
  public:
   struct Frame {
     vk::UniqueCommandBuffer cb;
-    vk::UniqueSemaphore renderFinished;
     vk::UniqueFence inFlightFence;
   };
 
@@ -50,6 +49,7 @@ class Renderer {
   [[nodiscard]] auto submit(
       std::uint32_t frameIndex, const RenderTask& task,
       vk::Semaphore waitSemaphore = nullptr,
+      vk::Semaphore signalSemaphore = nullptr,
       vk::PipelineStageFlags wait_stage =
           vk::PipelineStageFlagBits::eColorAttachmentOutput) -> RenderResult;
 

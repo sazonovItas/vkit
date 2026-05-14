@@ -44,14 +44,14 @@ void NormalMapNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 
   PinUI::DrawInput(n->getInputs()[0].get(), "Height Map",
                    style::colors::kPinColorYellow);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Normal (F32)",
                     style::colors::kPinColorCyan, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawOutput(n->getOutputs()[1].get(), "Normal (Color)",
                     style::colors::kPinColorYellow, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImNodes::EndNode();
 

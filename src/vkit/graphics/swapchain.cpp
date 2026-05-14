@@ -55,7 +55,7 @@ auto getImageExtent(const vk::SurfaceCapabilitiesKHR& caps,
                      caps.minImageExtent.height, caps.maxImageExtent.height)};
 }
 
-auto getImageCount(const vk::SurfaceCapabilitiesKHR& capabilities,
+auto chooseImageCount(const vk::SurfaceCapabilitiesKHR& capabilities,
                    std::uint32_t minImageCount) -> std::uint32_t {
   std::uint32_t max = capabilities.maxImageCount;
   if (max == 0) {
@@ -107,8 +107,10 @@ auto Swapchain::recreate(const glm::ivec2 size) -> bool {
 
 auto Swapchain::getExtent() const -> vk::Extent2D { return ci_.imageExtent; }
 
-auto Swapchain::getFormat() const -> vk::Format {
-  return ci_.imageFormat;
+auto Swapchain::getFormat() const -> vk::Format { return ci_.imageFormat; }
+
+auto Swapchain::getImageCount() const -> std::uint32_t {
+  return static_cast<std::uint32_t>(images_.size());
 }
 
 auto Swapchain::acquireNextImage(vk::Semaphore signal)
@@ -195,7 +197,7 @@ auto Swapchain::createSwapchainCreateInfo(const vk::SurfaceKHR& surface,
 
   auto capabilities = device_.physicalDevice.getSurfaceCapabilitiesKHR(surface);
 
-  auto image_count = getImageCount(capabilities, minImageCount);
+  auto image_count = chooseImageCount(capabilities, minImageCount);
 
   vk::SwapchainCreateInfoKHR ci{};
   ci.setSurface(surface)

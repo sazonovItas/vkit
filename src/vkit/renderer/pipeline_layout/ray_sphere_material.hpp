@@ -15,6 +15,7 @@ struct RaySphereMaterialPipelineLayout final : graphics::PipelineLayout {
     glm::mat4 model;
     std::uint32_t materialType;
     std::uint32_t materialIndex;
+    std::uint32_t enableDepthWrite;
   };
 
   static constexpr auto kPushConstantRange = vk::PushConstantRange{

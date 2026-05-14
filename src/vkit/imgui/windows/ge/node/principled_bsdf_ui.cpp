@@ -47,47 +47,47 @@ void PrincipledBSDFNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   auto color_tex = style::colors::kPinColorYellow;
 
   PinUI::DrawInput(inputs[0].get(), "Base Color", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[1].get(), "Normal Map", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[2].get(), "Met/Rough", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[3].get(), "Emissive", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[4].get(), "Ambient Occlusion", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[5].get(), "Specular", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[6].get(), "Specular Color", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[7].get(), "Thickness", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[8].get(), "Clearcoat", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[9].get(), "Clearcoat Normal", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[10].get(), "Sheen Color", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[11].get(), "Sheen Roughness", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[12].get(), "Anisotropy", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawInput(inputs[13].get(), "Iridescence", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(inputs[14].get(), "Irid. Thickness", color_tex);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImGui::Dummy(ImVec2(node_width, 8.0F * zoom));
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Material", kPinColorMaterial,
                     node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImNodes::EndNode();
 

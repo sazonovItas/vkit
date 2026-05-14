@@ -9,6 +9,7 @@
 namespace vkit::controller {
 class AssetController;
 class EnvironmentController;
+class WorkflowController;
 };  // namespace vkit::controller
 
 namespace vkit::animation {
@@ -36,6 +37,8 @@ class ConfigurationWindow : public ImguiWindow {
   void setEnableSkinning(bool* enableSkinning);
   void setMaterialPreviewData(material::MaterialManager* matManager,
                               std::uint32_t* previewSlot);
+  void setWorkflowController(
+      controller::WorkflowController* workflowController);
 
  protected:
   void onDraw() override;
@@ -43,6 +46,7 @@ class ConfigurationWindow : public ImguiWindow {
  private:
   controller::AssetController* assetController_{nullptr};
   controller::EnvironmentController* envController_{nullptr};
+  controller::WorkflowController* workflowController_{nullptr};
 
   animation::Animator* animator_{nullptr};
   bool* enableSkinning_{nullptr};

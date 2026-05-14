@@ -10,9 +10,63 @@ GraphEditorWindow::GraphEditorWindow(const std::string_view name)
   ImNodes::StyleColorsDark();
 
   auto& style = ImNodes::GetStyle();
-  style.NodeCornerRounding = 4.0F;
-  style.PinCircleRadius = 5.0F;
-  style.LinkThickness = 6.0F;
+  style.NodeCornerRounding    = 4.0F;
+  style.NodePadding           = ImVec2(10.0F, 6.0F);
+  style.NodeBorderThickness   = 1.0F;
+  style.LinkThickness         = 2.5F;
+  style.LinkLineSegmentsPerLength = 0.1F;
+  style.LinkHoverDistance     = 8.0F;
+  style.PinCircleRadius       = 4.5F;
+  style.PinQuadSideLength     = 8.0F;
+  style.PinTriangleSideLength = 10.0F;
+  style.PinLineThickness      = 1.5F;
+  style.PinHoverRadius        = 8.0F;
+  style.PinOffset             = 0.0F;
+  style.MiniMapPadding        = ImVec2(8.0F, 8.0F);
+  style.MiniMapOffset         = ImVec2(4.0F, 4.0F);
+  style.Flags = ImNodesStyleFlags_GridLines | ImNodesStyleFlags_GridLinesPrimary;
+
+  auto col = [](float r, float g, float b, float a = 1.0F) -> unsigned int {
+    return IM_COL32(static_cast<int>(r * 255), static_cast<int>(g * 255),
+                    static_cast<int>(b * 255), static_cast<int>(a * 255));
+  };
+  unsigned int* c = style.Colors;
+  // Grid
+  c[ImNodesCol_GridBackground]         = col(0.098F, 0.098F, 0.098F);
+  c[ImNodesCol_GridLine]               = col(0.157F, 0.157F, 0.157F);
+  c[ImNodesCol_GridLinePrimary]        = col(0.110F, 0.110F, 0.110F);
+  // Node
+  c[ImNodesCol_NodeBackground]         = col(0.188F, 0.188F, 0.188F);
+  c[ImNodesCol_NodeBackgroundHovered]  = col(0.220F, 0.220F, 0.220F);
+  c[ImNodesCol_NodeBackgroundSelected] = col(0.220F, 0.220F, 0.220F);
+  c[ImNodesCol_NodeOutline]            = col(0.082F, 0.082F, 0.082F);
+  // Title bar
+  c[ImNodesCol_TitleBar]               = col(0.145F, 0.145F, 0.145F);
+  c[ImNodesCol_TitleBarHovered]        = col(0.188F, 0.188F, 0.188F);
+  c[ImNodesCol_TitleBarSelected]       = col(0.122F, 0.498F, 0.769F);
+  // Links
+  c[ImNodesCol_Link]                   = col(0.447F, 0.447F, 0.447F);
+  c[ImNodesCol_LinkHovered]            = col(0.122F, 0.498F, 0.769F);
+  c[ImNodesCol_LinkSelected]           = col(0.122F, 0.498F, 0.769F);
+  // Pins
+  c[ImNodesCol_Pin]                    = col(0.447F, 0.447F, 0.447F);
+  c[ImNodesCol_PinHovered]             = col(0.122F, 0.498F, 0.769F);
+  // Box select
+  c[ImNodesCol_BoxSelector]            = col(0.122F, 0.498F, 0.769F, 0.20F);
+  c[ImNodesCol_BoxSelectorOutline]     = col(0.122F, 0.498F, 0.769F, 0.80F);
+  // Mini-map
+  c[ImNodesCol_MiniMapBackground]          = col(0.118F, 0.118F, 0.118F, 0.80F);
+  c[ImNodesCol_MiniMapBackgroundHovered]   = col(0.118F, 0.118F, 0.118F, 0.95F);
+  c[ImNodesCol_MiniMapOutline]             = col(0.082F, 0.082F, 0.082F);
+  c[ImNodesCol_MiniMapOutlineHovered]      = col(0.122F, 0.498F, 0.769F);
+  c[ImNodesCol_MiniMapNodeBackground]      = col(0.188F, 0.188F, 0.188F);
+  c[ImNodesCol_MiniMapNodeBackgroundHovered]  = col(0.220F, 0.220F, 0.220F);
+  c[ImNodesCol_MiniMapNodeBackgroundSelected] = col(0.122F, 0.498F, 0.769F, 0.80F);
+  c[ImNodesCol_MiniMapNodeOutline]         = col(0.082F, 0.082F, 0.082F);
+  c[ImNodesCol_MiniMapLink]                = col(0.447F, 0.447F, 0.447F);
+  c[ImNodesCol_MiniMapLinkSelected]        = col(0.122F, 0.498F, 0.769F);
+  c[ImNodesCol_MiniMapCanvas]              = col(0.200F, 0.200F, 0.200F, 0.80F);
+  c[ImNodesCol_MiniMapCanvasOutline]       = col(0.082F, 0.082F, 0.082F);
 }
 
 GraphEditorWindow::~GraphEditorWindow() { ImNodes::DestroyContext(); }
@@ -41,6 +95,10 @@ void GraphEditorWindow::onDraw() {
   ImGui::Spacing();
 
   ImNodes::BeginNodeEditor();
+
+  for (const auto& p : controller_->drainPendingPositions()) {
+    ImNodes::SetNodeEditorSpacePos(p.nodeId, ImVec2{p.x, p.y});
+  }
 
   if (open_create_menu || (ImNodes::IsEditorHovered() &&
                            ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {

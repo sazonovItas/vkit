@@ -40,6 +40,11 @@ float G_SchlickGGX(float NdotV, float NdotL, float roughness) {
     return g1 * g2;
 }
 
+// Neubelt and Pettineo 2013 visibility for Charlie (sheen) NDF
+float G_Ashikhmin(float NdotL, float NdotV) {
+    return 1.0 / (4.0 * (NdotL + NdotV - NdotL * NdotV));
+}
+
 vec3 F_Schlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp01(1.0 - cosTheta), 5.0);
 }

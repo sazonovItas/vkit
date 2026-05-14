@@ -40,10 +40,11 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint materialType;
     uint materialIndex;
+    uint enableDepthWrite;
 } pcs;
 
 void main() {
-    SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
+    SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj, pcs.enableDepthWrite);
 
     vec3 V = normalize(camera.position - hit.worldPos);
     vec3 L = V;

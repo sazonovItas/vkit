@@ -3,6 +3,16 @@
 
 #include "common/environment.glsl"
 
+// ACES filmic tonemapping (Hill 2015 approximation)
+vec3 tonemapACES(vec3 x) {
+    const float a = 2.51;
+    const float b = 0.03;
+    const float c = 2.43;
+    const float d = 0.59;
+    const float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 #define DIFFUSE_MATERIAL          1
 #define DIFFUSE_SPECULAR_MATERIAL 2
 #define PRINCIPLED_MATERIAL       3
@@ -91,6 +101,7 @@ vec4 evaluatePrincipledBSDF(PrincipledBSDFData mat, vec3 worldPos, vec2 uv, mat3
     if (s.albedo.a < 0.01) discard;
 
     vec3 finalColor = evaluateUberLighting(s, L, baseTBN, mat, envParams);
+    finalColor = tonemapACES(finalColor);
     return vec4(finalColor, s.albedo.a);
 }
 

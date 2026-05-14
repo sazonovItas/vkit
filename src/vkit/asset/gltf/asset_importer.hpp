@@ -34,6 +34,8 @@ class AssetImporter {
   void resetState();
   void loadBuffers(const fastgltf::Asset& asset,
                    const std::filesystem::path& directory);
+  void loadMaterials(const fastgltf::Asset& asset,
+                     const std::filesystem::path& directory);
   void loadMeshes(const fastgltf::Asset& asset);
   void loadNodes(const fastgltf::Asset& asset);
   void loadSkins(const fastgltf::Asset& asset);

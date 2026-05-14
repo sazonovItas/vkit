@@ -9,6 +9,7 @@
 #include "vkit/animation/animator.hpp"
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/controller/workflow.hpp"
 #include "vkit/material/manager.hpp"
 
 namespace vkit::imgui::windows {
@@ -50,6 +51,11 @@ void ConfigurationWindow::setMaterialPreviewData(
     material::MaterialManager* matManager, std::uint32_t* previewSlot) {
   matManager_ = matManager;
   previewSlot_ = previewSlot;
+}
+
+void ConfigurationWindow::setWorkflowController(
+    controller::WorkflowController* workflowController) {
+  workflowController_ = workflowController;
 }
 
 void ConfigurationWindow::onDraw() {
@@ -128,6 +134,25 @@ void ConfigurationWindow::drawAssetManagementSection() {
         if (ImGui::InputText("Name", assetNameBuffer_,
                              sizeof(assetNameBuffer_))) {
           current_asset->setName(assetNameBuffer_);
+        }
+
+        if (workflowController_ &&
+            !current_asset->gltfMaterials.empty()) {
+          ImGui::Spacing();
+          ImGui::Separator();
+          ImGui::Spacing();
+
+          const int matCount =
+              static_cast<int>(current_asset->gltfMaterials.size());
+          ImGui::TextDisabled("%d material(s) available for import",
+                              matCount);
+          ImGui::Spacing();
+
+          if (ImGui::Button("Import Materials to Workflow",
+                            ImVec2(-FLT_MIN, 0))) {
+            workflowController_->importAssetMaterials(
+                current_asset->gltfMaterials);
+          }
         }
 
         ImGui::Spacing();

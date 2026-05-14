@@ -24,12 +24,10 @@ Renderer::Renderer(vk::Device device, vk::Queue graphicsQueue,
       .setCommandBufferCount(framesInFlight_);
   auto command_buffers = device_.allocateCommandBuffersUnique(alloc_info);
 
-  auto semaphore_info = vk::SemaphoreCreateInfo{};
   auto fence_info = vk::FenceCreateInfo{vk::FenceCreateFlagBits::eSignaled};
 
   for (std::uint32_t i = 0; i < framesInFlight_; i++) {
     frames_[i].cb = std::move(command_buffers[i]);
-    frames_[i].renderFinished = device_.createSemaphoreUnique(semaphore_info);
     frames_[i].inFlightFence = device_.createFenceUnique(fence_info);
   }
 }
@@ -51,7 +49,7 @@ void Renderer::beginFrame(std::uint32_t frameIndex) {
 }
 
 auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
-                      vk::Semaphore waitSemaphore,
+                      vk::Semaphore waitSemaphore, vk::Semaphore signalSemaphore,
                       vk::PipelineStageFlags wait_stage) -> RenderResult {
   assert(frameIndex < framesInFlight_ && "Renderer: frameIndex out of bounds!");
   assert(isFrameStarted_ && "Must call beginFrame() before calling submit()!");
@@ -60,9 +58,7 @@ auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
 
   if (task.commands.empty()) {
     isFrameStarted_ = false;
-    return {
-        .renderFinishedSemaphore = nullptr,
-    };
+    return {.renderFinishedSemaphore = nullptr};
   }
 
   device_.resetFences(frame.inFlightFence.get());
@@ -80,8 +76,11 @@ auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
   cb.end();
 
   auto submit_info = vk::SubmitInfo{};
-  submit_info.setCommandBuffers(cb).setSignalSemaphores(
-      frame.renderFinished.get());
+  submit_info.setCommandBuffers(cb);
+
+  if (signalSemaphore) {
+    submit_info.setSignalSemaphores(signalSemaphore);
+  }
 
   if (waitSemaphore) {
     submit_info.setWaitSemaphores(waitSemaphore)
@@ -92,9 +91,7 @@ auto Renderer::submit(std::uint32_t frameIndex, const RenderTask& task,
 
   isFrameStarted_ = false;
 
-  return RenderResult{
-      .renderFinishedSemaphore = frame.renderFinished.get(),
-  };
+  return RenderResult{.renderFinishedSemaphore = signalSemaphore};
 }
 
 };  // namespace vkit::renderer
