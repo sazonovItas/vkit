@@ -47,7 +47,7 @@ void SlotOutputNodeUI::drawCanvas(workflow::WorkflowNode* node) {
   ImGui::Dummy(ImVec2(node_width, 2.0F * zoom));
 
   PinUI::DrawInput(n->getInputs()[0].get(), "Material", kPinColorMaterial);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImNodes::EndNode();
 

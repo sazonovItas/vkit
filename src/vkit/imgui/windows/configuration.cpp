@@ -9,6 +9,7 @@
 #include "vkit/animation/animator.hpp"
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/controller/workflow.hpp"
 #include "vkit/material/manager.hpp"
 
 namespace vkit::imgui::windows {
@@ -46,10 +47,17 @@ void ConfigurationWindow::setEnableSkinning(bool* enableSkinning) {
   enableSkinning_ = enableSkinning;
 }
 
+void ConfigurationWindow::setExposure(float* exposure) { exposure_ = exposure; }
+
 void ConfigurationWindow::setMaterialPreviewData(
     material::MaterialManager* matManager, std::uint32_t* previewSlot) {
   matManager_ = matManager;
   previewSlot_ = previewSlot;
+}
+
+void ConfigurationWindow::setWorkflowController(
+    controller::WorkflowController* workflowController) {
+  workflowController_ = workflowController;
 }
 
 void ConfigurationWindow::onDraw() {
@@ -57,6 +65,7 @@ void ConfigurationWindow::onDraw() {
                     ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
   drawAssetManagementSection();
+  drawSceneParamsConfigurationSection();
   drawAnimationManagementSection();
   drawPrimitiveMaterialSection();
   drawEnvironmentManagementSection();
@@ -130,6 +139,23 @@ void ConfigurationWindow::drawAssetManagementSection() {
           current_asset->setName(assetNameBuffer_);
         }
 
+        if (workflowController_ && !current_asset->gltfMaterials.empty()) {
+          ImGui::Spacing();
+          ImGui::Separator();
+          ImGui::Spacing();
+
+          const int mat_count =
+              static_cast<int>(current_asset->gltfMaterials.size());
+          ImGui::TextDisabled("%d material(s) available for import", mat_count);
+          ImGui::Spacing();
+
+          if (ImGui::Button("Import Materials to Workflow",
+                            ImVec2(-FLT_MIN, 0))) {
+            workflowController_->importAssetMaterials(
+                current_asset->gltfMaterials);
+          }
+        }
+
         ImGui::Spacing();
 
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.6F, 0.2F, 0.2F, 1.0F));
@@ -150,6 +176,16 @@ void ConfigurationWindow::drawAssetManagementSection() {
     }
 
     ImGui::Spacing();
+  }
+}
+
+void ConfigurationWindow::drawSceneParamsConfigurationSection() {
+  if (!exposure_) return;
+
+  if (ImGui::CollapsingHeader("Scene Params")) {
+    ImGui::Spacing();
+
+    ImGui::SliderFloat("Exposure", exposure_, 0.1F, 10.0F);
   }
 }
 

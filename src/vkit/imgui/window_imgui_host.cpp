@@ -36,6 +36,7 @@ void WindowImguiHost::setStatusBarCallback(StatusBarCallback callback) {
   statusBarCallback_ = std::move(callback);
 }
 
+
 void WindowImguiHost::beginFrame(std::uint32_t width, std::uint32_t height,
                                  float dt) {
   if (width < 1 || height < 1) {

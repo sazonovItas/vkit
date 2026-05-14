@@ -54,7 +54,7 @@ void ImguiWindow::render() {
   ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.0F, 0.0F, 0.0F, 0.0F));
 
   const auto not_collapsed = ImGui::Begin(
-      title_.c_str(), &isVisible_, getFlags() | ImGuiWindowFlags_NoTitleBar);
+      title_.c_str(), nullptr, getFlags() | ImGuiWindowFlags_NoTitleBar);
 
   ImGui::PopStyleColor(2);
   ImGui::PopStyleVar(1);
@@ -66,7 +66,7 @@ void ImguiWindow::render() {
     ImGui::PushStyleColor(ImGuiCol_ChildBg,
                           ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
 
-    ImVec4 active_border = ImVec4(0.2F, 0.5F, 0.9F, 1.0F);
+    ImVec4 active_border = ImVec4(0.122F, 0.498F, 0.769F, 1.0F);
     ImVec4 inactive_border = ImGui::GetStyle().Colors[ImGuiCol_Border];
     ImGui::PushStyleColor(ImGuiCol_Border,
                           isFocused_ ? active_border : inactive_border);

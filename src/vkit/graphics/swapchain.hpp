@@ -17,6 +17,7 @@ class Swapchain {
 
   [[nodiscard]] auto getExtent() const -> vk::Extent2D;
   [[nodiscard]] auto getFormat() const -> vk::Format;
+  [[nodiscard]] auto getImageCount() const -> std::uint32_t;
 
   [[nodiscard]] auto acquireNextImage(vk::Semaphore signal)
       -> std::optional<std::uint32_t>;

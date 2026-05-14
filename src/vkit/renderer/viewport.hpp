@@ -70,10 +70,10 @@ struct RenderTarget {
     return image.extent.height;
   }
 
-  void ensureSize(vk::Device device, vma::Allocator allocator,
+  bool ensureSize(vk::Device device, vma::Allocator allocator,
                   std::uint32_t width, std::uint32_t height) {
-    if (width == 0 || height == 0) return;
-    if (view && getWidth() == width && getHeight() == height) return;
+    if (width == 0 || height == 0) return false;
+    if (view && getWidth() == width && getHeight() == height) return false;
 
     vk::ImageCreateInfo info{};
     info.setImageType(vk::ImageType::e2D)
@@ -93,8 +93,11 @@ struct RenderTarget {
         .setFormat(format)
         .setSubresourceRange({aspectFlags, 0, 1, 0, 1});
 
+    // Destroy view before image: VkImageView must not outlive its VkImage.
+    view.reset();
     image = std::move(new_img);
     view = device.createImageViewUnique(view_info);
+    return true;
   }
 };
 
@@ -118,15 +121,17 @@ class Viewport {
     }
   }
 
-  void ensureSize(vk::Device device, vma::Allocator allocator,
+  bool ensureSize(vk::Device device, vma::Allocator allocator,
                   std::uint32_t width, std::uint32_t height) {
     extent = vk::Extent2D{width, height};
+    bool resized = false;
     for (auto& target : colorTargets) {
-      target.ensureSize(device, allocator, width, height);
+      resized |= target.ensureSize(device, allocator, width, height);
     }
     if (depthTarget) {
-      depthTarget->ensureSize(device, allocator, width, height);
+      resized |= depthTarget->ensureSize(device, allocator, width, height);
     }
+    return resized;
   }
 };
 

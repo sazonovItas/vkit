@@ -44,6 +44,7 @@ layout(push_constant) uniform PushConstants {
     uint enableSkinning;
     uint materialType;
     uint materialIndex;
+    float exposure;
 } pcs;
 
 void main() {
@@ -62,7 +63,7 @@ void main() {
         outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], inUV, baseTBN, V, L);
     }
     else if (pcs.materialType == PRINCIPLED_MATERIAL) {
-        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], inWorldPos, inUV, baseTBN, V, L, env.params);
+        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], inWorldPos, inUV, baseTBN, V, L, env.params, pcs.exposure);
     }
     else {
         outColor = evaluateFallback(inNormal, inTangent, inUV);

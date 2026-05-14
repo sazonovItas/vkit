@@ -9,6 +9,7 @@
 #include "vkit/asset/asset.hpp"
 #include "vkit/graphics/command.hpp"
 #include "vkit/material/manager.hpp"
+#include "vkit/material/material.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
 #include "vkit/renderer/pipeline_layout/ray_sphere_material.hpp"
 #include "vkit/renderer/pipeline_layout/skybox.hpp"
@@ -53,13 +54,14 @@ class DrawSkyboxCommand final : public graphics::Command {
 
 class DrawRaySphereCommand final : public graphics::Command {
  public:
-  DrawRaySphereCommand(
-      vk::Pipeline opaquePipeline,
-      vk::Pipeline transparentPipeline,  // <-- Added Transparent
-      vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
-      vk::DescriptorSet bindlessSet, vk::DescriptorSet materialSet,
-      glm::mat4 model, std::uint32_t materialSlot,
-      const material::MaterialManager* materialManager)
+  DrawRaySphereCommand(vk::Pipeline opaquePipeline,
+                       vk::Pipeline transparentPipeline,
+                       vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
+                       vk::DescriptorSet bindlessSet,
+                       vk::DescriptorSet materialSet, glm::mat4 model,
+                       std::uint32_t materialSlot,
+                       const material::MaterialManager* materialManager,
+                       float exposure)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
         layout_{layout},
@@ -68,13 +70,15 @@ class DrawRaySphereCommand final : public graphics::Command {
         materialSet_{materialSet},
         model_{model},
         materialSlot_{materialSlot},
-        materialManager_{materialManager} {}
+        materialManager_{materialManager},
+        exposure_{exposure} {}
 
   void record(vk::CommandBuffer cb) const override {
     std::uint32_t mat_type = 0;
     std::uint32_t mat_idx = 0;
     vk::Pipeline active_pipeline = opaquePipeline_;
 
+    auto enable_depth_write = true;
     if (materialManager_) {
       auto slot = materialManager_->getSlot(materialSlot_);
 
@@ -96,8 +100,11 @@ class DrawRaySphereCommand final : public graphics::Command {
 
     cb.bindPipeline(vk::PipelineBindPoint::eGraphics, active_pipeline);
 
-    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_};
+    std::array<vk::DescriptorSet, 3> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
@@ -105,6 +112,8 @@ class DrawRaySphereCommand final : public graphics::Command {
         .model = model_,
         .materialType = mat_type,
         .materialIndex = mat_idx,
+        .enableDepthWrite = static_cast<std::uint32_t>(enable_depth_write),
+        .exposure = exposure_,
     };
 
     cb.pushConstants(
@@ -124,6 +133,7 @@ class DrawRaySphereCommand final : public graphics::Command {
   glm::mat4 model_;
   std::uint32_t materialSlot_;
   const material::MaterialManager* materialManager_;
+  float exposure_;
 };
 
 class DrawAssetCommand final : public graphics::Command {
@@ -143,7 +153,7 @@ class DrawAssetCommand final : public graphics::Command {
                    vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
                    const asset::Asset* asset,
                    const material::MaterialManager* materialManager,
-                   bool enableSkinning)
+                   bool enableSkinning, float exposure)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
         layout_{layout},
@@ -153,7 +163,8 @@ class DrawAssetCommand final : public graphics::Command {
         primSet_{primSet},
         asset_{asset},
         materialManager_{materialManager},
-        enableSkinning_{enableSkinning} {}
+        enableSkinning_{enableSkinning},
+        exposure_{exposure} {}
 
   void record(vk::CommandBuffer cb) const override {
     if (!asset_ || asset_->scenes.empty() || !materialManager_) return;
@@ -200,6 +211,7 @@ class DrawAssetCommand final : public graphics::Command {
                       (node->skin != nullptr && enableSkinning_) ? 1U : 0U,
                   .materialType = final_mat_type,
                   .materialIndex = final_mat_index,
+                  .exposure = exposure_,
               }};
 
           if (alpha_mode == material::AlphaMode::kBlend) {
@@ -217,8 +229,12 @@ class DrawAssetCommand final : public graphics::Command {
         traverse_node(traverse_node, node.get());
     }
 
-    std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
-                                             materialSet_, primSet_};
+    std::array<vk::DescriptorSet, 4> sets = {
+        sceneSet_,
+        bindlessSet_,
+        materialSet_,
+        primSet_,
+    };
     cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
                           nullptr);
 
@@ -258,6 +274,7 @@ class DrawAssetCommand final : public graphics::Command {
   const asset::Asset* asset_;
   const material::MaterialManager* materialManager_;
   const bool enableSkinning_;
+  float exposure_;
 };
 
 };  // namespace vkit::renderer::cmd

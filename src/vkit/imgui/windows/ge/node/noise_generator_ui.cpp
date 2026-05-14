@@ -51,10 +51,10 @@ void NoiseGeneratorNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Image",
                     style::colors::kPinColorCyan, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawOutput(n->getOutputs()[1].get(), "Color",
                     style::colors::kPinColorYellow, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImNodes::EndNode();
 

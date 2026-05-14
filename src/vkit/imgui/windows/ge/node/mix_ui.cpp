@@ -44,20 +44,20 @@ void MixNodeUI::drawCanvas(workflow::WorkflowNode* node) {
 
   PinUI::DrawInput(n->getInputs()[0].get(), "Color A",
                    style::colors::kPinColorYellow);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(n->getInputs()[1].get(), "Color B",
                    style::colors::kPinColorYellow);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawInput(n->getInputs()[2].get(), "Factor (Mask)",
                    style::colors::kPinColorCyan);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   PinUI::DrawOutput(n->getOutputs()[0].get(), "Result (F32)",
                     style::colors::kPinColorCyan, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
   PinUI::DrawOutput(n->getOutputs()[1].get(), "Result (Color)",
                     style::colors::kPinColorYellow, node_width);
-  ImGui::Spacing();
+  ImGui::Dummy(ImVec2(0.0f, ImGui::GetStyle().ItemSpacing.y * zoom));
 
   ImNodes::EndNode();
   ImGui::PopStyleColor();

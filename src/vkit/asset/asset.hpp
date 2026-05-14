@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "vkit/animation/animation.hpp"
+#include "vkit/asset/material_info.hpp"
 #include "vkit/item/item.hpp"
 #include "vkit/item/storage_item.hpp"
 #include "vkit/primitive/storage.hpp"
@@ -30,6 +31,8 @@ class Asset : public Item<Asset>, public StorageItem {
   std::vector<std::shared_ptr<animation::Animation>> animations;
 
   primitive::PrimitiveStorage primitives;
+
+  std::vector<GltfMaterialInfo> gltfMaterials;
 
   std::vector<std::shared_ptr<scene::Scene>> scenes;
   std::int32_t activeSceneIndex{0};

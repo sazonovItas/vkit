@@ -16,6 +16,7 @@ struct PrimitiveMaterialPipelineLayout final : graphics::PipelineLayout {
     std::uint32_t enableSkinning;
     std::uint32_t materialType;
     std::uint32_t materialIndex;
+    float exposure;
   };
 
   static constexpr auto kPushConstantRange = vk::PushConstantRange{

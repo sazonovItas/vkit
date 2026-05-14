@@ -100,7 +100,7 @@ Surface buildSurface(vec3 hitPos, vec3 viewDir, mat3 baseTBN, vec2 uv, Principle
 
     s.albedo = mat.params.baseColorFactor;
     if (mat.textures.baseColorTexIdx >= 0) {
-        s.albedo *= sampleTexture2DLinear(uint(mat.textures.baseColorTexIdx), s.uv);
+        s.albedo.rgb *= sampleTexture2DLinear(uint(mat.textures.baseColorTexIdx), s.uv).rgb;
     }
 
     s.metallic = mat.params.metallicFactor;
@@ -240,8 +240,13 @@ vec3 applySheenLayer(Surface s, vec3 L, vec3 underlyingColor) {
     float dotNH = clamp01(dot(s.N, H));
     float dotNL = clamp01(dot(s.N, L));
 
-    vec3 sheenBrdf = s.sheenColor * D_Charlie(s.sheenRoughness, dotNH) * G_SchlickGGX(s.dotNV, dotNL, s.sheenRoughness) * dotNL;
-    return underlyingColor + sheenBrdf;
+    vec3 sheenBrdf = s.sheenColor * D_Charlie(s.sheenRoughness, dotNH) * G_Ashikhmin(dotNL, s.dotNV) * dotNL;
+
+    // Energy conservation: sheen peaks at grazing (low NdotV), so the base layer
+    // is attenuated proportionally there. Approximation avoids a precomputed sheen-E LUT.
+    float maxSheen = max(s.sheenColor.r, max(s.sheenColor.g, s.sheenColor.b));
+    float sheenScaling = 1.0 - maxSheen * (1.0 - s.dotNV * s.dotNV);
+    return underlyingColor * clamp(sheenScaling, 0.0, 1.0) + sheenBrdf;
 }
 
 vec3 applyClearcoatLayer(Surface s, vec3 L, mat3 baseTBN, vec3 underlyingColor, PrincipledBSDFData mat, EnvironmentParams env) {
@@ -276,7 +281,7 @@ vec3 applyClearcoatLayer(Surface s, vec3 L, mat3 baseTBN, vec3 underlyingColor, 
         vec3 prefCoat = mix(prefFloor, prefCeil, fract(rawL));
 
         vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(mat.params.clearcoatRoughnessFactor, dotNV_c)).rg;
-        coatIndirect = prefCoat * (coatF * brdf.x + brdf.y) * env.intensity;
+        coatIndirect = prefCoat * (coatF * brdf.x + coatFactor * brdf.y) * env.intensity;
     }
 
     return underlyingColor * (vec3(1.0) - coatF) + (coatDirect + coatIndirect);

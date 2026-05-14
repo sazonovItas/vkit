@@ -40,10 +40,12 @@ layout(push_constant) uniform PushConstants {
     mat4 model;
     uint materialType;
     uint materialIndex;
+    uint enableDepthWrite;
+    float exposure;
 } pcs;
 
 void main() {
-    SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj);
+    SphereHit hit = calculateSphereHit(inLocalPos, camera.position, pcs.model, camera.view, camera.proj, pcs.enableDepthWrite);
 
     vec3 V = normalize(camera.position - hit.worldPos);
     vec3 L = V;
@@ -56,7 +58,7 @@ void main() {
         outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], hit.uv, baseTBN, V, L);
     }
     else if (pcs.materialType == PRINCIPLED_MATERIAL) {
-        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params);
+        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params, pcs.exposure);
     }
     else {
         outColor = evaluateFallback(hit.normal, hit.tangent, hit.uv);

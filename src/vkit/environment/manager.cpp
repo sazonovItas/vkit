@@ -142,7 +142,7 @@ void EnvironmentManager::initializeGlobalBrdfLut() {
       vk::ImageLayout::eUndefined, vk::ImageLayout::eGeneral,
       vk::AccessFlags2{}, vk::AccessFlagBits2::eShaderWrite,
       vk::PipelineStageFlagBits2::eTopOfPipe,
-      vk::PipelineStageFlagBits2::eBottomOfPipe, 0, 1, 0, 1);
+      vk::PipelineStageFlagBits2::eComputeShader, 0, 1, 0, 1);
 
   task.add<compute::cmd::DispatchBrdfLutCommand>(
       *brdfLutPipeline_, brdfLutPipelineLayout_->get(), sets[0], kDim, kDim);
@@ -150,7 +150,7 @@ void EnvironmentManager::initializeGlobalBrdfLut() {
   task.add<compute::cmd::ComputeImageBarrierCommand>(
       static_cast<vk::Image>(graphics_tex->getImage().image),
       vk::ImageLayout::eGeneral, vk::ImageLayout::eShaderReadOnlyOptimal,
-      vk::AccessFlagBits2::eShaderWrite, vk::AccessFlagBits2::eShaderRead,
+      vk::AccessFlagBits2::eShaderWrite, vk::AccessFlagBits2::eNone,
       vk::PipelineStageFlagBits2::eComputeShader,
       vk::PipelineStageFlagBits2::eBottomOfPipe, 0, 1, 0, 1);
 

@@ -64,7 +64,7 @@ class App {
   void initImguiWindows();
 
   void mainLoop();
-  void recreateSwapchain() const;
+  void recreateSwapchain();
 
   static constexpr int kMaxFramesInFlight = 3;
   std::uint32_t currentFrame_{0};
@@ -80,6 +80,7 @@ class App {
     std::unique_ptr<graphics::Swapchain> swapchain;
     std::unique_ptr<renderer::Renderer> renderer;
     std::vector<vk::UniqueSemaphore> imageAvailableSemaphores;
+    std::vector<vk::UniqueSemaphore> renderFinishedSemaphores;
 
     std::unique_ptr<renderer::dsl::BindlessTextureSetLayout> bindlessSetLayout;
     vk::UniqueDescriptorPool bindlessPool;
@@ -131,6 +132,7 @@ class App {
     std::shared_ptr<imgui::windows::Viewer> sceneViewer;
 
     bool enableSkinning{false};
+    float exposure{1.5F};
     std::uint32_t previewMaterialSlot{0};
     std::shared_ptr<imgui::windows::Viewer> materialViewer;
 

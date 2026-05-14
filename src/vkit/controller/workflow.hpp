@@ -3,6 +3,8 @@
 #include <string>
 #include <vector>
 
+#include "vkit/asset/material_info.hpp"
+
 #include "vkit/compute/compute_output_dispatcher.hpp"
 #include "vkit/material/manager.hpp"
 #include "vkit/texture/manager.hpp"
@@ -21,6 +23,12 @@
 #include "vkit/workflow/workflow.hpp"
 
 namespace vkit::controller {
+
+struct NodePosition {
+  int nodeId;
+  float x;
+  float y;
+};
 
 class WorkflowController {
  public:
@@ -65,12 +73,18 @@ class WorkflowController {
     return workflow_;
   }
 
+  void importAssetMaterials(
+      const std::vector<asset::GltfMaterialInfo>& materials);
+  [[nodiscard]] auto drainPendingPositions() -> std::vector<NodePosition>;
+
  private:
   workflow::Workflow* workflow_{nullptr};
   texture::TextureManager* textureManager_{nullptr};
   material::MaterialManager* materialManager_{nullptr};
   workflow::ExecutionContext* ctx_{nullptr};
   compute::ComputeOutputDispatcher* dispatcher_{nullptr};
+
+  std::vector<NodePosition> pendingPositions_;
 };
 
 }  // namespace vkit::controller
