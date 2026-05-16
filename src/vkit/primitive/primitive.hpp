@@ -65,6 +65,8 @@ class Primitive : public StorageItem {
   PolygonMode polygonMode{PolygonMode::eFill};
   DevicePrimitiveAttributes attrs;
 
+  bool visible{true};
+
   [[nodiscard]] auto getMaterialSlot() const -> std::uint32_t {
     return materialSlot_;
   }

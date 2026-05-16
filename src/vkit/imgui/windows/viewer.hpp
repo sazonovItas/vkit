@@ -30,6 +30,11 @@ class Viewer : public ImguiWindow {
   [[nodiscard]] auto getHeight() const -> std::uint32_t;
   [[nodiscard]] auto toContent(glm::vec2 positionInRoot) const -> glm::vec2;
 
+  [[nodiscard]] auto getContentX() const -> float { return contentRectX_; }
+  [[nodiscard]] auto getContentY() const -> float { return contentRectY_; }
+  [[nodiscard]] auto getContentWidth() const -> float { return contentRectWidth_; }
+  [[nodiscard]] auto getContentHeight() const -> float { return contentRectHeight_; }
+
  protected:
   void onBegin() override;
   void onEnd() override;

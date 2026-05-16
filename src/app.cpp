@@ -1,5 +1,6 @@
 #include "app.hpp"
 
+#include <ImGuizmo.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -8,6 +9,7 @@
 
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <memory>
 #include <span>
 
@@ -468,12 +470,7 @@ void App::initViewports() {
   scene_.sceneCamera = std::make_shared<scene::Camera>("Scene Camera");
   scene_.sceneCamera->setPosition(glm::vec3(0.0F, 2.0F, 5.0F));
 
-  // Default camera-attached point light (position updated every frame).
-  ui_.cameraLight.type = static_cast<int>(renderer::types::LightType::kPoint);
-  ui_.cameraLight.color = {1.0F, 1.0F, 1.0F};
-  ui_.cameraLight.intensity = 1.5F;
-  ui_.cameraLight.range = 25.0F;
-  ui_.cameraLight.castsShadows = 0;
+  ui_.sceneController = std::make_unique<controller::SceneController>();
 
   scene_.materialCamera = std::make_shared<scene::Camera>("Material Camera");
   scene_.materialController.target = glm::vec3(0.0F, 0.0F, 0.0F);
@@ -491,7 +488,11 @@ void App::initViewports() {
   ui_.sceneViewer->setOnManipulate(
       [this](imgui::windows::Viewer& viewer) mutable {
         auto& io = ImGui::GetIO();
-        if (viewer.isHovered() && viewer.isFocused()) {
+
+        // Block camera movement when ImGuizmo is being used
+        const bool guizmo_using = ImGuizmo::IsUsing();
+
+        if (!guizmo_using && viewer.isHovered() && viewer.isFocused()) {
           glm::vec3 local_dir{0.0F, 0.0F, 0.0F};
           if (ImGui::IsKeyDown(ImGuiKey_W)) local_dir.z += 1.0F;
           if (ImGui::IsKeyDown(ImGuiKey_S)) local_dir.z -= 1.0F;
@@ -510,7 +511,8 @@ void App::initViewports() {
           }
         }
 
-        if (viewer.isHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        if (!guizmo_using && viewer.isHovered() &&
+            ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
           scene_.sceneController.processMouseMovement(io.MouseDelta.x,
                                                       io.MouseDelta.y);
         }
@@ -520,6 +522,182 @@ void App::initViewports() {
               scene_.sceneController.movementSpeed + (io.MouseWheel * 2.0F);
           scene_.sceneController.setMovementSpeed(std::max(0.1F, new_speed));
         }
+
+        // --- N/T/R/S mode buttons overlay ---
+        auto& sc = *ui_.sceneController;
+        const auto gizmo_op = sc.getGizmoOp();
+        const ImVec4 active_col{0.122F, 0.498F, 0.769F, 1.0F};
+
+        ImGui::SetCursorScreenPos(
+            ImVec2(viewer.getContentX() + 8.0F, viewer.getContentY() + 8.0F));
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0F, 2.0F));
+        ImGui::PushID("gizmo_mode");
+
+        if (gizmo_op == controller::GizmoOp::None)
+          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+        if (ImGui::SmallButton("N")) sc.setGizmoOp(controller::GizmoOp::None);
+        if (gizmo_op == controller::GizmoOp::None)
+          ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (gizmo_op == controller::GizmoOp::Translate)
+          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+        if (ImGui::SmallButton("T"))
+          sc.setGizmoOp(controller::GizmoOp::Translate);
+        if (gizmo_op == controller::GizmoOp::Translate)
+          ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (gizmo_op == controller::GizmoOp::Rotate)
+          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+        if (ImGui::SmallButton("R")) sc.setGizmoOp(controller::GizmoOp::Rotate);
+        if (gizmo_op == controller::GizmoOp::Rotate)
+          ImGui::PopStyleColor();
+
+        ImGui::SameLine();
+        if (gizmo_op == controller::GizmoOp::Scale)
+          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+        if (ImGui::SmallButton("S")) sc.setGizmoOp(controller::GizmoOp::Scale);
+        if (gizmo_op == controller::GizmoOp::Scale)
+          ImGui::PopStyleColor();
+
+        ImGui::PopID();
+        ImGui::PopStyleVar();
+
+        // --- ImGuizmo setup — clipped to viewer content area ---
+        if (gizmo_op == controller::GizmoOp::None) return;
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        const ImVec2 clip_min(viewer.getContentX(), viewer.getContentY());
+        const ImVec2 clip_max(viewer.getContentX() + viewer.getContentWidth(),
+                              viewer.getContentY() + viewer.getContentHeight());
+        dl->PushClipRect(clip_min, clip_max, true);
+
+        ImGuizmo::SetOrthographic(false);
+        ImGuizmo::SetDrawlist(dl);
+        ImGuizmo::SetRect(viewer.getContentX(), viewer.getContentY(),
+                          viewer.getContentWidth(), viewer.getContentHeight());
+
+        // Raw projection (no Vulkan Y-flip) — ImGuizmo works in OpenGL NDC
+        const glm::mat4 view_mat = scene_.sceneCamera->getViewMatrix();
+        const glm::mat4 proj_mat =
+            scene_.sceneCamera->getProjection().getMatrix();
+
+        // Map selected mode to ImGuizmo operation
+        ImGuizmo::OPERATION imguizmo_op = ImGuizmo::TRANSLATE;
+        switch (gizmo_op) {
+          case controller::GizmoOp::Translate: imguizmo_op = ImGuizmo::TRANSLATE; break;
+          case controller::GizmoOp::Rotate:    imguizmo_op = ImGuizmo::ROTATE;    break;
+          case controller::GizmoOp::Scale:     imguizmo_op = ImGuizmo::SCALE;     break;
+          default: break;
+        }
+
+        // --- Primitive gizmo — operates on all selected nodes at once ---
+        const auto& selection = ui_.sceneController->getSelection();
+        auto current_asset = engine_.assetController->getCurrentAsset();
+
+        if (!selection.empty() && current_asset &&
+            !current_asset->scenes.empty()) {
+          // Collect every distinct node that owns at least one selected prim.
+          std::vector<scene::Node*> selected_nodes;
+          auto active_scene = current_asset->getActiveScene();
+          if (active_scene) {
+            auto collect = [&](auto& self, scene::Node* node) -> void {
+              if (node->mesh) {
+                for (const auto& prim : node->mesh->getPrimitives()) {
+                  if (prim->getStorageId().has_value() &&
+                      selection.count(prim->getStorageId().value())) {
+                    selected_nodes.push_back(node);
+                    break; // one entry per node
+                  }
+                }
+              }
+              for (const auto& child : node->getChildren())
+                self(self, child.get());
+            };
+            for (std::uint32_t root_id : active_scene->rootNodes)
+              if (auto node = current_asset->nodes.get(root_id))
+                collect(collect, node.get());
+          }
+
+          if (!selected_nodes.empty()) {
+            // Pivot = centroid of each node's world AABB centre (or origin).
+            glm::vec3 centroid{0.0F};
+            for (auto* n : selected_nodes) {
+              const glm::mat4 w = n->getGlobalTransform().getMatrix();
+              centroid += (n->mesh && n->mesh->aabbValid())
+                              ? glm::vec3(w * glm::vec4(n->mesh->aabbCenter(), 1.0F))
+                              : glm::vec3(w[3]);
+            }
+            centroid /= static_cast<float>(selected_nodes.size());
+
+            // Single selection: keep node's own axes (LOCAL).
+            // Multi-selection: world-aligned gizmo at centroid.
+            glm::mat4 gizmo_mat = glm::translate(glm::mat4(1.0F), centroid);
+            const auto gizmo_mode = ImGuizmo::WORLD;
+            if (selected_nodes.size() == 1) {
+              auto* n = selected_nodes[0];
+              gizmo_mat = n->getGlobalTransform().getMatrix();
+              gizmo_mat[3] = glm::vec4(centroid, 1.0F);
+            }
+
+            glm::mat4 delta(1.0F);
+            const auto mode =
+                (selected_nodes.size() == 1) ? ImGuizmo::LOCAL : gizmo_mode;
+            if (ImGuizmo::Manipulate(
+                    glm::value_ptr(view_mat), glm::value_ptr(proj_mat),
+                    imguizmo_op, mode, glm::value_ptr(gizmo_mat),
+                    glm::value_ptr(delta))) {
+              for (auto* n : selected_nodes) {
+                const glm::mat4 world = n->getGlobalTransform().getMatrix();
+                const glm::mat4 new_world = delta * world;
+                auto parent = n->getParent().lock();
+                glm::mat4 new_local = new_world;
+                if (parent)
+                  new_local = glm::inverse(
+                                  parent->getGlobalTransform().getMatrix()) *
+                              new_world;
+                n->setLocalTransform(scene::TrsTransform(new_local));
+              }
+            }
+          }
+        } else if (ui_.sceneController->getSelectedLight().has_value()) {
+          // --- Light gizmo — T/R/S buttons select operation ---
+          auto& lights = sc.getLights();
+          const int lidx = ui_.sceneController->getSelectedLight().value();
+          if (lidx >= 0 && static_cast<std::size_t>(lidx) < lights.size()) {
+            auto& light = lights[lidx];
+
+            // Directional + Spot: R rotates direction; all others use imguizmo_op.
+            const bool has_direction =
+                light.type == static_cast<int>(
+                                  renderer::types::LightType::kDirectional) ||
+                light.type == static_cast<int>(
+                                  renderer::types::LightType::kSpot);
+            const ImGuizmo::OPERATION light_op =
+                (has_direction && gizmo_op == controller::GizmoOp::Rotate)
+                    ? ImGuizmo::ROTATE
+                    : imguizmo_op;
+
+            glm::mat4 light_mat =
+                glm::translate(glm::mat4(1.0F), light.position);
+            glm::mat4 delta(1.0F);
+
+            if (ImGuizmo::Manipulate(
+                    glm::value_ptr(view_mat), glm::value_ptr(proj_mat),
+                    light_op, ImGuizmo::WORLD, glm::value_ptr(light_mat),
+                    glm::value_ptr(delta))) {
+              if (light_op == ImGuizmo::TRANSLATE) {
+                light.position = glm::vec3(light_mat[3]);
+              } else {
+                light.direction = glm::normalize(
+                    glm::vec3(delta * glm::vec4(light.direction, 0.0F)));
+              }
+            }
+          }
+        }
+
+        dl->PopClipRect();
       });
 
   ui_.materialViewer =
@@ -580,15 +758,11 @@ void App::initImguiWindows() {
   ui_.configWindow->setAssetController(engine_.assetController.get());
   ui_.configWindow->setEnvironmentController(
       engine_.environmentController.get());
-  ui_.configWindow->setAnimator(rSys_.animator.get());
-  ui_.configWindow->setEnableSkinning(&ui_.enableSkinning);
-  ui_.configWindow->setSceneParams(&ui_.sceneParams);
-  ui_.configWindow->setLights(&ui_.lights);
+  ui_.configWindow->setSceneController(ui_.sceneController.get());
+  ui_.configWindow->setAnimator(rSys_.animator.get(), &ui_.enableSkinning);
   ui_.configWindow->setMaterialPreviewData(engine_.materialManager.get(),
                                            &ui_.previewMaterialSlot);
   ui_.configWindow->setWorkflowController(engine_.workflowController.get());
-  ui_.configWindow->setSelectedPrimitive(&ui_.selectedPrimitive);
-  ui_.configWindow->setCameraLight(&ui_.cameraLight, &ui_.cameraLightEnabled);
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -719,7 +893,8 @@ void App::mainLoop() {
       current_asset->update();
     }
 
-    if (ui_.enableSkinning)
+    if (ui_.enableSkinning && current_asset &&
+        current_asset->skins.getActiveCount() > 0)
       rSys_.animator->update(dt, current_asset.get());
     rSys_.materialSys->update(currentFrame_, *engine_.materialManager);
     rSys_.assetBridge->update(currentFrame_, current_asset.get());
@@ -751,19 +926,14 @@ void App::mainLoop() {
         .position = scene_.materialCamera->getPosition(),
     };
 
-    // Build LightsSSBO from the configured lights list plus optional camera light.
-    renderer::types::LightsSSBO lights_ssbo{};
-    std::uint32_t light_count = 0;
-    for (const auto& l : ui_.lights) {
-      if (light_count >= renderer::types::kMaxSceneLights) break;
-      lights_ssbo.lights[light_count++] = l;
-    }
-    if (ui_.cameraLightEnabled &&
-        light_count < renderer::types::kMaxSceneLights) {
-      ui_.cameraLight.position = scene_.sceneCamera->getPosition();
-      lights_ssbo.lights[light_count++] = ui_.cameraLight;
-    }
-    lights_ssbo.count = light_count;
+    // Build scene LightsSSBO (scene lights + optional camera light).
+    ui_.sceneController->updateCameraPosition(scene_.sceneCamera->getPosition());
+    const auto lights_ssbo = ui_.sceneController->buildSceneLightsSSBO();
+
+    // Material preview light — single point light at the material camera.
+    ui_.sceneController->updateMaterialCameraPosition(
+        scene_.materialCamera->getPosition());
+    const auto mat_lights_ssbo = ui_.sceneController->buildMatLightsSSBO();
 
     // Build shadow light UBO from the first shadow-casting light.
     renderer::types::ShadowLightUBO shadow_light{};
@@ -771,6 +941,7 @@ void App::mainLoop() {
     static constexpr float kShadowArea     = 20.0F;
     static constexpr float kShadowDistance = 50.0F;
     static constexpr float kPi             = 3.14159265F;
+    auto& scene_params = ui_.sceneController->getSceneParams();
     for (std::uint32_t li = 0; li < lights_ssbo.count; ++li) {
       const auto& sl = lights_ssbo.lights[li];
       if (sl.castsShadows == 0) continue;
@@ -786,33 +957,32 @@ void App::mainLoop() {
       const float half = kShadowArea * 0.5F;
 
       if (sl.type == static_cast<int>(renderer::types::LightType::kDirectional)) {
-        // Orthographic, looking from virtual light position toward scene center.
         const glm::vec3 lpos = -ldir * kShadowDistance;
         lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
         lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, kShadowDistance * 2.0F);
       } else if (sl.type == static_cast<int>(renderer::types::LightType::kSpot)) {
-        // Perspective frustum aligned with the spot's direction.
         const glm::vec3 lpos = sl.position;
         lview = glm::lookAt(lpos, lpos + ldir, up);
         const float fov = glm::clamp(sl.outerAngle * 2.0F, 0.01F, kPi * 0.99F);
         lproj = glm::perspectiveRH_ZO(fov, 1.0F, 0.1F, sl.range * 2.0F);
       } else {
-        // Point light: orthographic toward scene center (single shadow map approximation).
         const glm::vec3 lpos = sl.position;
         lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
         lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, sl.range * 2.0F);
       }
 
       shadow_light.viewProj = lproj * lview;
-      ui_.sceneParams.shadowViewProj = shadow_light.viewProj;
+      scene_params.shadowViewProj = shadow_light.viewProj;
       break;
     }
 
     rSys_.sceneRenderer->updateUniforms(currentFrame_, scene_ubo, mat_ubo,
-                                        env_params, ui_.sceneParams,
-                                        lights_ssbo, shadow_light);
+                                        env_params, scene_params,
+                                        lights_ssbo, mat_lights_ssbo,
+                                        shadow_light);
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
+    ImGuizmo::BeginFrame();
     ui_.windowManager->drawWindows(currentFrame_);
     ui_.host->endFrame();
 
@@ -826,7 +996,7 @@ void App::mainLoop() {
     auto light_set = rSys_.sceneRenderer->getLightDescriptorSet(currentFrame_);
 
     // Shadow pass: only when shadows are enabled and a shadow-casting light exists.
-    if (current_asset && ui_.sceneParams.shadowsEnabled && any_shadow_caster) {
+    if (current_asset && scene_params.shadowsEnabled && any_shadow_caster) {
       task.add<renderer::rp::BeginShadowPass>(
               rSys_.sceneRenderer->getShadowImage(),
               rSys_.sceneRenderer->getShadowImageView(),
@@ -858,7 +1028,7 @@ void App::mainLoop() {
               rSys_.sceneRenderer->outlinePipeline,
               rSys_.sceneRenderer->primitiveLayout->get(), scene_set,
               sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
-              ui_.enableSkinning, ui_.selectedPrimitive)
+              ui_.enableSkinning, &ui_.sceneController->getSelection())
           .add<renderer::cmd::DrawLightGizmosCommand>(
               rSys_.sceneRenderer->lightGizmoPipeline,
               rSys_.sceneRenderer->lightGizmoLayout->get(), scene_set,
@@ -867,21 +1037,19 @@ void App::mainLoop() {
     }
 
     if (ui_.materialViewer->isVisible()) {
-      if (ui_.materialViewer->isVisible()) {
-        task.add<renderer::rp::BeginViewportPass>(frame.materialViewport, 0, 1)
-            .add<renderer::cmd::DrawSkyboxCommand>(
-                rSys_.sceneRenderer->skyboxPipeline,
-                rSys_.sceneRenderer->skyboxLayout->get(), mat_scene_set,
-                sys_.bindlessSet, env_base_color, env_blur)
-            .add<renderer::cmd::DrawRaySphereCommand>(
-                rSys_.sceneRenderer->opaqueRaySpherePipeline,
-                rSys_.sceneRenderer->transparentRaySpherePipeline,
-                rSys_.sceneRenderer->transparentRaySphereBackFacePipeline,
-                rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
-                sys_.bindlessSet, mat_set, glm::mat4(1.0F),
-                ui_.previewMaterialSlot, engine_.materialManager.get())
-            .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
-      }
+      task.add<renderer::rp::BeginViewportPass>(frame.materialViewport, 0, 1)
+          .add<renderer::cmd::DrawSkyboxCommand>(
+              rSys_.sceneRenderer->skyboxPipeline,
+              rSys_.sceneRenderer->skyboxLayout->get(), mat_scene_set,
+              sys_.bindlessSet, env_base_color, env_blur)
+          .add<renderer::cmd::DrawRaySphereCommand>(
+              rSys_.sceneRenderer->opaqueRaySpherePipeline,
+              rSys_.sceneRenderer->transparentRaySpherePipeline,
+              rSys_.sceneRenderer->transparentRaySphereBackFacePipeline,
+              rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
+              sys_.bindlessSet, mat_set, glm::mat4(1.0F),
+              ui_.previewMaterialSlot, engine_.materialManager.get())
+          .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
     }
 
     task.add<renderer::rp::BeginSwapchainPass>(

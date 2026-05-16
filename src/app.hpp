@@ -14,6 +14,7 @@
 #include "vkit/controller/asset.hpp"
 #include "vkit/controller/camera.hpp"
 #include "vkit/controller/environment.hpp"
+#include "vkit/controller/scene.hpp"
 #include "vkit/controller/workflow.hpp"
 #include "vkit/environment/manager.hpp"
 #include "vkit/graphics/device.hpp"
@@ -131,15 +132,12 @@ class App {
     std::unique_ptr<imgui::ImguiWindowManager> windowManager;
 
     std::shared_ptr<imgui::windows::Viewer> sceneViewer;
+    std::shared_ptr<imgui::windows::Viewer> materialViewer;
+
+    std::unique_ptr<controller::SceneController> sceneController;
 
     bool enableSkinning{false};
-    renderer::types::SceneParamsUBO sceneParams{};
-    std::vector<renderer::types::Light> lights{renderer::types::Light{}};
-    renderer::types::Light cameraLight{};
-    bool cameraLightEnabled{false};
-    std::optional<std::uint32_t> selectedPrimitive{std::nullopt};
     std::uint32_t previewMaterialSlot{0};
-    std::shared_ptr<imgui::windows::Viewer> materialViewer;
 
     std::shared_ptr<imgui::windows::ge::GraphEditorWindow> graphWindow;
     std::shared_ptr<imgui::windows::ge::GraphNodeInspectorWindow>

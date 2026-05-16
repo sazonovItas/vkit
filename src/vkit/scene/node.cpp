@@ -16,6 +16,8 @@ void Node::addChild(const std::shared_ptr<Node>& child) {
   }
 }
 
+auto Node::getParent() const -> std::weak_ptr<Node> { return parent_; }
+
 auto Node::getChildren() const -> const std::vector<std::shared_ptr<Node>>& {
   return children_;
 }

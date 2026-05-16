@@ -465,6 +465,21 @@ void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
 
       if (const auto* it = gltf_prim.findAttribute("POSITION")) {
         populateAttribute(attrs.position, asset, it->accessorIndex);
+        const auto& acc = asset.accessors[it->accessorIndex];
+        if (acc.min.has_value() && acc.max.has_value() &&
+            acc.min->size() >= 3 && acc.max->size() >= 3 &&
+            acc.min->isType<double>() && acc.max->isType<double>()) {
+          const auto& mn = *acc.min;
+          const auto& mx = *acc.max;
+          mesh->aabbMin = glm::min(
+              mesh->aabbMin,
+              glm::vec3(float(mn.get<double>(0)), float(mn.get<double>(1)),
+                        float(mn.get<double>(2))));
+          mesh->aabbMax = glm::max(
+              mesh->aabbMax,
+              glm::vec3(float(mx.get<double>(0)), float(mx.get<double>(1)),
+                        float(mx.get<double>(2))));
+        }
       }
       if (const auto* it = gltf_prim.findAttribute("NORMAL")) {
         populateAttribute(attrs.normal, asset, it->accessorIndex);

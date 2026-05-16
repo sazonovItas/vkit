@@ -34,7 +34,8 @@ class SceneRenderer {
                       const types::CameraUBO& matCam,
                       const env::EnvironmentParams& envParams,
                       const types::SceneParamsUBO& sceneParams,
-                      const types::LightsSSBO& lightsData,
+                      const types::LightsSSBO& sceneLights,
+                      const types::LightsSSBO& matLights,
                       const types::ShadowLightUBO& shadowLight);
 
   [[nodiscard]] auto getMaterialSetLayout() const
@@ -122,7 +123,8 @@ class SceneRenderer {
     std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> environmentBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> sceneParamsBuffer;
-    std::unique_ptr<graphics::DescriptorBuffer> lightsBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> sceneLightsBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> matLightsBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> shadowLightBuffer;
     vk::DescriptorSet sceneDescriptorSet;
     vk::DescriptorSet materialDescriptorSet;

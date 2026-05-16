@@ -149,7 +149,8 @@ SceneRenderer::SceneRenderer(
       .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
       .setMultisampling(vk::SampleCountFlagBits::e8);
   uRaySphereTransparentBackFacePipeline_ = trans_ray_bf_builder.build(dev);
-  transparentRaySphereBackFacePipeline = *uRaySphereTransparentBackFacePipeline_;
+  transparentRaySphereBackFacePipeline =
+      *uRaySphereTransparentBackFacePipeline_;
 
   auto sky_vert = graphics::SpirVShaderModule{
       dev,
@@ -250,9 +251,8 @@ SceneRenderer::SceneRenderer(
         .setSamples(vk::SampleCountFlagBits::e1)
         .setUsage(vk::ImageUsageFlagBits::eDepthStencilAttachment |
                   vk::ImageUsageFlagBits::eSampled);
-    shadowImage_ =
-        graphics::AllocatedImage{device_.allocator, img_info,
-                                 graphics::allocation::kDeviceLocal};
+    shadowImage_ = graphics::AllocatedImage{device_.allocator, img_info,
+                                            graphics::allocation::kDeviceLocal};
 
     vk::ImageViewCreateInfo view_info{};
     view_info.setImage(static_cast<vk::Image>(shadowImage_))
@@ -276,12 +276,12 @@ SceneRenderer::SceneRenderer(
   }
 
   // Per frame descriptor pools:
-  //   sceneSet:    cam(UBO) + env(UBO) + params(UBO) + lights(SSBO) + shadowMap(CIS)
-  //   materialSet: matCam(UBO) + env(UBO) + params(UBO) + lights(SSBO) + shadowMap(CIS)
-  //   lightSet:    shadowLight(UBO)
+  //   sceneSet:    cam(UBO) + env(UBO) + params(UBO) + lights(SSBO) +
+  //   shadowMap(CIS) materialSet: matCam(UBO) + env(UBO) + params(UBO) +
+  //   lights(SSBO) + shadowMap(CIS) lightSet:    shadowLight(UBO)
   vk::DescriptorPoolSize pool_sizes[] = {
       {vk::DescriptorType::eUniformBuffer, framesInFlight * 7},
-      {vk::DescriptorType::eStorageBuffer, framesInFlight * 2},
+      {vk::DescriptorType::eStorageBuffer, framesInFlight * 3},
       {vk::DescriptorType::eCombinedImageSampler, framesInFlight * 2},
   };
   vk::DescriptorPoolCreateInfo pool_info{};
@@ -298,19 +298,20 @@ SceneRenderer::SceneRenderer(
     auto ssbo_usage = static_cast<dataformat::BufferUsageFlags>(
         vk::BufferUsageFlagBits::eStorageBuffer);
 
-    frame.sceneCameraBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ubo_usage);
-    frame.materialCameraBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ubo_usage);
-    frame.environmentBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ubo_usage);
-    frame.sceneParamsBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ubo_usage);
-    frame.lightsBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ssbo_usage,
-                                                     sizeof(types::LightsSSBO));
-    frame.shadowLightBuffer =
-        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, ubo_usage);
+    frame.sceneCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ubo_usage);
+    frame.materialCameraBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ubo_usage);
+    frame.environmentBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ubo_usage);
+    frame.sceneParamsBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ubo_usage);
+    frame.sceneLightsBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ssbo_usage, sizeof(types::LightsSSBO));
+    frame.matLightsBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ssbo_usage, sizeof(types::LightsSSBO));
+    frame.shadowLightBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, ubo_usage);
 
     vk::DescriptorSetAllocateInfo scene_alloc{*descriptorPool_, 1,
                                               &sceneSetLayout_->get()};
@@ -325,7 +326,8 @@ SceneRenderer::SceneRenderer(
     auto mat_cam      = frame.materialCameraBuffer->descriptorInfo();
     auto env_buf      = frame.environmentBuffer->descriptorInfo();
     auto params_buf   = frame.sceneParamsBuffer->descriptorInfo();
-    auto lights_buf   = frame.lightsBuffer->descriptorInfo();
+    auto scene_lights = frame.sceneLightsBuffer->descriptorInfo();
+    auto mat_lights   = frame.matLightsBuffer->descriptorInfo();
     auto shadow_light = frame.shadowLightBuffer->descriptorInfo();
 
     vk::DescriptorImageInfo shadow_img_info{};
@@ -335,52 +337,50 @@ SceneRenderer::SceneRenderer(
 
     std::array<vk::WriteDescriptorSet, 11> writes = {
         // --- sceneDescriptorSet ---
+        vk::WriteDescriptorSet{
+            frame.sceneDescriptorSet, dsl::SceneSetLayout::kCameraBinding, 0, 1,
+            vk::DescriptorType::eUniformBuffer, nullptr, &scene_cam, nullptr},
         vk::WriteDescriptorSet{frame.sceneDescriptorSet,
-                               dsl::SceneSetLayout::kCameraBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &scene_cam, nullptr},
+                               dsl::SceneSetLayout::kEnvironmentBinding, 0, 1,
+                               vk::DescriptorType::eUniformBuffer, nullptr,
+                               &env_buf, nullptr},
         vk::WriteDescriptorSet{frame.sceneDescriptorSet,
-                               dsl::SceneSetLayout::kEnvironmentBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &env_buf, nullptr},
+                               dsl::SceneSetLayout::kSceneParamsBinding, 0, 1,
+                               vk::DescriptorType::eUniformBuffer, nullptr,
+                               &params_buf, nullptr},
         vk::WriteDescriptorSet{frame.sceneDescriptorSet,
-                               dsl::SceneSetLayout::kSceneParamsBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &params_buf, nullptr},
+                               dsl::SceneSetLayout::kLightBinding, 0, 1,
+                               vk::DescriptorType::eStorageBuffer, nullptr,
+                               &scene_lights, nullptr},
         vk::WriteDescriptorSet{frame.sceneDescriptorSet,
-                               dsl::SceneSetLayout::kLightBinding,
-                               0, 1, vk::DescriptorType::eStorageBuffer,
-                               nullptr, &lights_buf, nullptr},
-        vk::WriteDescriptorSet{frame.sceneDescriptorSet,
-                               dsl::SceneSetLayout::kShadowMapBinding,
-                               0, 1, vk::DescriptorType::eCombinedImageSampler,
+                               dsl::SceneSetLayout::kShadowMapBinding, 0, 1,
+                               vk::DescriptorType::eCombinedImageSampler,
                                &shadow_img_info, nullptr, nullptr},
-        // --- materialDescriptorSet ---
+        // --- materialDescriptorSet (isolated studio lights buffer) ---
+        vk::WriteDescriptorSet{
+            frame.materialDescriptorSet, dsl::SceneSetLayout::kCameraBinding, 0,
+            1, vk::DescriptorType::eUniformBuffer, nullptr, &mat_cam, nullptr},
         vk::WriteDescriptorSet{frame.materialDescriptorSet,
-                               dsl::SceneSetLayout::kCameraBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &mat_cam, nullptr},
+                               dsl::SceneSetLayout::kEnvironmentBinding, 0, 1,
+                               vk::DescriptorType::eUniformBuffer, nullptr,
+                               &env_buf, nullptr},
         vk::WriteDescriptorSet{frame.materialDescriptorSet,
-                               dsl::SceneSetLayout::kEnvironmentBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &env_buf, nullptr},
+                               dsl::SceneSetLayout::kSceneParamsBinding, 0, 1,
+                               vk::DescriptorType::eUniformBuffer, nullptr,
+                               &params_buf, nullptr},
         vk::WriteDescriptorSet{frame.materialDescriptorSet,
-                               dsl::SceneSetLayout::kSceneParamsBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &params_buf, nullptr},
+                               dsl::SceneSetLayout::kLightBinding, 0, 1,
+                               vk::DescriptorType::eStorageBuffer, nullptr,
+                               &mat_lights, nullptr},
         vk::WriteDescriptorSet{frame.materialDescriptorSet,
-                               dsl::SceneSetLayout::kLightBinding,
-                               0, 1, vk::DescriptorType::eStorageBuffer,
-                               nullptr, &lights_buf, nullptr},
-        vk::WriteDescriptorSet{frame.materialDescriptorSet,
-                               dsl::SceneSetLayout::kShadowMapBinding,
-                               0, 1, vk::DescriptorType::eCombinedImageSampler,
+                               dsl::SceneSetLayout::kShadowMapBinding, 0, 1,
+                               vk::DescriptorType::eCombinedImageSampler,
                                &shadow_img_info, nullptr, nullptr},
         // --- lightDescriptorSet (shadow pass: viewProj only) ---
         vk::WriteDescriptorSet{frame.lightDescriptorSet,
-                               dsl::LightSetLayout::kLightBinding,
-                               0, 1, vk::DescriptorType::eUniformBuffer,
-                               nullptr, &shadow_light, nullptr},
+                               dsl::LightSetLayout::kLightBinding, 0, 1,
+                               vk::DescriptorType::eUniformBuffer, nullptr,
+                               &shadow_light, nullptr},
     };
     dev.updateDescriptorSets(writes, nullptr);
   }
@@ -391,7 +391,8 @@ void SceneRenderer::updateUniforms(std::uint32_t frameIndex,
                                    const types::CameraUBO& matCam,
                                    const env::EnvironmentParams& envParams,
                                    const types::SceneParamsUBO& sceneParams,
-                                   const types::LightsSSBO& lightsData,
+                                   const types::LightsSSBO& sceneLights,
+                                   const types::LightsSSBO& matLights,
                                    const types::ShadowLightUBO& shadowLight) {
   auto& frame = frames_[frameIndex];
   std::ignore =
@@ -400,12 +401,14 @@ void SceneRenderer::updateUniforms(std::uint32_t frameIndex,
       frame.materialCameraBuffer->writeAt(std::as_bytes(std::span{&matCam, 1}));
   std::ignore =
       frame.environmentBuffer->writeAt(std::as_bytes(std::span{&envParams, 1}));
-  std::ignore =
-      frame.sceneParamsBuffer->writeAt(std::as_bytes(std::span{&sceneParams, 1}));
-  std::ignore =
-      frame.lightsBuffer->writeAt(std::as_bytes(std::span{&lightsData, 1}));
-  std::ignore =
-      frame.shadowLightBuffer->writeAt(std::as_bytes(std::span{&shadowLight, 1}));
+  std::ignore = frame.sceneParamsBuffer->writeAt(
+      std::as_bytes(std::span{&sceneParams, 1}));
+  std::ignore = frame.sceneLightsBuffer->writeAt(
+      std::as_bytes(std::span{&sceneLights, 1}));
+  std::ignore = frame.matLightsBuffer->writeAt(
+      std::as_bytes(std::span{&matLights, 1}));
+  std::ignore = frame.shadowLightBuffer->writeAt(
+      std::as_bytes(std::span{&shadowLight, 1}));
 }
 
 };  // namespace vkit::renderer

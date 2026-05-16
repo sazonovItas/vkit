@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <memory>
 #include <optional>
+#include <unordered_set>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
@@ -175,8 +176,9 @@ class DrawAssetCommand final : public graphics::Command {
     std::vector<PrimitiveDrawInfo> transparent_draws;
 
     auto traverse_node = [&](auto& self, const scene::Node* node) -> void {
-      if (node->mesh) {
+      if (node->mesh && node->mesh->visible) {
         for (const auto& prim : node->mesh->getPrimitives()) {
+          if (!prim->visible) continue;
           if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
             continue;
 
@@ -309,7 +311,7 @@ class DrawOutlineCommand final : public graphics::Command {
                      vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
                      vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
                      const asset::Asset* asset, bool enableSkinning,
-                     std::optional<std::uint32_t> selectedPrimStorageId)
+                     const std::unordered_set<std::uint32_t>* selection)
       : pipeline_{pipeline},
         layout_{layout},
         sceneSet_{sceneSet},
@@ -318,31 +320,32 @@ class DrawOutlineCommand final : public graphics::Command {
         primSet_{primSet},
         asset_{asset},
         enableSkinning_{enableSkinning},
-        selectedPrimStorageId_{selectedPrimStorageId} {}
+        selection_{selection} {}
 
   void record(vk::CommandBuffer cb) const override {
-    if (!asset_ || !selectedPrimStorageId_.has_value() || asset_->scenes.empty())
+    if (!asset_ || !selection_ || selection_->empty() || asset_->scenes.empty())
       return;
     auto active_scene = asset_->getActiveScene();
     if (!active_scene) return;
 
-    bool found = false;
+    bool pipeline_bound = false;
 
     auto traverse_node = [&](auto& self, const scene::Node* node) -> void {
-      if (found) return;
-      if (node->mesh) {
+      if (node->mesh && node->mesh->visible) {
         for (const auto& prim : node->mesh->getPrimitives()) {
-          if (found) break;
+          if (!prim->visible) continue;
           if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
             continue;
-          if (prim->getStorageId().value() != *selectedPrimStorageId_) continue;
+          if (!selection_->count(prim->getStorageId().value())) continue;
 
-          found = true;
-          cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
-          std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
-                                                   materialSet_, primSet_};
-          cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0,
-                                sets, nullptr);
+          if (!pipeline_bound) {
+            pipeline_bound = true;
+            cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+            std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
+                                                     materialSet_, primSet_};
+            cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0,
+                                  sets, nullptr);
+          }
 
           auto pcs = pl::PrimitiveMaterialPipelineLayout::PushConstants{
               .model = node->getGlobalTransform().getMatrix(),
@@ -381,7 +384,7 @@ class DrawOutlineCommand final : public graphics::Command {
   vk::DescriptorSet primSet_;
   const asset::Asset* asset_;
   bool enableSkinning_;
-  std::optional<std::uint32_t> selectedPrimStorageId_;
+  const std::unordered_set<std::uint32_t>* selection_;
 };
 
 };  // namespace vkit::renderer::cmd
