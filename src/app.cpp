@@ -569,7 +569,7 @@ void App::initImguiWindows() {
       engine_.environmentController.get());
   ui_.configWindow->setAnimator(rSys_.animator.get());
   ui_.configWindow->setEnableSkinning(&ui_.enableSkinning);
-  ui_.configWindow->setExposure(&ui_.exposure);
+  ui_.configWindow->setSceneParams(&ui_.sceneParams);
   ui_.configWindow->setMaterialPreviewData(engine_.materialManager.get(),
                                            &ui_.previewMaterialSlot);
   ui_.configWindow->setWorkflowController(engine_.workflowController.get());
@@ -735,7 +735,7 @@ void App::mainLoop() {
     };
 
     rSys_.sceneRenderer->updateUniforms(currentFrame_, scene_ubo, mat_ubo,
-                                        env_params);
+                                        env_params, ui_.sceneParams);
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ui_.windowManager->drawWindows(currentFrame_);
@@ -758,9 +758,11 @@ void App::mainLoop() {
           .add<renderer::cmd::DrawAssetCommand>(
               rSys_.sceneRenderer->opaquePipeline,
               rSys_.sceneRenderer->transparentPipeline,
+              rSys_.sceneRenderer->transparentBackFacePipeline,
               rSys_.sceneRenderer->primitiveLayout->get(), scene_set,
               sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
-              engine_.materialManager.get(), ui_.enableSkinning, ui_.exposure)
+              engine_.materialManager.get(), ui_.enableSkinning,
+              scene_.sceneCamera->getPosition())
           .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
     }
 
@@ -774,10 +776,10 @@ void App::mainLoop() {
             .add<renderer::cmd::DrawRaySphereCommand>(
                 rSys_.sceneRenderer->opaqueRaySpherePipeline,
                 rSys_.sceneRenderer->transparentRaySpherePipeline,
+                rSys_.sceneRenderer->transparentRaySphereBackFacePipeline,
                 rSys_.sceneRenderer->raySphereLayout->get(), mat_scene_set,
                 sys_.bindlessSet, mat_set, glm::mat4(1.0F),
-                ui_.previewMaterialSlot, engine_.materialManager.get(),
-                ui_.exposure)
+                ui_.previewMaterialSlot, engine_.materialManager.get())
             .add<renderer::rp::EndViewportPass>(frame.materialViewport, 1);
       }
     }

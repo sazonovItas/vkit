@@ -47,7 +47,10 @@ void ConfigurationWindow::setEnableSkinning(bool* enableSkinning) {
   enableSkinning_ = enableSkinning;
 }
 
-void ConfigurationWindow::setExposure(float* exposure) { exposure_ = exposure; }
+void ConfigurationWindow::setSceneParams(
+    renderer::types::SceneParamsUBO* sceneParams) {
+  sceneParams_ = sceneParams;
+}
 
 void ConfigurationWindow::setMaterialPreviewData(
     material::MaterialManager* matManager, std::uint32_t* previewSlot) {
@@ -180,12 +183,12 @@ void ConfigurationWindow::drawAssetManagementSection() {
 }
 
 void ConfigurationWindow::drawSceneParamsConfigurationSection() {
-  if (!exposure_) return;
+  if (!sceneParams_) return;
 
   if (ImGui::CollapsingHeader("Scene Params")) {
     ImGui::Spacing();
-
-    ImGui::SliderFloat("Exposure", exposure_, 0.1F, 10.0F);
+    ImGui::SliderFloat("Exposure", &sceneParams_->exposure, 0.1F, 10.0F);
+    ImGui::SliderFloat("Gamma",    &sceneParams_->gamma,    0.1F,  3.0F);
   }
 }
 

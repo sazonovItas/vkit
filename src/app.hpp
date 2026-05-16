@@ -132,7 +132,7 @@ class App {
     std::shared_ptr<imgui::windows::Viewer> sceneViewer;
 
     bool enableSkinning{false};
-    float exposure{1.5F};
+    renderer::types::SceneParamsUBO sceneParams{};
     std::uint32_t previewMaterialSlot{0};
     std::shared_ptr<imgui::windows::Viewer> materialViewer;
 

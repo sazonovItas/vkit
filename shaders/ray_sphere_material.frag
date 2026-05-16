@@ -25,6 +25,10 @@ layout(set = 0, binding = 0) uniform Camera {
 layout(set = 0, binding = 1) uniform Environment {
     EnvironmentParams params;
 } env;
+layout(set = 0, binding = 2) uniform SceneParams {
+    float exposure;
+    float gamma;
+} sceneParams;
 
 layout(std430, set = 2, binding = 0) readonly buffer DiffuseBlock {
     DiffuseData materials[];
@@ -41,7 +45,6 @@ layout(push_constant) uniform PushConstants {
     uint materialType;
     uint materialIndex;
     uint enableDepthWrite;
-    float exposure;
 } pcs;
 
 void main() {
@@ -58,7 +61,8 @@ void main() {
         outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], hit.uv, baseTBN, V, L);
     }
     else if (pcs.materialType == PRINCIPLED_MATERIAL) {
-        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params, pcs.exposure);
+        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], hit.worldPos, hit.uv, baseTBN, V, L, env.params, sceneParams.exposure);
+        outColor.rgb = pow(outColor.rgb, vec3(1.0 / max(sceneParams.gamma, 0.01)));
     }
     else {
         outColor = evaluateFallback(hit.normal, hit.tangent, hit.uv);

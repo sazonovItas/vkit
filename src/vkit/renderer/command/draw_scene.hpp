@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <glm/glm.hpp>
 #include <memory>
@@ -56,76 +57,71 @@ class DrawRaySphereCommand final : public graphics::Command {
  public:
   DrawRaySphereCommand(vk::Pipeline opaquePipeline,
                        vk::Pipeline transparentPipeline,
+                       vk::Pipeline transparentBackFacePipeline,
                        vk::PipelineLayout layout, vk::DescriptorSet sceneSet,
                        vk::DescriptorSet bindlessSet,
                        vk::DescriptorSet materialSet, glm::mat4 model,
                        std::uint32_t materialSlot,
-                       const material::MaterialManager* materialManager,
-                       float exposure)
+                       const material::MaterialManager* materialManager)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
+        transparentBackFacePipeline_{transparentBackFacePipeline},
         layout_{layout},
         sceneSet_{sceneSet},
         bindlessSet_{bindlessSet},
         materialSet_{materialSet},
         model_{model},
         materialSlot_{materialSlot},
-        materialManager_{materialManager},
-        exposure_{exposure} {}
+        materialManager_{materialManager} {}
 
   void record(vk::CommandBuffer cb) const override {
     std::uint32_t mat_type = 0;
     std::uint32_t mat_idx = 0;
-    vk::Pipeline active_pipeline = opaquePipeline_;
+    bool is_blend = false;
 
-    auto enable_depth_write = true;
     if (materialManager_) {
       auto slot = materialManager_->getSlot(materialSlot_);
-
       if (slot && slot->getMaterialType() != material::Type::kNone) {
         auto m_type = slot->getMaterialType();
-        auto m_id = slot->getMaterialId();
-
-        auto mat = materialManager_->getMaterial(m_type, m_id);
+        auto m_id   = slot->getMaterialId();
+        auto mat    = materialManager_->getMaterial(m_type, m_id);
         if (mat) {
           mat_type = static_cast<std::uint32_t>(m_type);
-          mat_idx = m_id;
-
-          if (mat->getAlphaMode() == material::AlphaMode::kBlend) {
-            active_pipeline = transparentPipeline_;
-          }
+          mat_idx  = m_id;
+          is_blend = (mat->getAlphaMode() == material::AlphaMode::kBlend);
         }
       }
     }
 
-    cb.bindPipeline(vk::PipelineBindPoint::eGraphics, active_pipeline);
-
-    std::array<vk::DescriptorSet, 3> sets = {
-        sceneSet_,
-        bindlessSet_,
-        materialSet_,
-    };
-    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets,
-                          nullptr);
+    std::array<vk::DescriptorSet, 3> sets = {sceneSet_, bindlessSet_, materialSet_};
+    cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0, sets, nullptr);
 
     auto pcs = pl::RaySphereMaterialPipelineLayout::PushConstants{
         .model = model_,
         .materialType = mat_type,
         .materialIndex = mat_idx,
-        .enableDepthWrite = static_cast<std::uint32_t>(enable_depth_write),
-        .exposure = exposure_,
+        .enableDepthWrite = is_blend ? 0U : 1U,
     };
-
     cb.pushConstants(
         layout_,
         vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
         0, sizeof(pcs), &pcs);
-    cb.draw(36, 1, 0, 0);
+
+    if (is_blend) {
+      cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentBackFacePipeline_);
+      cb.draw(36, 1, 0, 0);
+      cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentPipeline_);
+      cb.draw(36, 1, 0, 0);
+    } else {
+      cb.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_);
+      cb.draw(36, 1, 0, 0);
+    }
   }
 
  private:
   vk::Pipeline opaquePipeline_;
   vk::Pipeline transparentPipeline_;
+  vk::Pipeline transparentBackFacePipeline_;
   vk::PipelineLayout layout_;
   vk::DescriptorSet sceneSet_;
   vk::DescriptorSet bindlessSet_;
@@ -133,7 +129,6 @@ class DrawRaySphereCommand final : public graphics::Command {
   glm::mat4 model_;
   std::uint32_t materialSlot_;
   const material::MaterialManager* materialManager_;
-  float exposure_;
 };
 
 class DrawAssetCommand final : public graphics::Command {
@@ -143,19 +138,23 @@ class DrawAssetCommand final : public graphics::Command {
     vk::DeviceSize indexOffset;
     vk::IndexType indexType;
     std::uint32_t indexCount;
+    float distSq{0.0F};
     pl::PrimitiveMaterialPipelineLayout::PushConstants pcs;
   };
 
  public:
   DrawAssetCommand(vk::Pipeline opaquePipeline,
-                   vk::Pipeline transparentPipeline, vk::PipelineLayout layout,
+                   vk::Pipeline transparentPipeline,
+                   vk::Pipeline transparentBackFacePipeline,
+                   vk::PipelineLayout layout,
                    vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
                    vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
                    const asset::Asset* asset,
                    const material::MaterialManager* materialManager,
-                   bool enableSkinning, float exposure)
+                   bool enableSkinning, glm::vec3 cameraPos)
       : opaquePipeline_{opaquePipeline},
         transparentPipeline_{transparentPipeline},
+        transparentBackFacePipeline_{transparentBackFacePipeline},
         layout_{layout},
         sceneSet_{sceneSet},
         bindlessSet_{bindlessSet},
@@ -164,7 +163,7 @@ class DrawAssetCommand final : public graphics::Command {
         asset_{asset},
         materialManager_{materialManager},
         enableSkinning_{enableSkinning},
-        exposure_{exposure} {}
+        cameraPos_{cameraPos} {}
 
   void record(vk::CommandBuffer cb) const override {
     if (!asset_ || asset_->scenes.empty() || !materialManager_) return;
@@ -198,20 +197,23 @@ class DrawAssetCommand final : public graphics::Command {
             }
           }
 
+          const glm::mat4 model = node->getGlobalTransform().getMatrix();
+          const glm::vec3 center = glm::vec3(model[3]);
+          const glm::vec3 d = center - cameraPos_;
           PrimitiveDrawInfo draw_info{
               .indexBuffer = prim->getIndexBuffer()->buffer,
               .indexOffset = prim->getIndexBufferOffset(),
               .indexType = prim->getIndexType(),
               .indexCount = prim->attrs.index.info.count,
+              .distSq = glm::dot(d, d),
               .pcs = {
-                  .model = node->getGlobalTransform().getMatrix(),
+                  .model = model,
                   .primIndex = prim->getStorageId().value(),
                   .skinOffset = asset_->skins.getOffsetForNode(node),
                   .enableSkinning =
                       (node->skin != nullptr && enableSkinning_) ? 1U : 0U,
                   .materialType = final_mat_type,
                   .materialIndex = final_mat_index,
-                  .exposure = exposure_,
               }};
 
           if (alpha_mode == material::AlphaMode::kBlend) {
@@ -228,6 +230,21 @@ class DrawAssetCommand final : public graphics::Command {
       if (auto node = asset_->nodes.get(root_id))
         traverse_node(traverse_node, node.get());
     }
+
+    // Opaques: material type first (reduces shader divergence), then
+    // front-to-back (early-z rejects occluded fragments).
+    std::sort(opaque_draws.begin(), opaque_draws.end(),
+              [](const PrimitiveDrawInfo& a, const PrimitiveDrawInfo& b) {
+                if (a.pcs.materialType != b.pcs.materialType)
+                  return a.pcs.materialType < b.pcs.materialType;
+                return a.distSq < b.distSq;
+              });
+
+    // Transparents: back-to-front for correct blending.
+    std::sort(transparent_draws.begin(), transparent_draws.end(),
+              [](const PrimitiveDrawInfo& a, const PrimitiveDrawInfo& b) {
+                return a.distSq > b.distSq;
+              });
 
     std::array<vk::DescriptorSet, 4> sets = {
         sceneSet_,
@@ -251,13 +268,20 @@ class DrawAssetCommand final : public graphics::Command {
     }
 
     if (!transparent_draws.empty()) {
+      const auto push_stage = vk::ShaderStageFlagBits::eVertex |
+                              vk::ShaderStageFlagBits::eFragment;
+      // Pass 1: back faces (cull front) so interior is composited first
+      cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentBackFacePipeline_);
+      for (const auto& draw : transparent_draws) {
+        cb.bindIndexBuffer(draw.indexBuffer, draw.indexOffset, draw.indexType);
+        cb.pushConstants(layout_, push_stage, 0, sizeof(draw.pcs), &draw.pcs);
+        cb.drawIndexed(draw.indexCount, 1, 0, 0, 0);
+      }
+      // Pass 2: front faces (cull back) composited on top
       cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentPipeline_);
       for (const auto& draw : transparent_draws) {
         cb.bindIndexBuffer(draw.indexBuffer, draw.indexOffset, draw.indexType);
-        cb.pushConstants(layout_,
-                         vk::ShaderStageFlagBits::eVertex |
-                             vk::ShaderStageFlagBits::eFragment,
-                         0, sizeof(draw.pcs), &draw.pcs);
+        cb.pushConstants(layout_, push_stage, 0, sizeof(draw.pcs), &draw.pcs);
         cb.drawIndexed(draw.indexCount, 1, 0, 0, 0);
       }
     }
@@ -266,6 +290,7 @@ class DrawAssetCommand final : public graphics::Command {
  private:
   vk::Pipeline opaquePipeline_;
   vk::Pipeline transparentPipeline_;
+  vk::Pipeline transparentBackFacePipeline_;
   vk::PipelineLayout layout_;
   vk::DescriptorSet sceneSet_;
   vk::DescriptorSet bindlessSet_;
@@ -274,7 +299,7 @@ class DrawAssetCommand final : public graphics::Command {
   const asset::Asset* asset_;
   const material::MaterialManager* materialManager_;
   const bool enableSkinning_;
-  float exposure_;
+  glm::vec3 cameraPos_;
 };
 
 };  // namespace vkit::renderer::cmd

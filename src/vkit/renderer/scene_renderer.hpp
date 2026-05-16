@@ -26,7 +26,8 @@ class SceneRenderer {
   void updateUniforms(std::uint32_t frameIndex,
                       const types::CameraUBO& sceneCam,
                       const types::CameraUBO& matCam,
-                      const env::EnvironmentParams& envParams);
+                      const env::EnvironmentParams& envParams,
+                      const types::SceneParamsUBO& sceneParams);
 
   [[nodiscard]] auto getMaterialSetLayout() const
       -> const dsl::MaterialSetLayout& {
@@ -48,8 +49,10 @@ class SceneRenderer {
 
   vk::Pipeline opaquePipeline;
   vk::Pipeline transparentPipeline;
+  vk::Pipeline transparentBackFacePipeline;
   vk::Pipeline opaqueRaySpherePipeline;
   vk::Pipeline transparentRaySpherePipeline;
+  vk::Pipeline transparentRaySphereBackFacePipeline;
   vk::Pipeline skyboxPipeline;
 
   pl::PrimitiveMaterialPipelineLayout* primitiveLayout{nullptr};
@@ -69,8 +72,10 @@ class SceneRenderer {
 
   vk::UniquePipeline uOpaquePipeline_;
   vk::UniquePipeline uTransparentPipeline_;
+  vk::UniquePipeline uTransparentBackFacePipeline_;
   vk::UniquePipeline uRaySphereOpaquePipeline_;
   vk::UniquePipeline uRaySphereTransparentPipeline_;
+  vk::UniquePipeline uRaySphereTransparentBackFacePipeline_;
   vk::UniquePipeline uSkyboxPipeline_;
 
   vk::UniqueDescriptorPool descriptorPool_;
@@ -79,6 +84,7 @@ class SceneRenderer {
     std::unique_ptr<graphics::DescriptorBuffer> sceneCameraBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> materialCameraBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> environmentBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> sceneParamsBuffer;
     vk::DescriptorSet sceneDescriptorSet;
     vk::DescriptorSet materialDescriptorSet;
   };

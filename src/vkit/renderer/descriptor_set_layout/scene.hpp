@@ -7,9 +7,10 @@ namespace vkit::renderer::dsl {
 struct SceneSetLayout final : public graphics::DescriptorSetLayout {
   static constexpr std::uint32_t kCameraBinding = 0;
   static constexpr std::uint32_t kEnvironmentBinding = 1;
+  static constexpr std::uint32_t kSceneParamsBinding = 2;
 
   static constexpr auto kBindings =
-      std::array<vk::DescriptorSetLayoutBinding, 2>{
+      std::array<vk::DescriptorSetLayoutBinding, 3>{
           vk::DescriptorSetLayoutBinding{
               kCameraBinding,
               vk::DescriptorType::eUniformBuffer,
@@ -22,10 +23,17 @@ struct SceneSetLayout final : public graphics::DescriptorSetLayout {
               1,
               vk::ShaderStageFlagBits::eAllGraphics,
           },
+          vk::DescriptorSetLayoutBinding{
+              kSceneParamsBinding,
+              vk::DescriptorType::eUniformBuffer,
+              1,
+              vk::ShaderStageFlagBits::eAllGraphics,
+          },
       };
 
   static constexpr auto kBindingFlags =
-      std::array<vk::DescriptorBindingFlags, 2>{
+      std::array<vk::DescriptorBindingFlags, 3>{
+          vk::DescriptorBindingFlagBits::ePartiallyBound,
           vk::DescriptorBindingFlagBits::ePartiallyBound,
           vk::DescriptorBindingFlagBits::ePartiallyBound,
       };

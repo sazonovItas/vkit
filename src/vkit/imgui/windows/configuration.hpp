@@ -5,6 +5,7 @@
 
 #include "vkit/imgui/imgui_window.hpp"
 #include "vkit/material/manager.hpp"
+#include "vkit/renderer/types.hpp"
 
 namespace vkit::controller {
 class AssetController;
@@ -35,7 +36,7 @@ class ConfigurationWindow : public ImguiWindow {
       controller::EnvironmentController* envController);
   void setAnimator(animation::Animator* animator);
   void setEnableSkinning(bool* enableSkinning);
-  void setExposure(float* exposure);
+  void setSceneParams(renderer::types::SceneParamsUBO* sceneParams);
   void setMaterialPreviewData(material::MaterialManager* matManager,
                               std::uint32_t* previewSlot);
   void setWorkflowController(
@@ -51,7 +52,7 @@ class ConfigurationWindow : public ImguiWindow {
 
   animation::Animator* animator_{nullptr};
   bool* enableSkinning_{nullptr};
-  float* exposure_{nullptr};
+  renderer::types::SceneParamsUBO* sceneParams_{nullptr};
 
   material::MaterialManager* matManager_{nullptr};
   std::uint32_t* previewSlot_{nullptr};

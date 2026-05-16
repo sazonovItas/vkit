@@ -51,7 +51,7 @@ SceneRenderer::SceneRenderer(
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::True, vk::True)
       .setCullMode(vk::CullModeFlagBits::eBack)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+      .setMultisampling(vk::SampleCountFlagBits::e8);
   uOpaquePipeline_ = opaque_builder.build(dev);
   opaquePipeline = *uOpaquePipeline_;
 
@@ -65,11 +65,27 @@ SceneRenderer::SceneRenderer(
       .setVertexInput({}, {})
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::True, vk::False)
-      .setCullMode(vk::CullModeFlagBits::eNone)
+      .setCullMode(vk::CullModeFlagBits::eBack)
       .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+      .setMultisampling(vk::SampleCountFlagBits::e8);
   uTransparentPipeline_ = trans_builder.build(dev);
   transparentPipeline = *uTransparentPipeline_;
+
+  auto trans_bf_builder =
+      graphics::pipeline::GraphicsPipelineBuilder{uPrimLayout_->get()};
+  trans_bf_builder
+      .addShaderStage(
+          prim_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          prim_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::True, vk::False)
+      .setCullMode(vk::CullModeFlagBits::eFront)
+      .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
+      .setMultisampling(vk::SampleCountFlagBits::e8);
+  uTransparentBackFacePipeline_ = trans_bf_builder.build(dev);
+  transparentBackFacePipeline = *uTransparentBackFacePipeline_;
 
   auto ray_vert = graphics::SpirVShaderModule{
       dev,
@@ -90,7 +106,7 @@ SceneRenderer::SceneRenderer(
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::True, vk::True)
       .setCullMode(vk::CullModeFlagBits::eNone)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+      .setMultisampling(vk::SampleCountFlagBits::e8);
   uRaySphereOpaquePipeline_ = opaque_ray_builder.build(dev);
   opaqueRaySpherePipeline = *uRaySphereOpaquePipeline_;
 
@@ -104,11 +120,27 @@ SceneRenderer::SceneRenderer(
       .setVertexInput({}, {})
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::True, vk::True)
-      .setCullMode(vk::CullModeFlagBits::eNone)
+      .setCullMode(vk::CullModeFlagBits::eBack)
       .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+      .setMultisampling(vk::SampleCountFlagBits::e8);
   uRaySphereTransparentPipeline_ = trans_ray_builder.build(dev);
   transparentRaySpherePipeline = *uRaySphereTransparentPipeline_;
+
+  auto trans_ray_bf_builder =
+      graphics::pipeline::GraphicsPipelineBuilder{uRaySphereLayout_->get()};
+  trans_ray_bf_builder
+      .addShaderStage(
+          ray_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          ray_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::True, vk::True)
+      .setCullMode(vk::CullModeFlagBits::eFront)
+      .setColorBlendAttachment(0, graphics::pipeline::blend::kAlpha)
+      .setMultisampling(vk::SampleCountFlagBits::e8);
+  uRaySphereTransparentBackFacePipeline_ = trans_ray_bf_builder.build(dev);
+  transparentRaySphereBackFacePipeline = *uRaySphereTransparentBackFacePipeline_;
 
   auto sky_vert = graphics::SpirVShaderModule{
       dev,
@@ -129,13 +161,13 @@ SceneRenderer::SceneRenderer(
       .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
       .setDepthState(vk::False, vk::False)
       .setCullMode(vk::CullModeFlagBits::eNone)
-      .setMultisampling(vk::SampleCountFlagBits::e8, vk::True, 0.5F);
+      .setMultisampling(vk::SampleCountFlagBits::e8);
   uSkyboxPipeline_ = sky_builder.build(dev);
   skyboxPipeline = *uSkyboxPipeline_;
 
   vk::DescriptorPoolSize pool_sizes[] = {{
       vk::DescriptorType::eUniformBuffer,
-      framesInFlight * 4,
+      framesInFlight * 6,
   }};
   vk::DescriptorPoolCreateInfo pool_info{};
   pool_info.setFlags(vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind)
@@ -155,56 +187,55 @@ SceneRenderer::SceneRenderer(
         std::make_unique<graphics::DescriptorBuffer>(device_.allocator, usage);
     frame.environmentBuffer =
         std::make_unique<graphics::DescriptorBuffer>(device_.allocator, usage);
+    frame.sceneParamsBuffer =
+        std::make_unique<graphics::DescriptorBuffer>(device_.allocator, usage);
 
     vk::DescriptorSetAllocateInfo alloc_info{*descriptorPool_, 1,
                                              &sceneSetLayout_->get()};
     frame.sceneDescriptorSet = dev.allocateDescriptorSets(alloc_info)[0];
     frame.materialDescriptorSet = dev.allocateDescriptorSets(alloc_info)[0];
 
-    auto scene_cam = frame.sceneCameraBuffer->descriptorInfo();
-    auto mat_cam = frame.materialCameraBuffer->descriptorInfo();
-    auto env_buf = frame.environmentBuffer->descriptorInfo();
+    auto scene_cam   = frame.sceneCameraBuffer->descriptorInfo();
+    auto mat_cam     = frame.materialCameraBuffer->descriptorInfo();
+    auto env_buf     = frame.environmentBuffer->descriptorInfo();
+    auto params_buf  = frame.sceneParamsBuffer->descriptorInfo();
 
-    std::array<vk::WriteDescriptorSet, 4> writes = {
+    std::array<vk::WriteDescriptorSet, 6> writes = {
         vk::WriteDescriptorSet{
             frame.sceneDescriptorSet,
             dsl::SceneSetLayout::kCameraBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &scene_cam,
-            nullptr,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &scene_cam, nullptr,
         },
         vk::WriteDescriptorSet{
             frame.sceneDescriptorSet,
             dsl::SceneSetLayout::kEnvironmentBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &env_buf,
-            nullptr,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &env_buf, nullptr,
+        },
+        vk::WriteDescriptorSet{
+            frame.sceneDescriptorSet,
+            dsl::SceneSetLayout::kSceneParamsBinding,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &params_buf, nullptr,
         },
         vk::WriteDescriptorSet{
             frame.materialDescriptorSet,
             dsl::SceneSetLayout::kCameraBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &mat_cam,
-            nullptr,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &mat_cam, nullptr,
         },
         vk::WriteDescriptorSet{
             frame.materialDescriptorSet,
             dsl::SceneSetLayout::kEnvironmentBinding,
-            0,
-            1,
-            vk::DescriptorType::eUniformBuffer,
-            nullptr,
-            &env_buf,
-            nullptr,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &env_buf, nullptr,
+        },
+        vk::WriteDescriptorSet{
+            frame.materialDescriptorSet,
+            dsl::SceneSetLayout::kSceneParamsBinding,
+            0, 1, vk::DescriptorType::eUniformBuffer,
+            nullptr, &params_buf, nullptr,
         },
     };
     dev.updateDescriptorSets(writes, nullptr);
@@ -214,7 +245,8 @@ SceneRenderer::SceneRenderer(
 void SceneRenderer::updateUniforms(std::uint32_t frameIndex,
                                    const types::CameraUBO& sceneCam,
                                    const types::CameraUBO& matCam,
-                                   const env::EnvironmentParams& envParams) {
+                                   const env::EnvironmentParams& envParams,
+                                   const types::SceneParamsUBO& sceneParams) {
   auto& frame = frames_[frameIndex];
   std::ignore =
       frame.sceneCameraBuffer->writeAt(std::as_bytes(std::span{&sceneCam, 1}));
@@ -222,6 +254,8 @@ void SceneRenderer::updateUniforms(std::uint32_t frameIndex,
       frame.materialCameraBuffer->writeAt(std::as_bytes(std::span{&matCam, 1}));
   std::ignore =
       frame.environmentBuffer->writeAt(std::as_bytes(std::span{&envParams, 1}));
+  std::ignore =
+      frame.sceneParamsBuffer->writeAt(std::as_bytes(std::span{&sceneParams, 1}));
 }
 
 };  // namespace vkit::renderer
