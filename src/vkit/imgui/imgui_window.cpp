@@ -45,7 +45,6 @@ void ImguiWindow::render() {
 
   ImGuiWindowClass window_class;
   window_class.ClassId = ImGui::GetID("vkit_windows");
-  window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_HiddenTabBar;
   ImGui::SetNextWindowClass(&window_class);
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(3.0F, 3.0F));

@@ -170,6 +170,11 @@ class GraphicsPipelineBuilder {
     return *this;
   }
 
+  auto clearColorBlendAttachments() -> GraphicsPipelineBuilder& {
+    colorBlendAttachments_.clear();
+    return *this;
+  }
+
   auto addDynamicState(vk::DynamicState state) -> GraphicsPipelineBuilder& {
     if (std::ranges::find(dynamicStates_, state) == dynamicStates_.end()) {
       dynamicStates_.push_back(state);

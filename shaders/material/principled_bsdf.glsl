@@ -164,7 +164,8 @@ Surface buildSurface(vec3 hitPos, vec3 viewDir, mat3 baseTBN, vec2 uv, Principle
     return s;
 }
 
-BaseLighting evaluateBaseLayer(Surface s, vec3 L, EnvironmentParams env) {
+// ── Direct-light BRDF (no IBL). Result is multiplied by lightColor externally.
+BaseLighting evaluateBaseLayerDirect(Surface s, vec3 L, float shadowFactor) {
     BaseLighting result;
     vec3 currentF0 = mix(s.F0, vec3(1.0), s.iridescence * 0.5);
     vec3 H = normalize(s.V + L);
@@ -173,40 +174,41 @@ BaseLighting evaluateBaseLayer(Surface s, vec3 L, EnvironmentParams env) {
     float dotVH = clamp01(dot(s.V, H));
 
     float D = s.anisotropy > 0.0
-        ? D_GGX_Anisotropic(max(s.roughness * (1.0 + s.anisotropy), 0.001), max(s.roughness * (1.0 - s.anisotropy), 0.001), dot(s.T, H), dot(s.B, H), dotNH) : D_GGX(dotNH, s.roughness);
+        ? D_GGX_Anisotropic(max(s.roughness*(1.0+s.anisotropy),0.001), max(s.roughness*(1.0-s.anisotropy),0.001), dot(s.T,H), dot(s.B,H), dotNH)
+        : D_GGX(dotNH, s.roughness);
 
-    float G = G_SchlickGGX(s.dotNV, dotNL, s.roughness);
+    float G    = G_SchlickGGX(s.dotNV, dotNL, s.roughness);
     vec3 F_dir = F_Schlick(dotVH, currentF0);
 
-    vec3 specDirect = ((D * G * F_dir) / max(4.0 * s.dotNV * dotNL, 0.001)) * dotNL;
+    result.specular = ((D * G * F_dir) / max(4.0 * s.dotNV * dotNL, 0.001)) * dotNL * shadowFactor;
+    result.diffuse  = ((vec3(1.0) - F_dir) * (1.0 - s.metallic) * s.albedo.rgb / PI) * dotNL * shadowFactor;
+    return result;
+}
 
-    vec3 diffDirect = ((vec3(1.0) - F_dir) * (1.0 - s.metallic) * s.albedo.rgb / PI) * dotNL;
-
-    vec3 diffIndirect = vec3(0.0);
-    vec3 specIndirect = vec3(0.0);
+// ── IBL (ambient) contribution only.
+BaseLighting evaluateBaseLayerIBL(Surface s, EnvironmentParams env) {
+    BaseLighting result;
+    result.diffuse  = vec3(0.0);
+    result.specular = vec3(0.0);
+    vec3 currentF0 = mix(s.F0, vec3(1.0), s.iridescence * 0.5);
     vec3 F_ind = F_SchlickRoughness(s.dotNV, currentF0, s.roughness);
 
-    // --- Environment IBL ---
     if ((env.features & ENV_FEATURE_USE_DIFFUSE) != 0u && env.irradianceTexIdx >= 0) {
         vec3 irradiance = sampleTexture2DLinear(uint(env.irradianceTexIdx), directionToUV(s.N)).rgb;
-        diffIndirect = irradiance * s.albedo.rgb * ((vec3(1.0) - F_ind) * (1.0 - s.metallic));
+        result.diffuse = irradiance * s.albedo.rgb * ((vec3(1.0) - F_ind) * (1.0 - s.metallic)) * env.intensity * s.ao;
     }
 
     if ((env.features & ENV_FEATURE_USE_SPECULAR) != 0u && env.prefilterTexIdx >= 0 && env.brdfLutTexIdx >= 0) {
-        float rawL = s.roughness * float(env.prefilterNumLayers - 1);
+        float rawL  = s.roughness * float(env.prefilterNumLayers - 1);
         vec3 refDir = s.anisotropy > 0.0 ? normalize(mix(s.R, s.T, s.anisotropy * 0.5)) : s.R;
-
-        vec2 refUV = directionToUV(refDir);
+        vec2 refUV  = directionToUV(refDir);
         vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(refUV, floor(rawL))).rgb;
-        vec3 prefCeil = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(refUV, ceil(rawL))).rgb;
+        vec3 prefCeil  = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(refUV, ceil(rawL))).rgb;
         vec3 prefiltered = mix(prefFloor, prefCeil, fract(rawL));
-
         vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(s.roughness, s.dotNV)).rg;
-        specIndirect = prefiltered * (F_ind * brdf.x + brdf.y);
+        result.specular = prefiltered * (F_ind * brdf.x + brdf.y) * env.intensity * s.ao;
     }
 
-    result.diffuse = diffDirect + (diffIndirect * env.intensity * s.ao);
-    result.specular = specDirect + (specIndirect * env.intensity * s.ao);
     return result;
 }
 
@@ -215,22 +217,19 @@ vec3 applyTransmissionLayer(Surface s, vec3 baseDiffuse, PrincipledBSDFData mat,
     if (length(T) < 0.001) return baseDiffuse;
 
     vec3 refracted = vec3(1.0);
-
     if ((env.features & ENV_FEATURE_USE_SPECULAR) != 0u && env.prefilterTexIdx >= 0) {
         float rawL = s.roughness * float(env.prefilterNumLayers - 1);
         vec2 tUV = directionToUV(T);
         vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(tUV, floor(rawL))).rgb;
-        vec3 prefCeil = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(tUV, ceil(rawL))).rgb;
+        vec3 prefCeil  = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(tUV, ceil(rawL))).rgb;
         refracted = mix(prefFloor, prefCeil, fract(rawL));
     }
 
     float thickness = mat.params.thicknessFactor;
-    if (mat.textures.thicknessTexIdx >= 0) {
+    if (mat.textures.thicknessTexIdx >= 0)
         thickness *= sampleTexture2DLinear(uint(mat.textures.thicknessTexIdx), s.uv).g;
-    }
 
     vec3 atten = calculateVolumeAttenuation(thickness, mat.params.attenuationDistance, mat.params.attenuationColor);
-
     vec3 transLight = refracted * s.albedo.rgb * atten * env.intensity;
     return mix(baseDiffuse, transLight, mat.params.transmissionFactor * (1.0 - s.metallic));
 }
@@ -239,79 +238,96 @@ vec3 applySheenLayer(Surface s, vec3 L, vec3 underlyingColor) {
     vec3 H = normalize(s.V + L);
     float dotNH = clamp01(dot(s.N, H));
     float dotNL = clamp01(dot(s.N, L));
-
     vec3 sheenBrdf = s.sheenColor * D_Charlie(s.sheenRoughness, dotNH) * G_Ashikhmin(dotNL, s.dotNV) * dotNL;
-
-    // Energy conservation: sheen peaks at grazing (low NdotV), so the base layer
-    // is attenuated proportionally there. Approximation avoids a precomputed sheen-E LUT.
     float maxSheen = max(s.sheenColor.r, max(s.sheenColor.g, s.sheenColor.b));
     float sheenScaling = 1.0 - maxSheen * (1.0 - s.dotNV * s.dotNV);
     return underlyingColor * clamp(sheenScaling, 0.0, 1.0) + sheenBrdf;
 }
 
-vec3 applyClearcoatLayer(Surface s, vec3 L, mat3 baseTBN, vec3 underlyingColor, PrincipledBSDFData mat, EnvironmentParams env) {
+// Per-light clearcoat (direct specular + energy conservation attenuation).
+vec3 applyClearcoatDirect(Surface s, vec3 L, mat3 baseTBN,
+                          vec3 underlyingColor, PrincipledBSDFData mat, float shadowFactor) {
     float coatFactor = mat.params.clearcoatFactor;
-    if (mat.textures.clearcoatTexIdx >= 0) {
+    if (mat.textures.clearcoatTexIdx >= 0)
         coatFactor *= sampleTexture2DLinear(uint(mat.textures.clearcoatTexIdx), s.uv).r;
-    }
 
     vec3 coatN = s.N;
-    if (mat.textures.clearcoatNormalTexIdx >= 0) {
+    if (mat.textures.clearcoatNormalTexIdx >= 0)
         coatN = normalize(baseTBN * (sampleTexture2DLinear(uint(mat.textures.clearcoatNormalTexIdx), s.uv).xyz * 2.0 - 1.0));
-    }
 
     float dotNV_c = max(dot(coatN, s.V), 1e-4);
     float dotNL_c = clamp01(dot(coatN, L));
-    vec3 H_c = normalize(s.V + L);
+    vec3  H_c     = normalize(s.V + L);
+    float D_c     = D_GGX(clamp01(dot(coatN, H_c)), mat.params.clearcoatRoughnessFactor);
+    float G_c     = G_SchlickGGX(dotNV_c, dotNL_c, mat.params.clearcoatRoughnessFactor);
+    vec3  coatF   = F_Schlick(clamp01(dot(s.V, H_c)), vec3(0.04)) * coatFactor;
+    vec3  coatDirect = ((D_c * G_c * coatF) / max(4.0 * dotNV_c * dotNL_c, 0.001)) * dotNL_c * shadowFactor;
 
-    float D_c = D_GGX(clamp01(dot(coatN, H_c)), mat.params.clearcoatRoughnessFactor);
-    float G_c = G_SchlickGGX(dotNV_c, dotNL_c, mat.params.clearcoatRoughnessFactor);
-    vec3 coatF = F_Schlick(clamp01(dot(s.V, H_c)), vec3(0.04)) * coatFactor;
-
-    vec3 coatDirect = ((D_c * G_c * coatF) / max(4.0 * dotNV_c * dotNL_c, 0.001)) * dotNL_c;
-    vec3 coatIndirect = vec3(0.0);
-
-    if ((env.features & ENV_FEATURE_USE_SPECULAR) != 0u && env.prefilterTexIdx >= 0 && env.brdfLutTexIdx >= 0) {
-        float rawL = mat.params.clearcoatRoughnessFactor * float(env.prefilterNumLayers - 1);
-        vec3 coatR = reflect(-s.V, coatN);
-        vec2 coatUV = directionToUV(coatR);
-
-        vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, floor(rawL))).rgb;
-        vec3 prefCeil = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, ceil(rawL))).rgb;
-        vec3 prefCoat = mix(prefFloor, prefCeil, fract(rawL));
-
-        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(mat.params.clearcoatRoughnessFactor, dotNV_c)).rg;
-        coatIndirect = prefCoat * (coatF * brdf.x + coatFactor * brdf.y) * env.intensity;
-    }
-
-    return underlyingColor * (vec3(1.0) - coatF) + (coatDirect + coatIndirect);
+    return underlyingColor * (vec3(1.0) - coatF) + coatDirect;
 }
 
-vec3 evaluateUberLighting(Surface s, vec3 L, mat3 baseTBN, PrincipledBSDFData mat, EnvironmentParams env) {
-    BaseLighting base = evaluateBaseLayer(s, L, env);
-    vec3 finalColor = base.diffuse;
+// IBL clearcoat: adds indirect specular and attenuates underlying via F_ind.
+vec3 applyClearcoatIBL(Surface s, mat3 baseTBN, vec3 underlyingColor,
+                        PrincipledBSDFData mat, EnvironmentParams env) {
+    float coatFactor = mat.params.clearcoatFactor;
+    if (mat.textures.clearcoatTexIdx >= 0)
+        coatFactor *= sampleTexture2DLinear(uint(mat.textures.clearcoatTexIdx), s.uv).r;
 
-    if ((mat.params.featureMask & MAT_FEATURE_TRANSMISSION) != 0u) {
+    vec3 coatN = s.N;
+    if (mat.textures.clearcoatNormalTexIdx >= 0)
+        coatN = normalize(baseTBN * (sampleTexture2DLinear(uint(mat.textures.clearcoatNormalTexIdx), s.uv).xyz * 2.0 - 1.0));
+
+    float dotNV_c = max(dot(coatN, s.V), 1e-4);
+    vec3 coatF_ind = F_SchlickRoughness(dotNV_c, vec3(0.04), mat.params.clearcoatRoughnessFactor) * coatFactor;
+
+    vec3 coatIndirect = vec3(0.0);
+    if ((env.features & ENV_FEATURE_USE_SPECULAR) != 0u && env.prefilterTexIdx >= 0 && env.brdfLutTexIdx >= 0) {
+        float rawL = mat.params.clearcoatRoughnessFactor * float(env.prefilterNumLayers - 1);
+        vec3 coatR  = reflect(-s.V, coatN);
+        vec2 coatUV = directionToUV(coatR);
+        vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, floor(rawL))).rgb;
+        vec3 prefCeil  = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, ceil(rawL))).rgb;
+        vec3 prefCoat  = mix(prefFloor, prefCeil, fract(rawL));
+        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(mat.params.clearcoatRoughnessFactor, dotNV_c)).rg;
+        coatIndirect = prefCoat * (coatF_ind * brdf.x + coatFactor * brdf.y) * env.intensity;
+    }
+
+    return underlyingColor * (vec3(1.0) - coatF_ind) + coatIndirect;
+}
+
+// ── IBL pass (call once per surface).
+vec3 evaluateUberLightingIBL(Surface s, mat3 baseTBN, PrincipledBSDFData mat, EnvironmentParams env) {
+    BaseLighting indirect = evaluateBaseLayerIBL(s, env);
+    vec3 finalColor = indirect.diffuse;
+
+    if ((mat.params.featureMask & MAT_FEATURE_TRANSMISSION) != 0u)
         finalColor = applyTransmissionLayer(s, finalColor, mat, env);
-    }
 
-    finalColor += base.specular;
+    finalColor += indirect.specular;
 
-    if ((mat.params.featureMask & MAT_FEATURE_SHEEN) != 0u) {
-        finalColor = applySheenLayer(s, L, finalColor);
-    }
-
-    if ((mat.params.featureMask & MAT_FEATURE_CLEARCOAT) != 0u) {
-        finalColor = applyClearcoatLayer(s, L, baseTBN, finalColor, mat, env);
-    }
+    if ((mat.params.featureMask & MAT_FEATURE_CLEARCOAT) != 0u)
+        finalColor = applyClearcoatIBL(s, baseTBN, finalColor, mat, env);
 
     if ((mat.params.featureMask & MAT_FEATURE_EMISSIVE) != 0u) {
         vec3 emissive = mat.params.emissiveFactor;
-        if (mat.textures.emissiveTexIdx >= 0) {
+        if (mat.textures.emissiveTexIdx >= 0)
             emissive *= sampleTexture2DLinear(uint(mat.textures.emissiveTexIdx), s.uv).rgb;
-        }
         finalColor += emissive;
     }
+
+    return finalColor;
+}
+
+// ── Per-light direct pass. Result is multiplied by lightColor externally.
+vec3 evaluateUberLightingDirect(Surface s, vec3 L, mat3 baseTBN, PrincipledBSDFData mat, float shadowFactor) {
+    BaseLighting direct = evaluateBaseLayerDirect(s, L, shadowFactor);
+    vec3 finalColor = direct.diffuse + direct.specular;
+
+    if ((mat.params.featureMask & MAT_FEATURE_SHEEN) != 0u)
+        finalColor = applySheenLayer(s, L, finalColor);
+
+    if ((mat.params.featureMask & MAT_FEATURE_CLEARCOAT) != 0u)
+        finalColor = applyClearcoatDirect(s, L, baseTBN, finalColor, mat, shadowFactor);
 
     return finalColor;
 }

@@ -2,9 +2,11 @@
 
 #include <imgui.h>
 
+#include <algorithm>
 #include <cstring>
 #include <limits>
 #include <string>
+#include <vector>
 
 #include "vkit/animation/animator.hpp"
 #include "vkit/controller/asset.hpp"
@@ -52,6 +54,11 @@ void ConfigurationWindow::setSceneParams(
   sceneParams_ = sceneParams;
 }
 
+void ConfigurationWindow::setLights(
+    std::vector<renderer::types::Light>* lights) {
+  lights_ = lights;
+}
+
 void ConfigurationWindow::setMaterialPreviewData(
     material::MaterialManager* matManager, std::uint32_t* previewSlot) {
   matManager_ = matManager;
@@ -63,14 +70,26 @@ void ConfigurationWindow::setWorkflowController(
   workflowController_ = workflowController;
 }
 
+void ConfigurationWindow::setSelectedPrimitive(
+    std::optional<std::uint32_t>* selectedPrimitive) {
+  selectedPrimitive_ = selectedPrimitive;
+}
+
+void ConfigurationWindow::setCameraLight(renderer::types::Light* cameraLight,
+                                         bool* cameraLightEnabled) {
+  cameraLight_ = cameraLight;
+  cameraLightEnabled_ = cameraLightEnabled;
+}
+
 void ConfigurationWindow::onDraw() {
   ImGui::BeginChild("ConfigScrollRegion", ImVec2(0, 0), 0,
                     ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
   drawAssetManagementSection();
   drawSceneParamsConfigurationSection();
+  drawLightingSection();
   drawAnimationManagementSection();
-  drawPrimitiveMaterialSection();
+  drawPrimitivesSection();
   drawEnvironmentManagementSection();
   drawMaterialPreivewSection();
 
@@ -189,7 +208,99 @@ void ConfigurationWindow::drawSceneParamsConfigurationSection() {
     ImGui::Spacing();
     ImGui::SliderFloat("Exposure", &sceneParams_->exposure, 0.1F, 10.0F);
     ImGui::SliderFloat("Gamma",    &sceneParams_->gamma,    0.1F,  3.0F);
+    ImGui::Spacing();
   }
+}
+
+void ConfigurationWindow::drawLightingSection() {
+  if (!lights_ || !sceneParams_) return;
+
+  if (!ImGui::CollapsingHeader("Lighting")) return;
+
+  ImGui::Spacing();
+
+  bool shadows_on = (sceneParams_->shadowsEnabled != 0);
+  if (ImGui::Checkbox("Enable Shadows", &shadows_on))
+    sceneParams_->shadowsEnabled = shadows_on ? 1 : 0;
+  if (shadows_on)
+    ImGui::SliderFloat("Shadow Bias", &sceneParams_->shadowBias, 0.0001F, 0.05F, "%.4f");
+
+  // ── Camera Light ──────────────────────────────────────────────────────────
+  if (cameraLight_ && cameraLightEnabled_) {
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    bool cam_on = *cameraLightEnabled_;
+    if (ImGui::Checkbox("Camera Light", &cam_on))
+      *cameraLightEnabled_ = cam_on;
+
+    if (cam_on) {
+      ImGui::PushID("cam_light");
+      ImGui::ColorEdit3("Color##cl",     &cameraLight_->color.x);
+      ImGui::SliderFloat("Intensity##cl", &cameraLight_->intensity, 0.0F, 20.0F);
+      ImGui::SliderFloat("Range##cl",     &cameraLight_->range, 0.1F, 200.0F);
+      bool cl_casts = (cameraLight_->castsShadows != 0);
+      if (ImGui::Checkbox("Casts Shadows##cl", &cl_casts))
+        cameraLight_->castsShadows = cl_casts ? 1 : 0;
+      ImGui::PopID();
+    }
+  }
+
+  ImGui::Spacing();
+  ImGui::Separator();
+
+  static const char* kLightTypeNames[] = {"Directional", "Point", "Spot"};
+
+  auto& lights = *lights_;
+  int remove_idx = -1;
+
+  for (int idx = 0; idx < static_cast<int>(lights.size()); ++idx) {
+    auto& li = lights[idx];
+    ImGui::PushID(idx);
+
+    const char* type_name = kLightTypeNames[std::clamp(li.type, 0, 2)];
+    std::string header = std::string("Light ") + std::to_string(idx) + " (" + type_name + ")";
+    if (ImGui::TreeNode(header.c_str())) {
+      ImGui::Combo("Type", &li.type, kLightTypeNames, 3);
+      ImGui::ColorEdit3("Color", &li.color.x);
+      ImGui::SliderFloat("Intensity", &li.intensity, 0.0F, 20.0F);
+
+      if (li.type == static_cast<int>(renderer::types::LightType::kDirectional) ||
+          li.type == static_cast<int>(renderer::types::LightType::kSpot)) {
+        ImGui::DragFloat3("Direction", &li.direction.x, 0.01F, -1.0F, 1.0F);
+      }
+      if (li.type == static_cast<int>(renderer::types::LightType::kPoint) ||
+          li.type == static_cast<int>(renderer::types::LightType::kSpot)) {
+        ImGui::DragFloat3("Position", &li.position.x, 0.1F);
+        ImGui::SliderFloat("Range", &li.range, 0.1F, 200.0F);
+      }
+      if (li.type == static_cast<int>(renderer::types::LightType::kSpot)) {
+        ImGui::SliderFloat("Inner Angle", &li.innerAngle, 0.01F, 1.57F);
+        ImGui::SliderFloat("Outer Angle", &li.outerAngle, 0.01F, 1.57F);
+      }
+
+      bool casts = (li.castsShadows != 0);
+      if (ImGui::Checkbox("Casts Shadows", &casts))
+        li.castsShadows = casts ? 1 : 0;
+
+      if (ImGui::Button("Remove")) remove_idx = idx;
+
+      ImGui::TreePop();
+    }
+    ImGui::PopID();
+  }
+
+  if (remove_idx >= 0)
+    lights.erase(lights.begin() + remove_idx);
+
+  ImGui::Spacing();
+  if (static_cast<std::uint32_t>(lights.size()) < renderer::types::kMaxSceneLights) {
+    if (ImGui::Button("Add Light"))
+      lights.emplace_back();
+  }
+
+  ImGui::Spacing();
 }
 
 void ConfigurationWindow::drawAnimationManagementSection() {
@@ -197,79 +308,100 @@ void ConfigurationWindow::drawAnimationManagementSection() {
 
   auto current_asset = assetController_->getCurrentAsset();
   if (!current_asset || current_asset->animations.empty()) return;
+  if (!*enableSkinning_) return;
 
   if (ImGui::CollapsingHeader("Animations")) {
     ImGui::Spacing();
 
-    if (ImGui::Checkbox("Enable Skinning & Animation", enableSkinning_)) {
-      if (!*enableSkinning_) {
-        animator_->stop();
-      }
+    static int selected_anim = 0;
+    if (selected_anim >= static_cast<int>(current_asset->animations.size())) {
+      selected_anim = 0;
+      animator_->setActiveAnimation(selected_anim);
     }
 
-    if (*enableSkinning_) {
-      ImGui::Spacing();
-      ImGui::Separator();
-      ImGui::Spacing();
+    const auto preview_name =
+        std::string{current_asset->animations[selected_anim]->getName()};
 
-      static int selected_anim = 0;
-      if (selected_anim >= current_asset->animations.size()) {
-        selected_anim = 0;
-        animator_->setActiveAnimation(selected_anim);
-      }
-
-      const auto preview_name =
-          std::string{current_asset->animations[selected_anim]->getName()};
-
-      if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
-        for (int i = 0; i < current_asset->animations.size(); ++i) {
-          bool is_selected = (selected_anim == i);
-
-          const auto item_name =
-              std::string{current_asset->animations[i]->getName()};
-
-          if (ImGui::Selectable(item_name.c_str(), is_selected)) {
-            selected_anim = i;
-            animator_->setActiveAnimation(selected_anim);
-            animator_->stop();
-            animator_->play();
-          }
-          if (is_selected) ImGui::SetItemDefaultFocus();
+    if (ImGui::BeginCombo("Clip", preview_name.c_str())) {
+      for (int i = 0; i < static_cast<int>(current_asset->animations.size()); ++i) {
+        bool is_selected = (selected_anim == i);
+        const auto item_name =
+            std::string{current_asset->animations[i]->getName()};
+        if (ImGui::Selectable(item_name.c_str(), is_selected)) {
+          selected_anim = i;
+          animator_->setActiveAnimation(selected_anim);
+          animator_->stop();
         }
-        ImGui::EndCombo();
+        if (is_selected) ImGui::SetItemDefaultFocus();
       }
+      ImGui::EndCombo();
+    }
 
-      ImGui::Spacing();
+    ImGui::Spacing();
 
-      bool is_playing = animator_->isPlaying();
-      if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
-        animator_->togglePlayback();
-      }
+    bool is_playing = animator_->isPlaying();
+    if (ImGui::Button(is_playing ? "Pause" : "Play ", ImVec2(80, 0))) {
+      animator_->togglePlayback();
+    }
 
-      ImGui::SameLine();
+    ImGui::SameLine();
 
-      if (ImGui::Button("Stop", ImVec2(80, 0))) {
-        animator_->stop();
-      }
+    if (ImGui::Button("Stop", ImVec2(80, 0))) {
+      animator_->stop();
+    }
 
-      float speed = animator_->getTimeScale();
-      if (ImGui::SliderFloat("Speed", &speed, 0.0F, 10.0F, "%.2fx")) {
-        animator_->setTimeScale(speed);
-      }
+    float speed = animator_->getTimeScale();
+    if (ImGui::SliderFloat("Speed", &speed, 0.0F, 10.0F, "%.2fx")) {
+      animator_->setTimeScale(speed);
     }
 
     ImGui::Spacing();
   }
 }
 
-void ConfigurationWindow::drawPrimitiveMaterialSection() {
-  if (!assetController_ || !matManager_) return;
+void ConfigurationWindow::drawPrimitivesSection() {
+  if (!assetController_) return;
   auto asset = assetController_->getCurrentAsset();
   if (!asset) return;
 
-  if (!ImGui::CollapsingHeader("Primitive Materials")) return;
+  if (!ImGui::CollapsingHeader("Primitives")) return;
 
   ImGui::Spacing();
+
+  // ── Selection ─────────────────────────────────────────────────────────────
+  if (selectedPrimitive_) {
+    if (selectedPrimitive_->has_value()) {
+      ImGui::TextDisabled("Selected: Primitive (id %u)", selectedPrimitive_->value());
+      ImGui::SameLine();
+      if (ImGui::Button("Clear Selection"))
+        *selectedPrimitive_ = std::nullopt;
+    } else {
+      ImGui::TextDisabled("No primitive selected");
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+  }
+
+  // ── Skinning ──────────────────────────────────────────────────────────────
+  if (enableSkinning_ && animator_ && !asset->animations.empty()) {
+    if (ImGui::Checkbox("Enable Skinning", enableSkinning_)) {
+      if (*enableSkinning_) {
+        animator_->snapshotBindPose(asset.get());
+      } else {
+        animator_->resetToBindPose(asset.get());
+      }
+    }
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+  }
+
+  // ── Material slots ────────────────────────────────────────────────────────
+  if (!matManager_) {
+    ImGui::Spacing();
+    return;
+  }
 
   auto slots = matManager_->getSlots();
   auto meshes = asset->meshes.getItems();
@@ -345,6 +477,26 @@ void ConfigurationWindow::drawPrimitiveMaterialSection() {
 
         ImGui::PushID(prim_idx);
 
+        // Selection button
+        const bool prim_has_id = prim->getStorageId().has_value();
+        const bool is_selected =
+            selectedPrimitive_ && prim_has_id &&
+            selectedPrimitive_->has_value() &&
+            selectedPrimitive_->value() == prim->getStorageId().value();
+
+        if (is_selected)
+          ImGui::PushStyleColor(ImGuiCol_Button,
+                                ImVec4(0.122F, 0.498F, 0.769F, 1.0F));
+        if (ImGui::Button(is_selected ? "Deselect" : "Select ") &&
+            selectedPrimitive_) {
+          if (is_selected)
+            *selectedPrimitive_ = std::nullopt;
+          else if (prim_has_id)
+            *selectedPrimitive_ = prim->getStorageId().value();
+        }
+        if (is_selected) ImGui::PopStyleColor();
+
+        ImGui::SameLine();
         ImGui::AlignTextToFramePadding();
         ImGui::TextDisabled("Primitive %d", prim_idx);
         ImGui::SameLine();

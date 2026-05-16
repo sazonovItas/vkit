@@ -5,6 +5,9 @@
 
 #include <algorithm>
 #include <filesystem>
+
+#include <glm/ext/matrix_clip_space.hpp>
+#include <glm/ext/matrix_transform.hpp>
 #include <memory>
 #include <span>
 
@@ -31,7 +34,10 @@
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
+#include "vkit/renderer/command/draw_light_gizmos.hpp"
 #include "vkit/renderer/command/draw_scene.hpp"
+#include "vkit/renderer/command/draw_shadow.hpp"
+#include "vkit/renderer/render_pass/shadow.hpp"
 #include "vkit/renderer/render_pass/swapchain.hpp"
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/types.hpp"
@@ -462,6 +468,13 @@ void App::initViewports() {
   scene_.sceneCamera = std::make_shared<scene::Camera>("Scene Camera");
   scene_.sceneCamera->setPosition(glm::vec3(0.0F, 2.0F, 5.0F));
 
+  // Default camera-attached point light (position updated every frame).
+  ui_.cameraLight.type = static_cast<int>(renderer::types::LightType::kPoint);
+  ui_.cameraLight.color = {1.0F, 1.0F, 1.0F};
+  ui_.cameraLight.intensity = 1.5F;
+  ui_.cameraLight.range = 25.0F;
+  ui_.cameraLight.castsShadows = 0;
+
   scene_.materialCamera = std::make_shared<scene::Camera>("Material Camera");
   scene_.materialController.target = glm::vec3(0.0F, 0.0F, 0.0F);
   scene_.materialController.distance = 2.5F;
@@ -570,9 +583,12 @@ void App::initImguiWindows() {
   ui_.configWindow->setAnimator(rSys_.animator.get());
   ui_.configWindow->setEnableSkinning(&ui_.enableSkinning);
   ui_.configWindow->setSceneParams(&ui_.sceneParams);
+  ui_.configWindow->setLights(&ui_.lights);
   ui_.configWindow->setMaterialPreviewData(engine_.materialManager.get(),
                                            &ui_.previewMaterialSlot);
   ui_.configWindow->setWorkflowController(engine_.workflowController.get());
+  ui_.configWindow->setSelectedPrimitive(&ui_.selectedPrimitive);
+  ui_.configWindow->setCameraLight(&ui_.cameraLight, &ui_.cameraLightEnabled);
 
   ui_.windowManager->addWindow(ui_.sceneViewer);
   ui_.windowManager->addWindow(ui_.materialViewer);
@@ -703,7 +719,8 @@ void App::mainLoop() {
       current_asset->update();
     }
 
-    rSys_.animator->update(dt, current_asset.get());
+    if (ui_.enableSkinning)
+      rSys_.animator->update(dt, current_asset.get());
     rSys_.materialSys->update(currentFrame_, *engine_.materialManager);
     rSys_.assetBridge->update(currentFrame_, current_asset.get());
 
@@ -734,8 +751,66 @@ void App::mainLoop() {
         .position = scene_.materialCamera->getPosition(),
     };
 
+    // Build LightsSSBO from the configured lights list plus optional camera light.
+    renderer::types::LightsSSBO lights_ssbo{};
+    std::uint32_t light_count = 0;
+    for (const auto& l : ui_.lights) {
+      if (light_count >= renderer::types::kMaxSceneLights) break;
+      lights_ssbo.lights[light_count++] = l;
+    }
+    if (ui_.cameraLightEnabled &&
+        light_count < renderer::types::kMaxSceneLights) {
+      ui_.cameraLight.position = scene_.sceneCamera->getPosition();
+      lights_ssbo.lights[light_count++] = ui_.cameraLight;
+    }
+    lights_ssbo.count = light_count;
+
+    // Build shadow light UBO from the first shadow-casting light.
+    renderer::types::ShadowLightUBO shadow_light{};
+    bool any_shadow_caster = false;
+    static constexpr float kShadowArea     = 20.0F;
+    static constexpr float kShadowDistance = 50.0F;
+    static constexpr float kPi             = 3.14159265F;
+    for (std::uint32_t li = 0; li < lights_ssbo.count; ++li) {
+      const auto& sl = lights_ssbo.lights[li];
+      if (sl.castsShadows == 0) continue;
+      any_shadow_caster = true;
+
+      const glm::vec3 ldir = glm::normalize(sl.direction);
+      const glm::vec3 up =
+          (std::abs(glm::dot(ldir, glm::vec3(0.0F, 1.0F, 0.0F))) < 0.99F)
+              ? glm::vec3(0.0F, 1.0F, 0.0F)
+              : glm::vec3(1.0F, 0.0F, 0.0F);
+
+      glm::mat4 lview, lproj;
+      const float half = kShadowArea * 0.5F;
+
+      if (sl.type == static_cast<int>(renderer::types::LightType::kDirectional)) {
+        // Orthographic, looking from virtual light position toward scene center.
+        const glm::vec3 lpos = -ldir * kShadowDistance;
+        lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
+        lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, kShadowDistance * 2.0F);
+      } else if (sl.type == static_cast<int>(renderer::types::LightType::kSpot)) {
+        // Perspective frustum aligned with the spot's direction.
+        const glm::vec3 lpos = sl.position;
+        lview = glm::lookAt(lpos, lpos + ldir, up);
+        const float fov = glm::clamp(sl.outerAngle * 2.0F, 0.01F, kPi * 0.99F);
+        lproj = glm::perspectiveRH_ZO(fov, 1.0F, 0.1F, sl.range * 2.0F);
+      } else {
+        // Point light: orthographic toward scene center (single shadow map approximation).
+        const glm::vec3 lpos = sl.position;
+        lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
+        lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, sl.range * 2.0F);
+      }
+
+      shadow_light.viewProj = lproj * lview;
+      ui_.sceneParams.shadowViewProj = shadow_light.viewProj;
+      break;
+    }
+
     rSys_.sceneRenderer->updateUniforms(currentFrame_, scene_ubo, mat_ubo,
-                                        env_params, ui_.sceneParams);
+                                        env_params, ui_.sceneParams,
+                                        lights_ssbo, shadow_light);
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ui_.windowManager->drawWindows(currentFrame_);
@@ -748,6 +823,22 @@ void App::mainLoop() {
         rSys_.sceneRenderer->getMaterialDescriptorSet(currentFrame_);
     auto mat_set = rSys_.materialSys->getDescriptorSet(currentFrame_);
     auto prim_set = rSys_.assetBridge->getDescriptorSet(currentFrame_);
+    auto light_set = rSys_.sceneRenderer->getLightDescriptorSet(currentFrame_);
+
+    // Shadow pass: only when shadows are enabled and a shadow-casting light exists.
+    if (current_asset && ui_.sceneParams.shadowsEnabled && any_shadow_caster) {
+      task.add<renderer::rp::BeginShadowPass>(
+              rSys_.sceneRenderer->getShadowImage(),
+              rSys_.sceneRenderer->getShadowImageView(),
+              rSys_.sceneRenderer->getShadowExtent())
+          .add<renderer::cmd::DrawShadowCommand>(
+              rSys_.sceneRenderer->shadowPipeline,
+              rSys_.sceneRenderer->shadowLayout->get(), light_set, prim_set,
+              current_asset.get(), engine_.materialManager.get(),
+              ui_.enableSkinning)
+          .add<renderer::rp::EndShadowPass>(
+              rSys_.sceneRenderer->getShadowImage());
+    }
 
     if (ui_.sceneViewer->isVisible()) {
       task.add<renderer::rp::BeginViewportPass>(frame.sceneViewport, 0, 1)
@@ -763,6 +854,15 @@ void App::mainLoop() {
               sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
               engine_.materialManager.get(), ui_.enableSkinning,
               scene_.sceneCamera->getPosition())
+          .add<renderer::cmd::DrawOutlineCommand>(
+              rSys_.sceneRenderer->outlinePipeline,
+              rSys_.sceneRenderer->primitiveLayout->get(), scene_set,
+              sys_.bindlessSet, mat_set, prim_set, current_asset.get(),
+              ui_.enableSkinning, ui_.selectedPrimitive)
+          .add<renderer::cmd::DrawLightGizmosCommand>(
+              rSys_.sceneRenderer->lightGizmoPipeline,
+              rSys_.sceneRenderer->lightGizmoLayout->get(), scene_set,
+              lights_ssbo.count)
           .add<renderer::rp::EndViewportPass>(frame.sceneViewport, 1);
     }
 

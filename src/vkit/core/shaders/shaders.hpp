@@ -29,6 +29,16 @@ static constexpr std::string_view kPrimitiveMaterialFragShaderPath =
 static constexpr std::string_view kSkyboxVertShaderPath = "shaders/skybox.vert";
 static constexpr std::string_view kSkyboxFragShaderPath = "shaders/skybox.frag";
 
+static constexpr std::string_view kShadowVertShaderPath = "shaders/shadow.vert";
+
+static constexpr std::string_view kLightGizmoVertShaderPath =
+    "shaders/light_gizmo.vert";
+static constexpr std::string_view kLightGizmoFragShaderPath =
+    "shaders/light_gizmo.frag";
+
+static constexpr std::string_view kOutlineVertShaderPath = "shaders/outline.vert";
+static constexpr std::string_view kOutlineFragShaderPath = "shaders/outline.frag";
+
 static constexpr std::string_view kIblBrdfLutShaderPath =
     "shaders/ibl/brdf_lut.comp";
 static constexpr std::string_view kIblDiffuseShaderPath =

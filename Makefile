@@ -16,6 +16,14 @@ glslc:
 	glslc ./shaders/skybox.vert -o ./assets/shaders/skybox.vert
 	glslc ./shaders/skybox.frag -o ./assets/shaders/skybox.frag
 
+	glslc ./shaders/shadow.vert -o ./assets/shaders/shadow.vert
+
+	glslc ./shaders/light_gizmo.vert -o ./assets/shaders/light_gizmo.vert
+	glslc ./shaders/light_gizmo.frag -o ./assets/shaders/light_gizmo.frag
+
+	glslc ./shaders/outline.vert -o ./assets/shaders/outline.vert
+	glslc ./shaders/outline.frag -o ./assets/shaders/outline.frag
+
 	glslc ./shaders/ibl/brdf_lut.comp -o ./assets/shaders/ibl/brdf_lut.comp
 	glslc ./shaders/ibl/diffuse_ibl.comp -o ./assets/shaders/ibl/diffuse_ibl.comp
 	glslc ./shaders/ibl/specular_ibl.comp -o ./assets/shaders/ibl/specular_ibl.comp

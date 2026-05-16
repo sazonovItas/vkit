@@ -11,12 +11,12 @@ layout(location = 0) out vec4 outColor;
 #include "common/bindless.glsl"
 #include "common/environment.glsl"
 #include "common/primitive_types.glsl"
+#include "common/shadow.glsl"
+#include "common/light_types.glsl"
 
 #include "material/diffuse.glsl"
 #include "material/diffuse_specular.glsl"
 #include "material/principled_bsdf.glsl"
-
-#include "evaluation.glsl"
 
 layout(set = 0, binding = 0) uniform Camera {
     mat4 view;
@@ -29,8 +29,18 @@ layout(set = 0, binding = 1) uniform Environment {
 layout(set = 0, binding = 2) uniform SceneParams {
     float exposure;
     float gamma;
+    int   shadowsEnabled;
+    float shadowBias;
+    mat4  shadowViewProj;
 } sceneParams;
+layout(std430, set = 0, binding = 3) readonly buffer LightsBlock {
+    uint  count;
+    uint  _pad0; uint _pad1; uint _pad2;
+    Light lights[];
+} lightsBlock;
+layout(set = 0, binding = 4) uniform sampler2DShadow shadowMap;
 
+#include "evaluation.glsl"
 
 layout(std430, set = 2, binding = 0) readonly buffer DiffuseBlock {
     DiffuseData materials[];
@@ -52,26 +62,22 @@ layout(push_constant) uniform PushConstants {
 } pcs;
 
 void main() {
-    vec3 V = normalize(camera.position - inWorldPos);
-    vec3 L = V;
-
     float facing = gl_FrontFacing ? 1.0 : -1.0;
-    vec3 N = normalize(inNormal) * facing;
-    vec3 T = length(inTangent) > 0.1 ? normalize(inTangent) * facing : vec3(1.0, 0.0, 0.0);
+    vec3 N = normalize(inNormal)   * facing;
+    vec3 T = length(inTangent)   > 0.1 ? normalize(inTangent)   * facing : vec3(1.0, 0.0, 0.0);
     vec3 B = length(inBitangent) > 0.1 ? normalize(inBitangent) * facing : cross(N, T);
     mat3 baseTBN = mat3(T, B, N);
 
+    vec3 V = normalize(camera.position - inWorldPos);
+
     if (pcs.materialType == DIFFUSE_MATERIAL) {
-        outColor = evaluateDiffuse(diffData.materials[pcs.materialIndex], inUV, baseTBN, L);
-    }
-    else if (pcs.materialType == DIFFUSE_SPECULAR_MATERIAL) {
-        outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], inUV, baseTBN, V, L);
-    }
-    else if (pcs.materialType == PRINCIPLED_MATERIAL) {
-        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], inWorldPos, inUV, baseTBN, V, L, env.params, sceneParams.exposure);
+        outColor = evaluateDiffuse(diffData.materials[pcs.materialIndex], inUV, baseTBN, inWorldPos);
+    } else if (pcs.materialType == DIFFUSE_SPECULAR_MATERIAL) {
+        outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], inUV, baseTBN, V, inWorldPos);
+    } else if (pcs.materialType == PRINCIPLED_MATERIAL) {
+        outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], inWorldPos, inUV, baseTBN, V, env.params, sceneParams.exposure);
         outColor.rgb = pow(outColor.rgb, vec3(1.0 / max(sceneParams.gamma, 0.01)));
-    }
-    else {
-        outColor = evaluateFallback(inNormal, inTangent, inUV);
+    } else {
+        outColor = evaluateFallback(inNormal, inTangent, inUV, inWorldPos);
     }
 }

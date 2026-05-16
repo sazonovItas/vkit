@@ -2,10 +2,15 @@
 
 #include <optional>
 #include <string_view>
+#include <vector>
 
 #include "vkit/imgui/imgui_window.hpp"
 #include "vkit/material/manager.hpp"
 #include "vkit/renderer/types.hpp"
+
+namespace vkit::imgui::windows {
+
+}  // namespace vkit::imgui::windows
 
 namespace vkit::controller {
 class AssetController;
@@ -37,10 +42,14 @@ class ConfigurationWindow : public ImguiWindow {
   void setAnimator(animation::Animator* animator);
   void setEnableSkinning(bool* enableSkinning);
   void setSceneParams(renderer::types::SceneParamsUBO* sceneParams);
+  void setLights(std::vector<renderer::types::Light>* lights);
   void setMaterialPreviewData(material::MaterialManager* matManager,
                               std::uint32_t* previewSlot);
   void setWorkflowController(
       controller::WorkflowController* workflowController);
+  void setSelectedPrimitive(std::optional<std::uint32_t>* selectedPrimitive);
+  void setCameraLight(renderer::types::Light* cameraLight,
+                      bool* cameraLightEnabled);
 
  protected:
   void onDraw() override;
@@ -53,6 +62,10 @@ class ConfigurationWindow : public ImguiWindow {
   animation::Animator* animator_{nullptr};
   bool* enableSkinning_{nullptr};
   renderer::types::SceneParamsUBO* sceneParams_{nullptr};
+  std::vector<renderer::types::Light>* lights_{nullptr};
+  std::optional<std::uint32_t>* selectedPrimitive_{nullptr};
+  renderer::types::Light* cameraLight_{nullptr};
+  bool* cameraLightEnabled_{nullptr};
 
   material::MaterialManager* matManager_{nullptr};
   std::uint32_t* previewSlot_{nullptr};
@@ -65,8 +78,9 @@ class ConfigurationWindow : public ImguiWindow {
 
   void drawAssetManagementSection();
   void drawSceneParamsConfigurationSection();
+  void drawLightingSection();
   void drawAnimationManagementSection();
-  void drawPrimitiveMaterialSection();
+  void drawPrimitivesSection();
   void drawEnvironmentManagementSection();
   void drawMaterialPreivewSection();
 };

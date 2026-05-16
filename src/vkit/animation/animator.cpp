@@ -5,14 +5,15 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "vkit/scene/node.hpp"
+
 namespace vkit::animation {
 
 void Animator::update(float dt, asset::Asset* currentAsset) {
   if (!currentAsset || currentAsset->animations.empty()) return;
+  if (!isPlaying_) return;
 
-  if (isPlaying_) {
-    totalTime_ += (dt * timeScale_);
-  }
+  totalTime_ += (dt * timeScale_);
 
   activeAnimationIndex_ =
       std::min(activeAnimationIndex_,
@@ -76,6 +77,29 @@ void Animator::update(float dt, asset::Asset* currentAsset) {
   }
 
   currentAsset->update();
+}
+
+void Animator::snapshotBindPose(asset::Asset* asset) {
+  if (!asset) return;
+  bindPose_.clear();
+  for (const auto& anim : asset->animations) {
+    if (!anim) continue;
+    for (const auto& channel : anim->channels) {
+      if (!channel.targetNode) continue;
+      auto* node = channel.targetNode.get();
+      if (bindPose_.find(node) == bindPose_.end())
+        bindPose_[node] = node->getLocalTransform();
+    }
+  }
+}
+
+void Animator::resetToBindPose(asset::Asset* asset) {
+  stop();
+  if (!asset) return;
+  for (auto& [node, transform] : bindPose_)
+    node->setLocalTransform(transform);
+  if (!bindPose_.empty())
+    asset->update();
 }
 
 };  // namespace vkit::animation

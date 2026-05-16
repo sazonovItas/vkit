@@ -4,6 +4,7 @@
 #include <array>
 #include <glm/glm.hpp>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <vulkan/vulkan.hpp>
 
@@ -300,6 +301,87 @@ class DrawAssetCommand final : public graphics::Command {
   const material::MaterialManager* materialManager_;
   const bool enableSkinning_;
   glm::vec3 cameraPos_;
+};
+
+class DrawOutlineCommand final : public graphics::Command {
+ public:
+  DrawOutlineCommand(vk::Pipeline pipeline, vk::PipelineLayout layout,
+                     vk::DescriptorSet sceneSet, vk::DescriptorSet bindlessSet,
+                     vk::DescriptorSet materialSet, vk::DescriptorSet primSet,
+                     const asset::Asset* asset, bool enableSkinning,
+                     std::optional<std::uint32_t> selectedPrimStorageId)
+      : pipeline_{pipeline},
+        layout_{layout},
+        sceneSet_{sceneSet},
+        bindlessSet_{bindlessSet},
+        materialSet_{materialSet},
+        primSet_{primSet},
+        asset_{asset},
+        enableSkinning_{enableSkinning},
+        selectedPrimStorageId_{selectedPrimStorageId} {}
+
+  void record(vk::CommandBuffer cb) const override {
+    if (!asset_ || !selectedPrimStorageId_.has_value() || asset_->scenes.empty())
+      return;
+    auto active_scene = asset_->getActiveScene();
+    if (!active_scene) return;
+
+    bool found = false;
+
+    auto traverse_node = [&](auto& self, const scene::Node* node) -> void {
+      if (found) return;
+      if (node->mesh) {
+        for (const auto& prim : node->mesh->getPrimitives()) {
+          if (found) break;
+          if (!prim->attrs.index.isValid() || !prim->getStorageId().has_value())
+            continue;
+          if (prim->getStorageId().value() != *selectedPrimStorageId_) continue;
+
+          found = true;
+          cb.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_);
+          std::array<vk::DescriptorSet, 4> sets = {sceneSet_, bindlessSet_,
+                                                   materialSet_, primSet_};
+          cb.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, layout_, 0,
+                                sets, nullptr);
+
+          auto pcs = pl::PrimitiveMaterialPipelineLayout::PushConstants{
+              .model = node->getGlobalTransform().getMatrix(),
+              .primIndex = prim->getStorageId().value(),
+              .skinOffset = asset_->skins.getOffsetForNode(node),
+              .enableSkinning =
+                  (node->skin != nullptr && enableSkinning_) ? 1U : 0U,
+              .materialType = 0U,
+              .materialIndex = 0U,
+          };
+          cb.bindIndexBuffer(prim->getIndexBuffer()->buffer,
+                             prim->getIndexBufferOffset(), prim->getIndexType());
+          cb.pushConstants(layout_,
+                           vk::ShaderStageFlagBits::eVertex |
+                               vk::ShaderStageFlagBits::eFragment,
+                           0, sizeof(pcs), &pcs);
+          cb.drawIndexed(prim->attrs.index.info.count, 1, 0, 0, 0);
+        }
+      }
+      for (const auto& child : node->getChildren())
+        self(self, child.get());
+    };
+
+    for (std::uint32_t root_id : active_scene->rootNodes) {
+      if (auto node = asset_->nodes.get(root_id))
+        traverse_node(traverse_node, node.get());
+    }
+  }
+
+ private:
+  vk::Pipeline pipeline_;
+  vk::PipelineLayout layout_;
+  vk::DescriptorSet sceneSet_;
+  vk::DescriptorSet bindlessSet_;
+  vk::DescriptorSet materialSet_;
+  vk::DescriptorSet primSet_;
+  const asset::Asset* asset_;
+  bool enableSkinning_;
+  std::optional<std::uint32_t> selectedPrimStorageId_;
 };
 
 };  // namespace vkit::renderer::cmd

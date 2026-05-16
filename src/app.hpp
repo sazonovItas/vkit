@@ -2,6 +2,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <vk_mem_alloc.hpp>
 
@@ -133,6 +134,10 @@ class App {
 
     bool enableSkinning{false};
     renderer::types::SceneParamsUBO sceneParams{};
+    std::vector<renderer::types::Light> lights{renderer::types::Light{}};
+    renderer::types::Light cameraLight{};
+    bool cameraLightEnabled{false};
+    std::optional<std::uint32_t> selectedPrimitive{std::nullopt};
     std::uint32_t previewMaterialSlot{0};
     std::shared_ptr<imgui::windows::Viewer> materialViewer;
 
