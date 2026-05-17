@@ -98,7 +98,7 @@ void main() {
 
         float alpha = mix(sA.albedo.a, sB.albedo.a, f);
         if (mx.params.opacityTexIdx >= 0) {
-            float op = sampleTexture2DLinear(uint(mx.params.opacityTexIdx), inUV).r;
+            float op = sampleTexture2DLinear(uint(mx.params.opacityTexIdx), inUV).a;
             if (op < mx.params.alphaCutoff) discard;
         } else {
             if (alpha < mx.params.alphaCutoff) discard;

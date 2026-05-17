@@ -14,6 +14,8 @@
 #include "vkit/workflow/node/material/mix_material.hpp"
 #include "vkit/workflow/node/material/principled_bsdf.hpp"
 #include "vkit/workflow/node/material/slot_output.hpp"
+#include "vkit/workflow/node/operators/channel_adjust.hpp"
+#include "vkit/workflow/node/operators/channel_remap.hpp"
 #include "vkit/workflow/node/operators/heightmap.hpp"
 #include "vkit/workflow/node/operators/mix.hpp"
 #include "vkit/workflow/node/operators/normalmap.hpp"
@@ -163,6 +165,30 @@ static void serializeNodeFields(std::ostringstream& j, WorkflowNode* wn,
     j << "      \"factor\": " << flt(p.factor) << ",\n";
     j << "      \"mixMode\": " << static_cast<uint32_t>(p.mode) << "\n";
 
+  } else if (auto* n = dynamic_cast<node::op::ChannelRemapNode*>(wn)) {
+    const auto& p = n->getParams();
+    j << "      \"type\": \"ChannelRemap\",\n";
+    j << "      \"outR\": " << p.outR << ",\n";
+    j << "      \"outG\": " << p.outG << ",\n";
+    j << "      \"outB\": " << p.outB << ",\n";
+    j << "      \"outA\": " << p.outA << "\n";
+
+  } else if (auto* n = dynamic_cast<node::op::ChannelAdjustNode*>(wn)) {
+    const auto& p = n->getParams();
+    j << "      \"type\": \"ChannelAdjust\",\n";
+    j << "      \"gainR\": " << flt(p.gain[0]) << ",\n";
+    j << "      \"gainG\": " << flt(p.gain[1]) << ",\n";
+    j << "      \"gainB\": " << flt(p.gain[2]) << ",\n";
+    j << "      \"gainA\": " << flt(p.gain[3]) << ",\n";
+    j << "      \"biasR\": " << flt(p.bias[0]) << ",\n";
+    j << "      \"biasG\": " << flt(p.bias[1]) << ",\n";
+    j << "      \"biasB\": " << flt(p.bias[2]) << ",\n";
+    j << "      \"biasA\": " << flt(p.bias[3]) << ",\n";
+    j << "      \"invertR\": " << (p.invert[0] ? 1 : 0) << ",\n";
+    j << "      \"invertG\": " << (p.invert[1] ? 1 : 0) << ",\n";
+    j << "      \"invertB\": " << (p.invert[2] ? 1 : 0) << ",\n";
+    j << "      \"invertA\": " << (p.invert[3] ? 1 : 0) << "\n";
+
   } else if (auto* n = dynamic_cast<node::mat::DiffuseNode*>(wn)) {
     j << "      \"type\": \"Diffuse\",\n";
     j << "      \"alphaMode\": " << static_cast<int>(n->alphaMode) << ",\n";
@@ -203,7 +229,11 @@ static void serializeNodeFields(std::ostringstream& j, WorkflowNode* wn,
 
   } else if (auto* n = dynamic_cast<node::mat::MixMaterialNode*>(wn)) {
     j << "      \"type\": \"MixMaterial\",\n";
-    j << "      \"factor\": " << flt(n->factor) << "\n";
+    j << "      \"factor\": " << flt(n->factor) << ",\n";
+    j << "      \"threshold\": " << flt(n->threshold) << ",\n";
+    j << "      \"edge\": " << flt(n->edge) << ",\n";
+    j << "      \"alphaCutoff\": " << flt(n->alphaCutoff) << ",\n";
+    j << "      \"alphaMode\": " << static_cast<int>(n->alphaMode) << "\n";
 
   } else if (auto* n = dynamic_cast<node::mat::SlotOutputNode*>(wn)) {
     j << "      \"type\": \"SlotOutput\",\n";
@@ -561,10 +591,44 @@ bool WorkflowSerializer::importFromFile(
       n->markStale();
       newNode = n;
 
+    } else if (type == "ChannelRemap") {
+      auto* n = controller->createChannelRemapNode(nameStr);
+      if (!n) continue;
+      node::op::ChannelRemapParams p = n->getParams();
+      p.outR = getU32(obj, "outR", p.outR);
+      p.outG = getU32(obj, "outG", p.outG);
+      p.outB = getU32(obj, "outB", p.outB);
+      p.outA = getU32(obj, "outA", p.outA);
+      n->setParams(p);
+      newNode = n;
+
+    } else if (type == "ChannelAdjust") {
+      auto* n = controller->createChannelAdjustNode(nameStr);
+      if (!n) continue;
+      node::op::ChannelAdjustParams p = n->getParams();
+      p.gain[0] = getF(obj, "gainR", p.gain[0]);
+      p.gain[1] = getF(obj, "gainG", p.gain[1]);
+      p.gain[2] = getF(obj, "gainB", p.gain[2]);
+      p.gain[3] = getF(obj, "gainA", p.gain[3]);
+      p.bias[0] = getF(obj, "biasR", p.bias[0]);
+      p.bias[1] = getF(obj, "biasG", p.bias[1]);
+      p.bias[2] = getF(obj, "biasB", p.bias[2]);
+      p.bias[3] = getF(obj, "biasA", p.bias[3]);
+      p.invert[0] = getU32(obj, "invertR", p.invert[0] ? 1u : 0u) != 0;
+      p.invert[1] = getU32(obj, "invertG", p.invert[1] ? 1u : 0u) != 0;
+      p.invert[2] = getU32(obj, "invertB", p.invert[2] ? 1u : 0u) != 0;
+      p.invert[3] = getU32(obj, "invertA", p.invert[3] ? 1u : 0u) != 0;
+      n->setParams(p);
+      newNode = n;
+
     } else if (type == "MixMaterial") {
       auto* n = controller->createMixMaterialNode(nameStr);
       if (!n) continue;
-      n->factor = getF(obj, "factor", n->factor);
+      n->factor     = getF(obj, "factor",     n->factor);
+      n->threshold  = getF(obj, "threshold",  n->threshold);
+      n->edge       = getF(obj, "edge",       n->edge);
+      n->alphaCutoff = getF(obj, "alphaCutoff", n->alphaCutoff);
+      n->alphaMode  = static_cast<material::AlphaMode>(getI32(obj, "alphaMode", static_cast<int32_t>(n->alphaMode)));
       n->markStale();
       newNode = n;
 

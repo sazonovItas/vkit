@@ -81,6 +81,9 @@ void WindowImguiHost::beginFrame(std::uint32_t width, std::uint32_t height,
 
   rootDockId_ = ImGui::GetID("vkit_dockspace");
 
+  ImGui::DockSpace(rootDockId_, ImVec2{0.0F, -status_bar_height},
+                   ImGuiDockNodeFlags_PassthruCentralNode);
+
   if (dockLayoutCallback_) {
     const auto available_size = ImVec2{
         static_cast<float>(width),
@@ -88,9 +91,6 @@ void WindowImguiHost::beginFrame(std::uint32_t width, std::uint32_t height,
     };
     dockLayoutCallback_(*this, available_size);
   }
-
-  ImGui::DockSpace(rootDockId_, ImVec2{0.0F, -status_bar_height},
-                   ImGuiDockNodeFlags_PassthruCentralNode);
 
   ImGui::SetCursorPos(ImVec2{0.0F, viewport->Size.y - status_bar_height});
   ImGui::BeginChild(

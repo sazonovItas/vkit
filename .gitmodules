@@ -1,3 +1,54 @@
+[submodule "ext/fastgltf"]
+	path = ext/fastgltf
+	url = git@github.com:spnda/fastgltf.git
+	branch = main
+
+[submodule "ext/glfw"]
+	path = ext/glfw
+	url = git@github.com:glfw/glfw.git
+	branch = master
+
+[submodule "ext/glm"]
+	path = ext/glm
+	url = git@github.com:g-truc/glm.git
+	branch = master
+
+[submodule "ext/imgui"]
+	path = ext/imgui
+	url = git@github.com:ocornut/imgui.git
+	branch = docking
+
+[submodule "ext/ImGuizmo"]
+	path = ext/ImGuizmo
+	url = git@github.com:CedricGuillemet/ImGuizmo.git
+	branch = master
+
+[submodule "ext/meshoptimizer"]
+	path = ext/meshoptimizer
+	url = git@github.com:zeux/meshoptimizer.git
+	branch = master
+
+[submodule "ext/nativefiledialog-extended"]
+	path = ext/nativefiledialog-extended
+	url = https://github.com/btzy/nativefiledialog-extended
+	branch = master
+
 [submodule "ext/simdjson"]
 	path = ext/simdjson
 	url = https://github.com/simdjson/simdjson.git
+	branch = master
+
+[submodule "ext/stb"]
+	path = ext/stb
+	url = git@github.com:nothings/stb.git
+	branch = master
+
+[submodule "ext/Vulkan-Headers"]
+	path = ext/Vulkan-Headers
+	url = git@github.com:KhronosGroup/Vulkan-Headers.git
+	branch = main
+
+[submodule "ext/VulkanMemoryAllocator-Hpp"]
+	path = ext/VulkanMemoryAllocator-Hpp
+	url = git@github.com:YaaZ/VulkanMemoryAllocator-Hpp.git
+	branch = master
