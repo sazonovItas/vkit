@@ -2,45 +2,45 @@
   "version": 1,
   "nodes": [
     {
-      "id": 105,
+      "id": 1,
       "name": "Robot – Normal",
-      "x": 425.5889,
-      "y": -261.317,
+      "x": 494.797,
+      "y": 52.11819,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_normal.jpeg",
       "useMipmaps": true
     },
     {
-      "id": 108,
+      "id": 4,
       "name": "Robot – Emissive",
-      "x": 425.5889,
-      "y": -135.477,
+      "x": 494.797,
+      "y": 146.6635,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_emissive.jpeg",
       "useMipmaps": true
     },
     {
-      "id": 111,
+      "id": 7,
       "name": "Robot – Occlusion",
-      "x": 425.5889,
-      "y": -9.636948,
+      "x": 494.797,
+      "y": 241.2089,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_occlusion.png",
       "useMipmaps": true
     },
     {
-      "id": 114,
+      "id": 10,
       "name": "Robot",
-      "x": 642.5695,
-      "y": -262.7811,
+      "x": 657.8176,
+      "y": 51.01807,
       "type": "PrincipledBSDF",
       "alphaMode": 0,
       "baseColorFactor": [1,1,1,1],
-      "emissiveFactor": [1,1,1],
+      "emissiveFactor": [1,1,1.086],
       "metallicFactor": 1,
-      "roughnessFactor": 1,
+      "roughnessFactor": 0,
       "occlusionStrength": 1,
-      "ior": 1.5,
+      "ior": 3,
       "specularColorFactor": [1,1,1],
       "specularFactor": 1,
       "transmissionFactor": 0,
@@ -59,27 +59,27 @@
       "iridescenceThicknessMax": 400
     },
     {
-      "id": 131,
+      "id": 27,
       "name": "Robot Slot",
-      "x": 1190.526,
-      "y": 127.6982,
+      "x": 1069.505,
+      "y": 344.3909,
       "type": "SlotOutput",
       "targetSlotId": 0
     },
     {
-      "id": 133,
+      "id": 29,
       "name": "Fire – Emissive",
-      "x": 1461.35,
-      "y": -163.3069,
+      "x": 1272.979,
+      "y": 125.7545,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Fire_emissive.jpeg",
       "useMipmaps": true
     },
     {
-      "id": 136,
+      "id": 32,
       "name": "Fire",
-      "x": 1766.269,
-      "y": -261.317,
+      "x": 1502.069,
+      "y": 52.11819,
       "type": "PrincipledBSDF",
       "alphaMode": 2,
       "baseColorFactor": [1,1,1,1],
@@ -106,53 +106,57 @@
       "iridescenceThicknessMax": 400
     },
     {
-      "id": 153,
+      "id": 49,
       "name": "Fire Slot",
-      "x": 2124.429,
-      "y": -91.91696,
+      "x": 1771.16,
+      "y": 179.3908,
       "type": "SlotOutput",
       "targetSlotId": 1
     },
     {
-      "id": 155,
+      "id": 51,
       "name": "Robot Diffuse",
-      "x": 447.8529,
-      "y": -375.057,
+      "x": 511.5243,
+      "y": -33.33641,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_diffuse.jpeg",
       "useMipmaps": true
     },
     {
-      "id": 158,
+      "id": 54,
       "name": "Fire Diffuse",
-      "x": 1448.039,
-      "y": -309.7168,
+      "x": 1262.979,
+      "y": 15.7547,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Fire_diffuse.png",
       "useMipmaps": true
     },
     {
-      "id": 161,
+      "id": 57,
       "name": "Mix Material",
-      "x": 908.0945,
-      "y": 74.76154,
+      "x": 765.6231,
+      "y": 289.3779,
       "type": "MixMaterial",
-      "factor": 0.461
+      "factor": 0.459,
+      "threshold": 0.5,
+      "edge": 1,
+      "alphaCutoff": 0.453,
+      "alphaMode": 0
     },
     {
-      "id": 167,
+      "id": 63,
       "name": "Texture Load",
-      "x": 123.4099,
-      "y": 223.2102,
+      "x": 267.7656,
+      "y": 416.1503,
       "type": "TextureLoad",
       "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/rust.jpg",
       "useMipmaps": true
     },
     {
-      "id": 170,
+      "id": 66,
       "name": "Principled BSDF",
-      "x": 693.4805,
-      "y": 236.8513,
+      "x": 597.1551,
+      "y": 392.0621,
       "type": "PrincipledBSDF",
       "alphaMode": 2,
       "baseColorFactor": [1,1,1,1],
@@ -179,30 +183,30 @@
       "iridescenceThicknessMax": 400
     },
     {
-      "id": 187,
+      "id": 83,
       "name": "Height Map",
-      "x": 287.3891,
-      "y": 341.8024,
+      "x": 374.5732,
+      "y": 505.2504,
       "type": "HeightMap",
       "contrast": 1,
       "brightness": 0,
       "invert": 0
     },
     {
-      "id": 191,
+      "id": 87,
       "name": "Normal Map",
-      "x": 452.8323,
-      "y": 343.2663,
+      "x": 486.5167,
+      "y": 506.3502,
       "type": "NormalMap",
-      "strength": 0.15,
+      "strength": 1.15,
       "invertX": 0,
       "invertY": 0
     },
     {
-      "id": 209,
+      "id": 91,
       "name": "Noise Generator",
-      "x": 297.1851,
-      "y": 94.43439,
+      "x": 287.7311,
+      "y": 254.8921,
       "type": "NoiseGenerator",
       "noiseType": 1,
       "width": 512,
@@ -218,114 +222,157 @@
       "worleyJitter": 1
     },
     {
-      "id": 213,
+      "id": 94,
+      "name": "Material Slot",
+      "x": 900.9658,
+      "y": 549.4454,
+      "type": "SlotOutput",
+      "targetSlotId": 2
+    },
+    {
+      "id": 112,
+      "name": "Channel Adjust",
+      "x": 392.2418,
+      "y": 328.1909,
+      "type": "ChannelAdjust",
+      "gainR": 1,
+      "gainG": 1,
+      "gainB": 1,
+      "gainA": 1,
+      "biasR": 0,
+      "biasG": 0,
+      "biasB": 0,
+      "biasA": 0,
+      "invertR": 0,
+      "invertG": 0,
+      "invertB": 0,
+      "invertA": 0
+    },
+    {
+      "id": 117,
       "name": "Channel Remap",
-      "x": 545.8701,
-      "y": 159.0474,
-      "type": "Unknown"
+      "x": 496.7428,
+      "y": 335.0211,
+      "type": "ChannelRemap",
+      "outR": 0,
+      "outG": 1,
+      "outB": 2,
+      "outA": 0
     }
   ],
   "links": [
     {
-      "srcNodeId": 105,
+      "srcNodeId": 1,
       "srcSlot": 1,
-      "sinkNodeId": 114,
+      "sinkNodeId": 10,
       "sinkSlot": 1
     },
     {
-      "srcNodeId": 108,
+      "srcNodeId": 4,
       "srcSlot": 1,
-      "sinkNodeId": 114,
+      "sinkNodeId": 10,
       "sinkSlot": 3
     },
     {
-      "srcNodeId": 111,
+      "srcNodeId": 7,
       "srcSlot": 1,
-      "sinkNodeId": 114,
+      "sinkNodeId": 10,
       "sinkSlot": 4
     },
     {
-      "srcNodeId": 133,
+      "srcNodeId": 29,
       "srcSlot": 1,
-      "sinkNodeId": 136,
+      "sinkNodeId": 32,
       "sinkSlot": 3
     },
     {
-      "srcNodeId": 136,
+      "srcNodeId": 32,
       "srcSlot": 0,
-      "sinkNodeId": 153,
+      "sinkNodeId": 49,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 155,
+      "srcNodeId": 51,
       "srcSlot": 1,
-      "sinkNodeId": 114,
+      "sinkNodeId": 10,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 158,
+      "srcNodeId": 54,
       "srcSlot": 1,
-      "sinkNodeId": 136,
+      "sinkNodeId": 32,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 114,
-      "srcSlot": 0,
-      "sinkNodeId": 161,
-      "sinkSlot": 0
-    },
-    {
-      "srcNodeId": 161,
-      "srcSlot": 0,
-      "sinkNodeId": 131,
-      "sinkSlot": 0
-    },
-    {
-      "srcNodeId": 167,
+      "srcNodeId": 63,
       "srcSlot": 1,
-      "sinkNodeId": 170,
+      "sinkNodeId": 66,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 167,
+      "srcNodeId": 63,
       "srcSlot": 1,
-      "sinkNodeId": 187,
+      "sinkNodeId": 83,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 187,
+      "srcNodeId": 83,
       "srcSlot": 1,
-      "sinkNodeId": 191,
+      "sinkNodeId": 87,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 191,
+      "srcNodeId": 87,
       "srcSlot": 1,
-      "sinkNodeId": 170,
+      "sinkNodeId": 66,
       "sinkSlot": 1
     },
     {
-      "srcNodeId": 170,
+      "srcNodeId": 66,
       "srcSlot": 0,
-      "sinkNodeId": 161,
+      "sinkNodeId": 94,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 10,
+      "srcSlot": 0,
+      "sinkNodeId": 57,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 66,
+      "srcSlot": 0,
+      "sinkNodeId": 57,
       "sinkSlot": 1
     },
     {
-      "srcNodeId": 209,
+      "srcNodeId": 91,
       "srcSlot": 1,
-      "sinkNodeId": 161,
+      "sinkNodeId": 57,
       "sinkSlot": 2
     },
     {
-      "srcNodeId": 209,
-      "srcSlot": 1,
-      "sinkNodeId": 213,
+      "srcNodeId": 57,
+      "srcSlot": 0,
+      "sinkNodeId": 27,
       "sinkSlot": 0
     },
     {
-      "srcNodeId": 213,
+      "srcNodeId": 91,
+      "srcSlot": 1,
+      "sinkNodeId": 112,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 112,
+      "srcSlot": 1,
+      "sinkNodeId": 117,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 117,
       "srcSlot": 0,
-      "sinkNodeId": 161,
+      "sinkNodeId": 57,
       "sinkSlot": 3
     }
   ]
