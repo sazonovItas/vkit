@@ -229,12 +229,9 @@ void ConfigurationWindow::drawLightingSection() {
     auto& li = lights[idx];
     ImGui::PushID(idx);
 
-    const bool is_light_sel = (sel_light && *sel_light == idx);
-    if (is_light_sel)
-      ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.122F, 0.498F, 0.769F, 1.0F));
-    if (ImGui::Button(is_light_sel ? "Desel" : "Sel  ", ImVec2(46, 0)))
-      sceneController_->setSelectedLight(is_light_sel ? std::nullopt : std::optional<int>{idx});
-    if (is_light_sel) ImGui::PopStyleColor();
+    bool is_light_sel = (sel_light && *sel_light == idx);
+    if (ImGui::Checkbox("##sel_light", &is_light_sel))
+      sceneController_->setSelectedLight(is_light_sel ? std::optional<int>{idx} : std::nullopt);
     ImGui::SameLine();
 
     const char* type_name = kLightTypeNames[std::clamp(li.type, 0, 2)];
@@ -541,14 +538,11 @@ void ConfigurationWindow::drawPrimitivesSection() {
         }
         ImGui::SameLine();
 
-        // Select / Deselect button
+        // Select / Deselect checkbox
         if (sceneController_ && has_id) {
-          if (is_selected)
-            ImGui::PushStyleColor(ImGuiCol_Button,
-                                  ImVec4(0.122F, 0.498F, 0.769F, 1.0F));
-          if (ImGui::Button(is_selected ? "Desel" : "Sel  ", ImVec2(46, 0)))
+          bool sel_state = is_selected;
+          if (ImGui::Checkbox("##sel_prim", &sel_state))
             sceneController_->togglePrimitive(storage_id);
-          if (is_selected) ImGui::PopStyleColor();
           ImGui::SameLine();
         }
 

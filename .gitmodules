@@ -1,0 +1,3 @@
+[submodule "ext/simdjson"]
+	path = ext/simdjson
+	url = https://github.com/simdjson/simdjson.git

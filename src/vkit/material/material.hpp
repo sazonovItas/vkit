@@ -16,6 +16,7 @@ enum class Type : std::uint32_t {
   kDiffuse = 1,
   kDiffuseSpecular = 2,
   kPrincipledBSDF = 3,
+  kMix = 4,
 };
 
 enum class AlphaMode : std::uint32_t { kOpaque = 0, kMask = 1, kBlend = 2 };

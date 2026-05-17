@@ -205,7 +205,7 @@ BaseLighting evaluateBaseLayerIBL(Surface s, EnvironmentParams env) {
         vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(refUV, floor(rawL))).rgb;
         vec3 prefCeil  = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(refUV, ceil(rawL))).rgb;
         vec3 prefiltered = mix(prefFloor, prefCeil, fract(rawL));
-        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(s.roughness, s.dotNV)).rg;
+        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(s.dotNV, s.roughness)).rg;
         result.specular = prefiltered * (F_ind * brdf.x + brdf.y) * env.intensity * s.ao;
     }
 
@@ -288,7 +288,7 @@ vec3 applyClearcoatIBL(Surface s, mat3 baseTBN, vec3 underlyingColor,
         vec3 prefFloor = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, floor(rawL))).rgb;
         vec3 prefCeil  = sampleTexture2DArrayLinear(uint(env.prefilterTexIdx), vec3(coatUV, ceil(rawL))).rgb;
         vec3 prefCoat  = mix(prefFloor, prefCeil, fract(rawL));
-        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(mat.params.clearcoatRoughnessFactor, dotNV_c)).rg;
+        vec2 brdf = sampleTexture2DLinear(uint(env.brdfLutTexIdx), vec2(dotNV_c, mat.params.clearcoatRoughnessFactor)).rg;
         coatIndirect = prefCoat * (coatF_ind * brdf.x + coatFactor * brdf.y) * env.intensity;
     }
 
@@ -316,6 +316,125 @@ vec3 evaluateUberLightingIBL(Surface s, mat3 baseTBN, PrincipledBSDFData mat, En
     }
 
     return finalColor;
+}
+
+// ── Per-pixel PBSDF blend ─────────────────────────────────────────────────────
+// Returns a blended PrincipledBSDFData where:
+//   - All scalar params are linearly mixed (factor 0→a, 1→b).
+//   - Multiplicative texture maps (baseColor, metallicRoughness, emissive,
+//     specular, sheenColor/Roughness, clearcoat, iridescence) are sampled from
+//     both materials, linearly blended, and baked into the params (texIdx=-1).
+//   - Normal and other directional maps use threshold selection (< 0.5 → A).
+PrincipledBSDFData sampleAndBlendPbsdf(PrincipledBSDFData a, PrincipledBSDFData b, float t, vec2 uv) {
+    PrincipledBSDFData r;
+
+    // --- Lerp all scalar params ---
+    r.params.baseColorFactor          = mix(a.params.baseColorFactor,          b.params.baseColorFactor,          t);
+    r.params.emissiveFactor           = mix(a.params.emissiveFactor,           b.params.emissiveFactor,           t);
+    r.params.metallicFactor           = mix(a.params.metallicFactor,           b.params.metallicFactor,           t);
+    r.params.roughnessFactor          = mix(a.params.roughnessFactor,          b.params.roughnessFactor,          t);
+    r.params.occlusionStrength        = mix(a.params.occlusionStrength,        b.params.occlusionStrength,        t);
+    r.params.ior                      = mix(a.params.ior,                      b.params.ior,                      t);
+    r.params.specularColorFactor      = mix(a.params.specularColorFactor,      b.params.specularColorFactor,      t);
+    r.params.specularFactor           = mix(a.params.specularFactor,           b.params.specularFactor,           t);
+    r.params.transmissionFactor       = mix(a.params.transmissionFactor,       b.params.transmissionFactor,       t);
+    r.params.thicknessFactor          = mix(a.params.thicknessFactor,          b.params.thicknessFactor,          t);
+    r.params.attenuationDistance      = mix(a.params.attenuationDistance,      b.params.attenuationDistance,      t);
+    r.params.attenuationColor         = mix(a.params.attenuationColor,         b.params.attenuationColor,         t);
+    r.params.sheenColorFactor         = mix(a.params.sheenColorFactor,         b.params.sheenColorFactor,         t);
+    r.params.sheenRoughnessFactor     = mix(a.params.sheenRoughnessFactor,     b.params.sheenRoughnessFactor,     t);
+    r.params.clearcoatFactor          = mix(a.params.clearcoatFactor,          b.params.clearcoatFactor,          t);
+    r.params.clearcoatRoughnessFactor = mix(a.params.clearcoatRoughnessFactor, b.params.clearcoatRoughnessFactor, t);
+    r.params.anisotropyStrength       = mix(a.params.anisotropyStrength,       b.params.anisotropyStrength,       t);
+    r.params.anisotropyRotation       = mix(a.params.anisotropyRotation,       b.params.anisotropyRotation,       t);
+    r.params.iridescenceFactor        = mix(a.params.iridescenceFactor,        b.params.iridescenceFactor,        t);
+    r.params.iridescenceIor           = mix(a.params.iridescenceIor,           b.params.iridescenceIor,           t);
+    r.params.iridescenceThicknessMin  = mix(a.params.iridescenceThicknessMin,  b.params.iridescenceThicknessMin,  t);
+    r.params.iridescenceThicknessMax  = mix(a.params.iridescenceThicknessMax,  b.params.iridescenceThicknessMax,  t);
+    r.params.featureMask = a.params.featureMask | b.params.featureMask;
+    r.params.padding1 = 0.0; r.params.padding2 = 0.0;
+    r.params.padding3 = 0.0; r.params.padding4 = 0.0; r.params.padding5 = 0.0;
+
+    // --- Base color: sample both, lerp, bake ---
+    vec4 bcA = vec4(1.0), bcB = vec4(1.0);
+    if (a.textures.baseColorTexIdx >= 0) bcA = sampleTexture2DLinear(uint(a.textures.baseColorTexIdx), uv);
+    if (b.textures.baseColorTexIdx >= 0) bcB = sampleTexture2DLinear(uint(b.textures.baseColorTexIdx), uv);
+    r.params.baseColorFactor *= mix(bcA, bcB, t);
+    r.textures.baseColorTexIdx = -1;
+
+    // --- Metallic/Roughness: sample both .gb channels, lerp, bake ---
+    float mrRoughA = 1.0, mrMetalA = 1.0, mrRoughB = 1.0, mrMetalB = 1.0;
+    if (a.textures.metallicRoughnessTexIdx >= 0) {
+        vec4 mr = sampleTexture2DLinear(uint(a.textures.metallicRoughnessTexIdx), uv);
+        mrRoughA = mr.g; mrMetalA = mr.b;
+    }
+    if (b.textures.metallicRoughnessTexIdx >= 0) {
+        vec4 mr = sampleTexture2DLinear(uint(b.textures.metallicRoughnessTexIdx), uv);
+        mrRoughB = mr.g; mrMetalB = mr.b;
+    }
+    r.params.roughnessFactor *= mix(mrRoughA, mrRoughB, t);
+    r.params.metallicFactor  *= mix(mrMetalA, mrMetalB, t);
+    r.textures.metallicRoughnessTexIdx = -1;
+
+    // --- Emissive ---
+    vec3 emA = vec3(1.0), emB = vec3(1.0);
+    if (a.textures.emissiveTexIdx >= 0) emA = sampleTexture2DLinear(uint(a.textures.emissiveTexIdx), uv).rgb;
+    if (b.textures.emissiveTexIdx >= 0) emB = sampleTexture2DLinear(uint(b.textures.emissiveTexIdx), uv).rgb;
+    r.params.emissiveFactor *= mix(emA, emB, t);
+    r.textures.emissiveTexIdx = -1;
+
+    // --- Specular (alpha channel) ---
+    float spA = 1.0, spB = 1.0;
+    if (a.textures.specularTexIdx >= 0) spA = sampleTexture2DLinear(uint(a.textures.specularTexIdx), uv).a;
+    if (b.textures.specularTexIdx >= 0) spB = sampleTexture2DLinear(uint(b.textures.specularTexIdx), uv).a;
+    r.params.specularFactor *= mix(spA, spB, t);
+    r.textures.specularTexIdx = -1;
+
+    // --- Specular color (rgb) ---
+    vec3 scA = vec3(1.0), scB = vec3(1.0);
+    if (a.textures.specularColorTexIdx >= 0) scA = sampleTexture2DLinear(uint(a.textures.specularColorTexIdx), uv).rgb;
+    if (b.textures.specularColorTexIdx >= 0) scB = sampleTexture2DLinear(uint(b.textures.specularColorTexIdx), uv).rgb;
+    r.params.specularColorFactor *= mix(scA, scB, t);
+    r.textures.specularColorTexIdx = -1;
+
+    // --- Clearcoat (r channel) ---
+    float ccA = 1.0, ccB = 1.0;
+    if (a.textures.clearcoatTexIdx >= 0) ccA = sampleTexture2DLinear(uint(a.textures.clearcoatTexIdx), uv).r;
+    if (b.textures.clearcoatTexIdx >= 0) ccB = sampleTexture2DLinear(uint(b.textures.clearcoatTexIdx), uv).r;
+    r.params.clearcoatFactor *= mix(ccA, ccB, t);
+    r.textures.clearcoatTexIdx = -1;
+
+    // --- Sheen color ---
+    vec3 shcA = vec3(1.0), shcB = vec3(1.0);
+    if (a.textures.sheenColorTexIdx >= 0) shcA = sampleTexture2DLinear(uint(a.textures.sheenColorTexIdx), uv).rgb;
+    if (b.textures.sheenColorTexIdx >= 0) shcB = sampleTexture2DLinear(uint(b.textures.sheenColorTexIdx), uv).rgb;
+    r.params.sheenColorFactor *= mix(shcA, shcB, t);
+    r.textures.sheenColorTexIdx = -1;
+
+    // --- Sheen roughness (alpha channel) ---
+    float shrA = 1.0, shrB = 1.0;
+    if (a.textures.sheenRoughnessTexIdx >= 0) shrA = sampleTexture2DLinear(uint(a.textures.sheenRoughnessTexIdx), uv).a;
+    if (b.textures.sheenRoughnessTexIdx >= 0) shrB = sampleTexture2DLinear(uint(b.textures.sheenRoughnessTexIdx), uv).a;
+    r.params.sheenRoughnessFactor *= mix(shrA, shrB, t);
+    r.textures.sheenRoughnessTexIdx = -1;
+
+    // --- Iridescence (r channel) ---
+    float irA = 1.0, irB = 1.0;
+    if (a.textures.iridescenceTexIdx >= 0) irA = sampleTexture2DLinear(uint(a.textures.iridescenceTexIdx), uv).r;
+    if (b.textures.iridescenceTexIdx >= 0) irB = sampleTexture2DLinear(uint(b.textures.iridescenceTexIdx), uv).r;
+    r.params.iridescenceFactor *= mix(irA, irB, t);
+    r.textures.iridescenceTexIdx = -1;
+
+    // --- Directional / structural maps: threshold pick (A when t<0.5, B otherwise) ---
+    r.textures.normalTexIdx                = t < 0.5 ? a.textures.normalTexIdx               : b.textures.normalTexIdx;
+    r.textures.occlusionTexIdx             = t < 0.5 ? a.textures.occlusionTexIdx             : b.textures.occlusionTexIdx;
+    r.textures.clearcoatNormalTexIdx       = t < 0.5 ? a.textures.clearcoatNormalTexIdx       : b.textures.clearcoatNormalTexIdx;
+    r.textures.thicknessTexIdx             = t < 0.5 ? a.textures.thicknessTexIdx             : b.textures.thicknessTexIdx;
+    r.textures.anisotropyTexIdx            = t < 0.5 ? a.textures.anisotropyTexIdx            : b.textures.anisotropyTexIdx;
+    r.textures.iridescenceThicknessTexIdx  = t < 0.5 ? a.textures.iridescenceThicknessTexIdx  : b.textures.iridescenceThicknessTexIdx;
+    r.textures.padding0 = 0;
+
+    return r;
 }
 
 // ── Per-light direct pass. Result is multiplied by lightColor externally.

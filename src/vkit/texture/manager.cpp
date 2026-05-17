@@ -126,4 +126,24 @@ void TextureManager::setImguiRenderer(imgui::ImguiRenderer* renderer) {
   }
 }
 
+void TextureManager::forceFlushGC() {
+  const auto lock = std::scoped_lock{this->mutex_};
+
+  for (auto& item : gcQueue_) {
+    auto& texture = item.texture;
+
+    if (bindlessManager_ && texture->getBindlessId().has_value()) {
+      bindlessManager_->removeTexture(texture->getBindlessId().value());
+      texture->setBindlessId(std::nullopt);
+    }
+
+    if (imguiRenderer_ && texture->getImguiId().has_value()) {
+      imguiRenderer_->unregisterTexture(texture->getImguiId().value());
+      texture->setImguiId(std::nullopt);
+    }
+  }
+
+  gcQueue_.clear();
+}
+
 };  // namespace vkit::texture

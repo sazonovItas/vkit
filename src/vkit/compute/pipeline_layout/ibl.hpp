@@ -13,34 +13,30 @@ struct BrdfLutPipelineLayout final : graphics::PipelineLayout {
   using SetLayouts = std::tuple<const dsl::BrdfLutSetLayout&>;
 
   explicit BrdfLutPipelineLayout(vk::Device device, SetLayouts setLayouts)
-      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+      : BrdfLutPipelineLayout(
+            device,
+            std::array<vk::DescriptorSetLayout, 1>{*std::get<0>(setLayouts)}) {}
 
  private:
-  static auto createPipelineCreateInfo(SetLayouts setLayouts)
-      -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        *std::get<0>(setLayouts),
-    };
-
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, {}};
-  }
+  BrdfLutPipelineLayout(vk::Device device,
+                        const std::array<vk::DescriptorSetLayout, 1>& layouts)
+      : PipelineLayout{device,
+                       vk::PipelineLayoutCreateInfo{}.setSetLayouts(layouts)} {}
 };
 
 struct DiffusePipelineLayout final : graphics::PipelineLayout {
   using SetLayouts = std::tuple<const dsl::IblComputeSetLayout&>;
 
   explicit DiffusePipelineLayout(vk::Device device, SetLayouts setLayouts)
-      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+      : DiffusePipelineLayout(
+            device,
+            std::array<vk::DescriptorSetLayout, 1>{*std::get<0>(setLayouts)}) {}
 
  private:
-  static auto createPipelineCreateInfo(SetLayouts setLayouts)
-      -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        *std::get<0>(setLayouts),
-    };
-
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, {}};
-  }
+  DiffusePipelineLayout(vk::Device device,
+                        const std::array<vk::DescriptorSetLayout, 1>& layouts)
+      : PipelineLayout{device,
+                       vk::PipelineLayoutCreateInfo{}.setSetLayouts(layouts)} {}
 };
 
 struct SpecularPipelineLayout final : graphics::PipelineLayout {
@@ -59,16 +55,16 @@ struct SpecularPipelineLayout final : graphics::PipelineLayout {
 
   explicit SpecularPipelineLayout(vk::Device device,
                                   const SetLayouts& setLayouts)
-      : PipelineLayout{device, createPipelineCreateInfo(setLayouts)} {}
+      : SpecularPipelineLayout(
+            device,
+            std::array<vk::DescriptorSetLayout, 1>{*std::get<0>(setLayouts)}) {}
 
  private:
-  static auto createPipelineCreateInfo(const SetLayouts& setLayouts)
-      -> vk::PipelineLayoutCreateInfo {
-    const auto set_layouts = std::array<vk::DescriptorSetLayout, 1>{
-        *std::get<0>(setLayouts),
-    };
-
-    return vk::PipelineLayoutCreateInfo{{}, set_layouts, kPushConstantRange};
+  SpecularPipelineLayout(vk::Device device,
+                         const std::array<vk::DescriptorSetLayout, 1>& layouts)
+      : PipelineLayout{device, vk::PipelineLayoutCreateInfo{}
+                                   .setSetLayouts(layouts)
+                                   .setPushConstantRanges(kPushConstantRange)} {
   }
 };
 

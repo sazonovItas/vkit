@@ -46,6 +46,12 @@ inline constexpr auto kAlpha =
         .setDstAlphaBlendFactor(vk::BlendFactor::eZero)
         .setAlphaBlendOp(vk::BlendOp::eAdd);
 
+// Color write disabled — used for depth pre-pass of transparent objects.
+inline constexpr auto kDepthOnly =
+    vk::PipelineColorBlendAttachmentState{}
+        .setColorWriteMask({})
+        .setBlendEnable(vk::False);
+
 inline constexpr auto kAdditive =
     vk::PipelineColorBlendAttachmentState{}
         .setColorWriteMask(

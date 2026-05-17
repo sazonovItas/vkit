@@ -10,6 +10,7 @@
 #include "vkit/item/storage.hpp"
 #include "vkit/material/diffuse.hpp"
 #include "vkit/material/diffuse_specular.hpp"
+#include "vkit/material/mix_material.hpp"
 #include "vkit/material/principled_bsdf.hpp"
 #include "vkit/material/slot.hpp"
 
@@ -55,6 +56,7 @@ class MaterialManager {
   TypedMaterialStorage<Diffuse> diffuse;
   TypedMaterialStorage<DiffuseSpecular> diffuseSpecular;
   TypedMaterialStorage<PrincipledBSDF> principledBSDF;
+  TypedMaterialStorage<MixMaterial> mix;
 
   Storage<Slot> slots;
 

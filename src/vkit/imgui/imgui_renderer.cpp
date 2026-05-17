@@ -44,11 +44,9 @@ ImguiRenderer::ImguiRenderer(vk::Device device, vma::Allocator allocator,
       sizeof(glm::vec2) * 2,
   };
 
-  const auto pipeline_layout_ci = vk::PipelineLayoutCreateInfo{
-      {},
-      descriptorSetLayout_->get(),
-      pc_range,
-  };
+  const auto dsl_handle = descriptorSetLayout_->get();
+  const auto pipeline_layout_ci =
+      vk::PipelineLayoutCreateInfo{}.setSetLayouts(dsl_handle).setPushConstantRanges(pc_range);
   pipelineLayout_.emplace(device_, pipeline_layout_ci);
 
   const auto linear_sampler_ci =

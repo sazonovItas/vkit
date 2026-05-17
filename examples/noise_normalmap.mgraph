@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Noise Generator",
+      "x": 81,
+      "y": 86,
+      "type": "NoiseGenerator",
+      "noiseType": 0,
+      "width": 512,
+      "height": 512,
+      "scale": 4,
+      "offsetX": 0,
+      "offsetY": 0,
+      "seed": 0,
+      "octaves": 6,
+      "persistence": 0.5,
+      "lacunarity": 2,
+      "worleyMode": 0,
+      "worleyJitter": 1
+    },
+    {
+      "id": 4,
+      "name": "Normal Map",
+      "x": 533,
+      "y": 60,
+      "type": "NormalMap",
+      "strength": 1,
+      "invertX": 0,
+      "invertY": 0
+    }
+  ],
+  "links": [
+    {
+      "srcNodeId": 1,
+      "srcSlot": 1,
+      "sinkNodeId": 4,
+      "sinkSlot": 0
+    }
+  ]
+}

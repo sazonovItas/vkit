@@ -31,6 +31,7 @@ class MaterialSystem {
     std::unique_ptr<graphics::DescriptorBuffer> diffuseBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> diffuseSpecBuffer;
     std::unique_ptr<graphics::DescriptorBuffer> principledBuffer;
+    std::unique_ptr<graphics::DescriptorBuffer> mixBuffer;
     vk::DescriptorSet descriptorSet;
   };
 

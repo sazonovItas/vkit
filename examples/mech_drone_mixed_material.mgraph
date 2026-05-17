@@ -1,0 +1,332 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": 105,
+      "name": "Robot – Normal",
+      "x": 425.5889,
+      "y": -261.317,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_normal.jpeg",
+      "useMipmaps": true
+    },
+    {
+      "id": 108,
+      "name": "Robot – Emissive",
+      "x": 425.5889,
+      "y": -135.477,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_emissive.jpeg",
+      "useMipmaps": true
+    },
+    {
+      "id": 111,
+      "name": "Robot – Occlusion",
+      "x": 425.5889,
+      "y": -9.636948,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_occlusion.png",
+      "useMipmaps": true
+    },
+    {
+      "id": 114,
+      "name": "Robot",
+      "x": 642.5695,
+      "y": -262.7811,
+      "type": "PrincipledBSDF",
+      "alphaMode": 0,
+      "baseColorFactor": [1,1,1,1],
+      "emissiveFactor": [1,1,1],
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "occlusionStrength": 1,
+      "ior": 1.5,
+      "specularColorFactor": [1,1,1],
+      "specularFactor": 1,
+      "transmissionFactor": 0,
+      "thicknessFactor": 0,
+      "attenuationDistance": 3.402823e+38,
+      "attenuationColor": [1,1,1],
+      "sheenColorFactor": [0,0,0],
+      "sheenRoughnessFactor": 0,
+      "clearcoatFactor": 0,
+      "clearcoatRoughnessFactor": 0,
+      "anisotropyStrength": 0,
+      "anisotropyRotation": [1,0],
+      "iridescenceFactor": 0,
+      "iridescenceIor": 1.3,
+      "iridescenceThicknessMin": 100,
+      "iridescenceThicknessMax": 400
+    },
+    {
+      "id": 131,
+      "name": "Robot Slot",
+      "x": 1190.526,
+      "y": 127.6982,
+      "type": "SlotOutput",
+      "targetSlotId": 0
+    },
+    {
+      "id": 133,
+      "name": "Fire – Emissive",
+      "x": 1461.35,
+      "y": -163.3069,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Fire_emissive.jpeg",
+      "useMipmaps": true
+    },
+    {
+      "id": 136,
+      "name": "Fire",
+      "x": 1766.269,
+      "y": -261.317,
+      "type": "PrincipledBSDF",
+      "alphaMode": 2,
+      "baseColorFactor": [1,1,1,1],
+      "emissiveFactor": [1,1,1],
+      "metallicFactor": 1,
+      "roughnessFactor": 1,
+      "occlusionStrength": 1,
+      "ior": 1.5,
+      "specularColorFactor": [1,1,1],
+      "specularFactor": 1,
+      "transmissionFactor": 0,
+      "thicknessFactor": 0,
+      "attenuationDistance": 3.402823e+38,
+      "attenuationColor": [1,1,1],
+      "sheenColorFactor": [0,0,0],
+      "sheenRoughnessFactor": 0,
+      "clearcoatFactor": 0,
+      "clearcoatRoughnessFactor": 0,
+      "anisotropyStrength": 0,
+      "anisotropyRotation": [1,0],
+      "iridescenceFactor": 0,
+      "iridescenceIor": 1.3,
+      "iridescenceThicknessMin": 100,
+      "iridescenceThicknessMax": 400
+    },
+    {
+      "id": 153,
+      "name": "Fire Slot",
+      "x": 2124.429,
+      "y": -91.91696,
+      "type": "SlotOutput",
+      "targetSlotId": 1
+    },
+    {
+      "id": 155,
+      "name": "Robot Diffuse",
+      "x": 447.8529,
+      "y": -375.057,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Robot_diffuse.jpeg",
+      "useMipmaps": true
+    },
+    {
+      "id": 158,
+      "name": "Fire Diffuse",
+      "x": 1448.039,
+      "y": -309.7168,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/Fire_diffuse.png",
+      "useMipmaps": true
+    },
+    {
+      "id": 161,
+      "name": "Mix Material",
+      "x": 908.0945,
+      "y": 74.76154,
+      "type": "MixMaterial",
+      "factor": 0.461
+    },
+    {
+      "id": 167,
+      "name": "Texture Load",
+      "x": 123.4099,
+      "y": 223.2102,
+      "type": "TextureLoad",
+      "path": "/home/itas/workspace/projects/vulkan/vkit/examples/textures/rust.jpg",
+      "useMipmaps": true
+    },
+    {
+      "id": 170,
+      "name": "Principled BSDF",
+      "x": 693.4805,
+      "y": 236.8513,
+      "type": "PrincipledBSDF",
+      "alphaMode": 2,
+      "baseColorFactor": [1,1,1,1],
+      "emissiveFactor": [0,0,0],
+      "metallicFactor": 1,
+      "roughnessFactor": 0.963,
+      "occlusionStrength": 1,
+      "ior": 1,
+      "specularColorFactor": [1,1,1],
+      "specularFactor": 1,
+      "transmissionFactor": 0,
+      "thicknessFactor": 0,
+      "attenuationDistance": 0,
+      "attenuationColor": [1,1,1],
+      "sheenColorFactor": [0,0,0],
+      "sheenRoughnessFactor": 0,
+      "clearcoatFactor": 0,
+      "clearcoatRoughnessFactor": 0,
+      "anisotropyStrength": 0,
+      "anisotropyRotation": [1,0],
+      "iridescenceFactor": 0,
+      "iridescenceIor": 1,
+      "iridescenceThicknessMin": 100,
+      "iridescenceThicknessMax": 400
+    },
+    {
+      "id": 187,
+      "name": "Height Map",
+      "x": 287.3891,
+      "y": 341.8024,
+      "type": "HeightMap",
+      "contrast": 1,
+      "brightness": 0,
+      "invert": 0
+    },
+    {
+      "id": 191,
+      "name": "Normal Map",
+      "x": 452.8323,
+      "y": 343.2663,
+      "type": "NormalMap",
+      "strength": 0.15,
+      "invertX": 0,
+      "invertY": 0
+    },
+    {
+      "id": 209,
+      "name": "Noise Generator",
+      "x": 297.1851,
+      "y": 94.43439,
+      "type": "NoiseGenerator",
+      "noiseType": 1,
+      "width": 512,
+      "height": 512,
+      "scale": 4,
+      "offsetX": 0,
+      "offsetY": 0,
+      "seed": 0,
+      "octaves": 6,
+      "persistence": 0.5,
+      "lacunarity": 2,
+      "worleyMode": 0,
+      "worleyJitter": 1
+    },
+    {
+      "id": 213,
+      "name": "Channel Remap",
+      "x": 545.8701,
+      "y": 159.0474,
+      "type": "Unknown"
+    }
+  ],
+  "links": [
+    {
+      "srcNodeId": 105,
+      "srcSlot": 1,
+      "sinkNodeId": 114,
+      "sinkSlot": 1
+    },
+    {
+      "srcNodeId": 108,
+      "srcSlot": 1,
+      "sinkNodeId": 114,
+      "sinkSlot": 3
+    },
+    {
+      "srcNodeId": 111,
+      "srcSlot": 1,
+      "sinkNodeId": 114,
+      "sinkSlot": 4
+    },
+    {
+      "srcNodeId": 133,
+      "srcSlot": 1,
+      "sinkNodeId": 136,
+      "sinkSlot": 3
+    },
+    {
+      "srcNodeId": 136,
+      "srcSlot": 0,
+      "sinkNodeId": 153,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 155,
+      "srcSlot": 1,
+      "sinkNodeId": 114,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 158,
+      "srcSlot": 1,
+      "sinkNodeId": 136,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 114,
+      "srcSlot": 0,
+      "sinkNodeId": 161,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 161,
+      "srcSlot": 0,
+      "sinkNodeId": 131,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 167,
+      "srcSlot": 1,
+      "sinkNodeId": 170,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 167,
+      "srcSlot": 1,
+      "sinkNodeId": 187,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 187,
+      "srcSlot": 1,
+      "sinkNodeId": 191,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 191,
+      "srcSlot": 1,
+      "sinkNodeId": 170,
+      "sinkSlot": 1
+    },
+    {
+      "srcNodeId": 170,
+      "srcSlot": 0,
+      "sinkNodeId": 161,
+      "sinkSlot": 1
+    },
+    {
+      "srcNodeId": 209,
+      "srcSlot": 1,
+      "sinkNodeId": 161,
+      "sinkSlot": 2
+    },
+    {
+      "srcNodeId": 209,
+      "srcSlot": 1,
+      "sinkNodeId": 213,
+      "sinkSlot": 0
+    },
+    {
+      "srcNodeId": 213,
+      "srcSlot": 0,
+      "sinkNodeId": 161,
+      "sinkSlot": 3
+    }
+  ]
+}

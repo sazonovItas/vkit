@@ -189,7 +189,7 @@ void ComputeOutputDispatcher::registerPipeline(
   vk::PushConstantRange pc_range{vk::ShaderStageFlagBits::eCompute, 0,
                                  pushConstantsSize};
   auto pl = device.createPipelineLayoutUnique(
-      vk::PipelineLayoutCreateInfo{{}, dsl, pc_range});
+      vk::PipelineLayoutCreateInfo{}.setSetLayouts(dsl).setPushConstantRanges(pc_range));
 
   graphics::SpirVShaderModule shader(device, spv);
   auto stage = shader.stageCreateInfo(vk::ShaderStageFlagBits::eCompute);

@@ -8,9 +8,10 @@ struct MaterialSetLayout final : public graphics::DescriptorSetLayout {
   static constexpr std::uint32_t kDiffuseBinding = 0;
   static constexpr std::uint32_t kDiffuseSpecularBinding = 1;
   static constexpr std::uint32_t kPrincipledBsdfBinding = 2;
+  static constexpr std::uint32_t kMixBinding = 3;
 
   static constexpr auto kBindings =
-      std::array<vk::DescriptorSetLayoutBinding, 3>{
+      std::array<vk::DescriptorSetLayoutBinding, 4>{
           vk::DescriptorSetLayoutBinding{
               kDiffuseBinding,
               vk::DescriptorType::eStorageBuffer,
@@ -29,10 +30,18 @@ struct MaterialSetLayout final : public graphics::DescriptorSetLayout {
               1,
               vk::ShaderStageFlagBits::eFragment,
           },
+          vk::DescriptorSetLayoutBinding{
+              kMixBinding,
+              vk::DescriptorType::eStorageBuffer,
+              1,
+              vk::ShaderStageFlagBits::eFragment,
+          },
       };
 
   static constexpr auto kBindingFlags =
-      std::array<vk::DescriptorBindingFlags, 3>{
+      std::array<vk::DescriptorBindingFlags, 4>{
+          vk::DescriptorBindingFlagBits::eUpdateAfterBind |
+              vk::DescriptorBindingFlagBits::ePartiallyBound,
           vk::DescriptorBindingFlagBits::eUpdateAfterBind |
               vk::DescriptorBindingFlagBits::ePartiallyBound,
           vk::DescriptorBindingFlagBits::eUpdateAfterBind |

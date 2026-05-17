@@ -24,4 +24,9 @@ auto openFileDialog(std::span<const FileFilter> filters = {},
                     const std::filesystem::path& default_path = {})
     -> std::optional<std::filesystem::path>;
 
+auto saveFileDialog(std::span<const FileFilter> filters = {},
+                    const std::filesystem::path& default_path = {},
+                    const char* default_name = nullptr)
+    -> std::optional<std::filesystem::path>;
+
 };  // namespace vkit::platform

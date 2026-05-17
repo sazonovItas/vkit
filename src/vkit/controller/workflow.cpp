@@ -96,6 +96,22 @@ auto WorkflowController::createTintNode(const std::string& name)
       ctx_->computeOutputResultBus, dispatcher_->getPipeline("tint"));
 }
 
+auto WorkflowController::createChannelAdjustNode(const std::string& name)
+    -> workflow::node::op::ChannelAdjustNode* {
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::op::ChannelAdjustNode>(
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("channel_adjust"));
+}
+
+auto WorkflowController::createChannelRemapNode(const std::string& name)
+    -> workflow::node::op::ChannelRemapNode* {
+  if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::op::ChannelRemapNode>(
+      name, *textureManager_, ctx_->computeOutputBus,
+      ctx_->computeOutputResultBus, dispatcher_->getPipeline("channel_remap"));
+}
+
 auto WorkflowController::createMixNode(const std::string& name)
     -> workflow::node::op::MixNode* {
   if (!workflow_ || !ctx_ || !dispatcher_ || !textureManager_) return nullptr;
@@ -104,10 +120,31 @@ auto WorkflowController::createMixNode(const std::string& name)
       ctx_->computeOutputResultBus, dispatcher_->getPipeline("mix"));
 }
 
+auto WorkflowController::createDiffuseNode(const std::string& name)
+    -> workflow::node::mat::DiffuseNode* {
+  if (!workflow_ || !materialManager_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::mat::DiffuseNode>(
+      name, *materialManager_, *textureManager_);
+}
+
+auto WorkflowController::createDiffuseSpecularNode(const std::string& name)
+    -> workflow::node::mat::DiffuseSpecularNode* {
+  if (!workflow_ || !materialManager_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::mat::DiffuseSpecularNode>(
+      name, *materialManager_, *textureManager_);
+}
+
 auto WorkflowController::createPrincipledBSDFNode(const std::string& name)
     -> workflow::node::mat::PrincipledBSDFNode* {
   if (!workflow_ || !materialManager_ || !textureManager_) return nullptr;
   return workflow_->createNode<workflow::node::mat::PrincipledBSDFNode>(
+      name, *materialManager_, *textureManager_);
+}
+
+auto WorkflowController::createMixMaterialNode(const std::string& name)
+    -> workflow::node::mat::MixMaterialNode* {
+  if (!workflow_ || !materialManager_ || !textureManager_) return nullptr;
+  return workflow_->createNode<workflow::node::mat::MixMaterialNode>(
       name, *materialManager_, *textureManager_);
 }
 
@@ -121,6 +158,32 @@ auto WorkflowController::createSlotOutputNode(const std::string& name)
 void WorkflowController::deleteNodes(const std::vector<int>& nodeIds) {
   if (!workflow_) return;
   for (int id : nodeIds) workflow_->destroyNode(id);
+}
+
+void WorkflowController::clearWorkflow() {
+  if (!workflow_) return;
+
+  // Wait for the GPU to finish using any resources owned by the current nodes
+  // before destroying them (prevents validation errors about in-use resources).
+  if (deviceWaitFn_) deviceWaitFn_();
+
+  std::vector<int> ids;
+  ids.reserve(workflow_->getNodes().size());
+  for (auto* n : workflow_->getNodes()) ids.push_back(n->getId());
+  for (int id : ids) workflow_->destroyNode(id);
+
+  // Immediately free textures from ImGui/bindless so Vulkan can reuse their
+  // handles without causing "conflicting imgui id" errors on the next import.
+  if (textureManager_) textureManager_->forceFlushGC();
+
+  // Clear material slots so the new workflow creates them at predictable IDs.
+  if (materialManager_) materialManager_->slots.clear();
+
+  pendingPositions_.clear();
+}
+
+void WorkflowController::pushPendingPositions(std::vector<NodePosition> positions) {
+  for (auto& p : positions) pendingPositions_.push_back(p);
 }
 
 auto WorkflowController::canConnectPins(int a, int b) const -> bool {

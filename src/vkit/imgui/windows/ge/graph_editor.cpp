@@ -2,6 +2,9 @@
 
 #include <imgui.h>
 
+#include "vkit/platform/file_dialog.hpp"
+#include "vkit/workflow/serializer.hpp"
+
 namespace vkit::imgui::windows::ge {
 
 GraphEditorWindow::GraphEditorWindow(const std::string_view name)
@@ -92,6 +95,27 @@ void GraphEditorWindow::onDraw() {
     ImNodes::ClearNodeSelection();
     ImNodes::ClearLinkSelection();
   }
+  ImGui::SameLine();
+  ImGui::Text("|");
+  ImGui::SameLine();
+  if (ImGui::Button("Export Graph")) {
+    static const platform::FileFilter kFilters[] = {{"Material Graph", "mgraph"}};
+    auto path = platform::saveFileDialog(kFilters, {}, "material");
+    if (path) {
+      if (path->extension() != ".mgraph") *path += ".mgraph";
+      pendingExportPath_ = std::move(*path);
+      pendingExport_ = true;
+    }
+  }
+  ImGui::SameLine();
+  if (ImGui::Button("Import Graph")) {
+    static const platform::FileFilter kFilters[] = {{"Material Graph", "mgraph"}};
+    auto path = platform::openFileDialog(kFilters);
+    if (path) {
+      pendingImportPath_ = std::move(*path);
+      pendingImport_ = true;
+    }
+  }
   ImGui::Spacing();
 
   ImNodes::BeginNodeEditor();
@@ -131,6 +155,29 @@ void GraphEditorWindow::onDraw() {
   }
 
   ImNodes::EndNodeEditor();
+
+  // Deferred export: positions are now current after EndNodeEditor
+  if (pendingExport_) {
+    pendingExport_ = false;
+    std::vector<controller::NodePosition> positions;
+    for (auto* node : workflow->getNodes()) {
+      auto pos = ImNodes::GetNodeEditorSpacePos(node->getId());
+      positions.push_back({node->getId(), pos.x, pos.y});
+    }
+    workflow::WorkflowSerializer::exportToFile(workflow, positions,
+                                               pendingExportPath_);
+  }
+
+  // Deferred import: clear selection so stale ImNodes IDs don't linger
+  if (pendingImport_) {
+    pendingImport_ = false;
+    ImNodes::ClearNodeSelection();
+    ImNodes::ClearLinkSelection();
+    std::vector<controller::NodePosition> positions;
+    workflow::WorkflowSerializer::importFromFile(pendingImportPath_, controller_,
+                                                 positions);
+    controller_->pushPendingPositions(std::move(positions));
+  }
 
   int hovered_pin_id;
   if (ImNodes::IsPinHovered(&hovered_pin_id)) {

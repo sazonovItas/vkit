@@ -137,6 +137,7 @@ class App {
     std::unique_ptr<controller::SceneController> sceneController;
 
     bool enableSkinning{false};
+    bool gizmoWasUsing{false};
     std::uint32_t previewMaterialSlot{0};
 
     std::shared_ptr<imgui::windows::ge::GraphEditorWindow> graphWindow;

@@ -1,11 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <optional>
 #include <unordered_set>
 #include <vector>
-
-#include <glm/glm.hpp>
 
 #include "vkit/renderer/types.hpp"
 
@@ -18,7 +17,8 @@ class SceneController {
   SceneController();
 
   // --- Lights ---
-  [[nodiscard]] auto getLights() const -> const std::vector<renderer::types::Light>&;
+  [[nodiscard]] auto getLights() const
+      -> const std::vector<renderer::types::Light>&;
   [[nodiscard]] auto getLights() -> std::vector<renderer::types::Light>&;
   void addLight(const renderer::types::Light& light = {});
   void removeLight(int index);
@@ -42,7 +42,8 @@ class SceneController {
   void togglePrimitive(std::uint32_t storageId);
   void clearSelection();
   [[nodiscard]] auto isSelected(std::uint32_t storageId) const -> bool;
-  [[nodiscard]] auto getSelection() const -> const std::unordered_set<std::uint32_t>&;
+  [[nodiscard]] auto getSelection() const
+      -> const std::unordered_set<std::uint32_t>&;
 
   // --- Material camera light (always at material camera position) ---
   [[nodiscard]] auto getMaterialCameraLight() -> renderer::types::Light&;
@@ -59,7 +60,8 @@ class SceneController {
   void setSelectedLight(std::optional<int> index);
 
   // --- Build GPU data ---
-  [[nodiscard]] auto buildSceneLightsSSBO() const -> renderer::types::LightsSSBO;
+  [[nodiscard]] auto buildSceneLightsSSBO() const
+      -> renderer::types::LightsSSBO;
   [[nodiscard]] auto buildMatLightsSSBO() const -> renderer::types::LightsSSBO;
 
  private:

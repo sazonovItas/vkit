@@ -40,6 +40,7 @@ class TextureManager : public vkit::Storage<Texture> {
   void setImguiRenderer(imgui::ImguiRenderer* renderer);
 
   void processGC();
+  void forceFlushGC();
 
  private:
   graphics::BindlessTextureManager* bindlessManager_{nullptr};

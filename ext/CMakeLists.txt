@@ -145,6 +145,11 @@ set(NFD_INSTALL OFF CACHE BOOL "" FORCE)
 set(NFD_WAYLAND OFF CACHE BOOL "" FORCE)
 add_subdirectory(nativefiledialog-extended)
 
+message(STATUS "[simdjson]")
+set(SIMDJSON_DEVELOPER_MODE OFF CACHE BOOL "" FORCE)
+set(SIMDJSON_BUILD_STATIC_LIB ON CACHE BOOL "" FORCE)
+add_subdirectory(simdjson)
+
 message(STATUS "[stb]")
 
 add_library(stb)
@@ -170,6 +175,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
     meshoptimizer
     stb::stb
     nfd
+    simdjson
     dl
 )
 

@@ -63,5 +63,9 @@ static constexpr std::string_view kOperatorsTintShaderPath =
     "shaders/operators/tint.comp";
 static constexpr std::string_view kOperatorsMixShaderPath =
     "shaders/operators/mix.comp";
+static constexpr std::string_view kOperatorsChannelRemapShaderPath =
+    "shaders/operators/channel_remap.comp";
+static constexpr std::string_view kOperatorsChannelAdjustShaderPath =
+    "shaders/operators/channel_adjust.comp";
 
 };  // namespace vkit::shaders

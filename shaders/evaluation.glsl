@@ -16,6 +16,7 @@ vec3 tonemapACES(vec3 x) {
 #define DIFFUSE_MATERIAL          1
 #define DIFFUSE_SPECULAR_MATERIAL 2
 #define PRINCIPLED_MATERIAL       3
+#define MIX_MATERIAL              4
 
 const vec3 AMBIENT_COLOR = vec3(0.05, 0.05, 0.05);
 

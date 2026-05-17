@@ -1,0 +1,41 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inImage;
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 2, rgba8)   uniform writeonly image2D outImageUnorm;
+
+// Channel source values:
+//   0=R  1=G  2=B  3=A  4=const0  5=const1
+layout(push_constant) uniform PC {
+    uint width;
+    uint height;
+    uint outR;
+    uint outG;
+    uint outB;
+    uint outA;
+} pc;
+
+float pick(vec4 src, uint ch) {
+    if (ch == 0u) return src.r;
+    if (ch == 1u) return src.g;
+    if (ch == 2u) return src.b;
+    if (ch == 3u) return src.a;
+    if (ch == 4u) return 0.0;
+    return 1.0;
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(float(pc.width), float(pc.height));
+    vec4 src = texture(inImage, uv);
+
+    vec4 out_ = vec4(pick(src, pc.outR), pick(src, pc.outG),
+                     pick(src, pc.outB), pick(src, pc.outA));
+
+    imageStore(outImageF32,   coord, out_);
+    imageStore(outImageUnorm, coord, out_);
+}

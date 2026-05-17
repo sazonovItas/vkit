@@ -1,24 +1,19 @@
 #include "vkit/controller/scene.hpp"
 
-#include <algorithm>
-
 namespace vkit::controller {
 
 SceneController::SceneController() {
-  lights_.push_back({});
-
-  cameraLight_.type =
-      static_cast<int>(renderer::types::LightType::kPoint);
+  cameraLight_.type = static_cast<int>(renderer::types::LightType::kPoint);
   cameraLight_.color = {1.0F, 1.0F, 1.0F};
   cameraLight_.intensity = 1.5F;
   cameraLight_.range = 25.0F;
   cameraLight_.castsShadows = 0;
 
-  // Material camera light — follows the material camera each frame.
-  materialCameraLight_.type         = static_cast<int>(renderer::types::LightType::kPoint);
-  materialCameraLight_.color        = {1.0F, 1.0F, 1.0F};
-  materialCameraLight_.intensity    = 1.5F;
-  materialCameraLight_.range        = 100.0F;
+  materialCameraLight_.type =
+      static_cast<int>(renderer::types::LightType::kPoint);
+  materialCameraLight_.color = {1.0F, 1.0F, 1.0F};
+  materialCameraLight_.intensity = 1.5F;
+  materialCameraLight_.range = 100.0F;
   materialCameraLight_.castsShadows = 0;
 }
 
@@ -78,18 +73,16 @@ void SceneController::deselectPrimitive(std::uint32_t storageId) {
 }
 
 void SceneController::togglePrimitive(std::uint32_t storageId) {
-  if (selectedPrimitives_.count(storageId))
+  if (selectedPrimitives_.contains(storageId))
     selectedPrimitives_.erase(storageId);
   else
     selectedPrimitives_.insert(storageId);
 }
 
-void SceneController::clearSelection() {
-  selectedPrimitives_.clear();
-}
+void SceneController::clearSelection() { selectedPrimitives_.clear(); }
 
 auto SceneController::isSelected(std::uint32_t storageId) const -> bool {
-  return selectedPrimitives_.count(storageId) > 0;
+  return selectedPrimitives_.contains(storageId);
 }
 
 auto SceneController::getSelection() const

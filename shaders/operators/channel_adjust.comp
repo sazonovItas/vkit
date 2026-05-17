@@ -1,0 +1,38 @@
+#version 450 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform sampler2D inImage;
+layout(set = 0, binding = 1, rgba32f) uniform writeonly image2D outImageF32;
+layout(set = 0, binding = 2, rgba8)   uniform writeonly image2D outImageUnorm;
+
+layout(push_constant) uniform PC {
+    uint  width;
+    uint  height;
+    float gainR; float gainG; float gainB; float gainA;
+    float biasR; float biasG; float biasB; float biasA;
+    uint  invertR; uint invertG; uint invertB; uint invertA;
+} pc;
+
+float adjust(float v, float gain, float bias, uint inv) {
+    float r = clamp(v * gain + bias, 0.0, 1.0);
+    return inv != 0u ? 1.0 - r : r;
+}
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= int(pc.width) || coord.y >= int(pc.height)) return;
+
+    vec2 uv = (vec2(coord) + 0.5) / vec2(float(pc.width), float(pc.height));
+    vec4 src = texture(inImage, uv);
+
+    vec4 out_ = vec4(
+        adjust(src.r, pc.gainR, pc.biasR, pc.invertR),
+        adjust(src.g, pc.gainG, pc.biasG, pc.invertG),
+        adjust(src.b, pc.gainB, pc.biasB, pc.invertB),
+        adjust(src.a, pc.gainA, pc.biasA, pc.invertA)
+    );
+
+    imageStore(outImageF32,   coord, out_);
+    imageStore(outImageUnorm, coord, out_);
+}

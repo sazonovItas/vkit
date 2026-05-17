@@ -64,6 +64,26 @@ SceneRenderer::SceneRenderer(
   uOpaquePipeline_ = opaque_builder.build(dev);
   opaquePipeline = *uOpaquePipeline_;
 
+  // Depth pre-pass for transparent objects: writes front-face depths, no color.
+  // This lets the back-face blend pass correctly fail depth test where front
+  // faces are closer, preventing back faces from showing through opaque blend
+  // materials (alpha=1) and giving the depth buffer correct values.
+  auto depth_prepass_builder =
+      graphics::pipeline::GraphicsPipelineBuilder{uPrimLayout_->get()};
+  depth_prepass_builder
+      .addShaderStage(
+          prim_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
+      .addShaderStage(
+          prim_frag.stageCreateInfo(vk::ShaderStageFlagBits::eFragment))
+      .setVertexInput({}, {})
+      .setRenderingFormats({vk::Format::eR8G8B8A8Unorm}, vk::Format::eD32Sfloat)
+      .setDepthState(vk::True, vk::True)
+      .setCullMode(vk::CullModeFlagBits::eBack)
+      .setColorBlendAttachment(0, graphics::pipeline::blend::kDepthOnly)
+      .setMultisampling(vk::SampleCountFlagBits::e8);
+  uTransparentDepthPrepassPipeline_ = depth_prepass_builder.build(dev);
+  transparentDepthPrepassPipeline = *uTransparentDepthPrepassPipeline_;
+
   auto trans_builder =
       graphics::pipeline::GraphicsPipelineBuilder{uPrimLayout_->get()};
   trans_builder

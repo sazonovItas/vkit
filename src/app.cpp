@@ -6,12 +6,13 @@
 
 #include <algorithm>
 #include <filesystem>
-
 #include <glm/ext/matrix_clip_space.hpp>
 #include <glm/ext/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <memory>
+#include <numbers>
 #include <span>
+#include <unordered_set>
 
 #include "vkit/asset/asset_manager.hpp"
 #include "vkit/asset/gltf_storage.hpp"
@@ -24,8 +25,11 @@
 #include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
+#include "vkit/imgui/windows/ge/node/diffuse_specular_ui.hpp"
+#include "vkit/imgui/windows/ge/node/diffuse_ui.hpp"
 #include "vkit/imgui/windows/ge/node/fractal_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/heightmap_ui.hpp"
+#include "vkit/imgui/windows/ge/node/mix_material_ui.hpp"
 #include "vkit/imgui/windows/ge/node/mix_ui.hpp"
 #include "vkit/imgui/windows/ge/node/noise_generator_ui.hpp"
 #include "vkit/imgui/windows/ge/node/normalmap_ui.hpp"
@@ -34,6 +38,8 @@
 #include "vkit/imgui/windows/ge/node/slot_output_ui.hpp"
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
+#include "vkit/imgui/windows/ge/node/channel_adjust_ui.hpp"
+#include "vkit/imgui/windows/ge/node/channel_remap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/command/draw_light_gizmos.hpp"
@@ -44,6 +50,8 @@
 #include "vkit/renderer/render_pass/viewport.hpp"
 #include "vkit/renderer/types.hpp"
 #include "vkit/renderer/viewport.hpp"
+#include "vkit/workflow/node/operators/channel_adjust.hpp"
+#include "vkit/workflow/node/operators/channel_remap.hpp"
 #include "vkit/workflow/node/operators/tint.hpp"
 #include "vkit/workflow/node/procedural/fractal_generator.hpp"
 #include "vkit/workflow/node/procedural/noise_generator.hpp"
@@ -74,13 +82,23 @@ void registerGraphNodes(imgui::windows::ge::GraphEditorWindow& graphWindow,
       std::make_unique<imgui::windows::ge::TintNodeUI>(texManager));
   registry.registerUI<workflow::node::op::MixNode>(
       std::make_unique<imgui::windows::ge::MixNodeUI>(texManager));
+  registry.registerUI<workflow::node::op::ChannelRemapNode>(
+      std::make_unique<imgui::windows::ge::ChannelRemapNodeUI>(texManager));
+  registry.registerUI<workflow::node::op::ChannelAdjustNode>(
+      std::make_unique<imgui::windows::ge::ChannelAdjustNodeUI>(texManager));
+  registry.registerUI<workflow::node::mat::DiffuseNode>(
+      std::make_unique<imgui::windows::ge::DiffuseNodeUI>());
+  registry.registerUI<workflow::node::mat::DiffuseSpecularNode>(
+      std::make_unique<imgui::windows::ge::DiffuseSpecularNodeUI>());
   registry.registerUI<workflow::node::mat::PrincipledBSDFNode>(
       std::make_unique<imgui::windows::ge::PrincipledBSDFNodeUI>());
+  registry.registerUI<workflow::node::mat::MixMaterialNode>(
+      std::make_unique<imgui::windows::ge::MixMaterialNodeUI>());
   registry.registerUI<workflow::node::mat::SlotOutputNode>(
       std::make_unique<imgui::windows::ge::SlotOutputNodeUI>());
 }
 
-void applyBlenderStyle() {
+void applyStyle() {
   ImGuiStyle& s = ImGui::GetStyle();
 
   // Spacing / sizing
@@ -205,6 +223,11 @@ App::~App() {
   ui_.sceneViewer.reset();
   ui_.materialViewer.reset();
 
+  // Stop background texture loading before freeing workflow nodes so that
+  // in-flight disk-load threads (which hold device references) finish
+  // before anything they depend on is torn down.
+  engine_.textureUploader.reset();
+
   engine_.workflowController.reset();
   engine_.workflow.reset();
   engine_.assetController.reset();
@@ -323,7 +346,7 @@ void App::initImguiCore() {
   ui_.host = std::make_unique<imgui::WindowImguiHost>(
       sys_.window.get(), *ui_.renderer, "vkit", "");
 
-  applyBlenderStyle();
+  applyStyle();
 
   ui_.host->setDockLayoutCallback([](vkit::imgui::WindowImguiHost& host,
                                      ImVec2 availableSize) {
@@ -423,6 +446,14 @@ void App::initCompute() {
   d.registerPipeline("mix", dev,
                      shaders::shaderPath(shaders::kOperatorsMixShaderPath),
                      BL::kDualInput, sizeof(core::events::MixPushConstants));
+  d.registerPipeline(
+      "channel_remap", dev,
+      shaders::shaderPath(shaders::kOperatorsChannelRemapShaderPath),
+      BL::kSingleInput, sizeof(core::events::ChannelRemapPushConstants));
+  d.registerPipeline(
+      "channel_adjust", dev,
+      shaders::shaderPath(shaders::kOperatorsChannelAdjustShaderPath),
+      BL::kSingleInput, sizeof(core::events::ChannelAdjustPushConstants));
 }
 
 void App::initEnvironment() {
@@ -464,6 +495,9 @@ void App::initWorkflow() {
       .setExecutionContext(engine_.executionContext.get())
       .setComputeDispatcher(engine_.computeOutputDispatcher.get())
       .setMaterialManager(engine_.materialManager.get());
+
+  engine_.workflowController->setDeviceWaitFn(
+      [this]() { sys_.device->get().waitIdle(); });
 }
 
 void App::initViewports() {
@@ -485,220 +519,400 @@ void App::initViewports() {
         }
       });
 
-  ui_.sceneViewer->setOnManipulate(
-      [this](imgui::windows::Viewer& viewer) mutable {
-        auto& io = ImGui::GetIO();
+  ui_.sceneViewer->setOnManipulate([this](
+                                       imgui::windows::Viewer& viewer) mutable {
+    auto& io = ImGui::GetIO();
 
-        // Block camera movement when ImGuizmo is being used
-        const bool guizmo_using = ImGuizmo::IsUsing();
+    // Block camera movement when ImGuizmo is being used
+    const bool guizmo_using = ImGuizmo::IsUsing();
 
-        if (!guizmo_using && viewer.isHovered() && viewer.isFocused()) {
-          glm::vec3 local_dir{0.0F, 0.0F, 0.0F};
-          if (ImGui::IsKeyDown(ImGuiKey_W)) local_dir.z += 1.0F;
-          if (ImGui::IsKeyDown(ImGuiKey_S)) local_dir.z -= 1.0F;
-          if (ImGui::IsKeyDown(ImGuiKey_D)) local_dir.x += 1.0F;
-          if (ImGui::IsKeyDown(ImGuiKey_A)) local_dir.x -= 1.0F;
-          if (ImGui::IsKeyDown(ImGuiKey_E)) local_dir.y += 1.0F;
-          if (ImGui::IsKeyDown(ImGuiKey_Q)) local_dir.y -= 1.0F;
+    if (!guizmo_using && viewer.isHovered() && viewer.isFocused()) {
+      glm::vec3 local_dir{0.0F, 0.0F, 0.0F};
+      if (ImGui::IsKeyDown(ImGuiKey_W)) local_dir.z += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_S)) local_dir.z -= 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_D)) local_dir.x += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_A)) local_dir.x -= 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_E)) local_dir.y += 1.0F;
+      if (ImGui::IsKeyDown(ImGuiKey_Q)) local_dir.y -= 1.0F;
 
-          if (glm::length(local_dir) > 0.0F) {
-            local_dir = glm::normalize(local_dir);
-            float speed_mult = (ImGui::IsKeyDown(ImGuiKey_LeftShift) ||
-                                ImGui::IsKeyDown(ImGuiKey_RightShift))
-                                   ? 3.0F
-                                   : 1.0F;
-            scene_.sceneController.move(local_dir, io.DeltaTime * speed_mult);
+      if (glm::length(local_dir) > 0.0F) {
+        local_dir = glm::normalize(local_dir);
+        float speed_mult = (ImGui::IsKeyDown(ImGuiKey_LeftShift) ||
+                            ImGui::IsKeyDown(ImGuiKey_RightShift))
+                               ? 3.0F
+                               : 1.0F;
+        scene_.sceneController.move(local_dir, io.DeltaTime * speed_mult);
+      }
+    }
+
+    if (!guizmo_using && viewer.isHovered() &&
+        ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+      scene_.sceneController.processMouseMovement(io.MouseDelta.x,
+                                                  io.MouseDelta.y);
+    }
+
+    if (viewer.isHovered() && io.MouseWheel != 0.0F) {
+      float new_speed =
+          scene_.sceneController.movementSpeed + (io.MouseWheel * 2.0F);
+      scene_.sceneController.setMovementSpeed(std::max(0.1F, new_speed));
+    }
+
+    // --- N/T/R/S mode buttons overlay ---
+    auto& sc = *ui_.sceneController;
+    const auto gizmo_op = sc.getGizmoOp();
+    const ImVec4 active_col{0.122F, 0.498F, 0.769F, 1.0F};
+
+    ImGui::SetCursorScreenPos(
+        ImVec2(viewer.getContentX() + 8.0F, viewer.getContentY() + 8.0F));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0F, 2.0F));
+    ImGui::PushID("gizmo_mode");
+
+    if (gizmo_op == controller::GizmoOp::None)
+      ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+    if (ImGui::SmallButton("N")) sc.setGizmoOp(controller::GizmoOp::None);
+    if (gizmo_op == controller::GizmoOp::None) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    if (gizmo_op == controller::GizmoOp::Translate)
+      ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+    if (ImGui::SmallButton("T")) sc.setGizmoOp(controller::GizmoOp::Translate);
+    if (gizmo_op == controller::GizmoOp::Translate) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    if (gizmo_op == controller::GizmoOp::Rotate)
+      ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+    if (ImGui::SmallButton("R")) sc.setGizmoOp(controller::GizmoOp::Rotate);
+    if (gizmo_op == controller::GizmoOp::Rotate) ImGui::PopStyleColor();
+
+    ImGui::SameLine();
+    if (gizmo_op == controller::GizmoOp::Scale)
+      ImGui::PushStyleColor(ImGuiCol_Button, active_col);
+    if (ImGui::SmallButton("S")) sc.setGizmoOp(controller::GizmoOp::Scale);
+    if (gizmo_op == controller::GizmoOp::Scale) ImGui::PopStyleColor();
+
+    ImGui::PopID();
+    ImGui::PopStyleVar();
+
+    // --- Light direction indicators (always drawn, any gizmo mode) ---
+    {
+      ImDrawList* ld = ImGui::GetWindowDrawList();
+      const float vx = viewer.getContentX();
+      const float vy = viewer.getContentY();
+      const float vw = viewer.getContentWidth();
+      const float vh = viewer.getContentHeight();
+      ld->PushClipRect(ImVec2(vx, vy), ImVec2(vx + vw, vy + vh), true);
+
+      const glm::mat4 vm = scene_.sceneCamera->getViewMatrix();
+      const glm::mat4 pm = scene_.sceneCamera->getProjection().getMatrix();
+
+      // Project world pos → ImGui screen pos. Sets visible=false if behind
+      // camera.
+      auto w2s = [&](const glm::vec3& p, bool& vis) -> ImVec2 {
+        const glm::vec4 clip = pm * vm * glm::vec4(p, 1.0F);
+        vis = clip.w > 0.001F;
+        if (!vis) return {};
+        const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+        return {vx + (((ndc.x * 0.5F) + 0.5F) * vw),
+                vy + ((1.0F - ((ndc.y * 0.5F) + 0.5F)) * vh)};
+      };
+
+      // Build two basis vectors perpendicular to `dir`.
+      auto make_basis = [](const glm::vec3& dir, glm::vec3& right,
+                           glm::vec3& up2) {
+        const glm::vec3 world_up =
+            (std::abs(glm::dot(dir, glm::vec3(0.0F, 1.0F, 0.0F))) < 0.99F)
+                ? glm::vec3(0.0F, 1.0F, 0.0F)
+                : glm::vec3(1.0F, 0.0F, 0.0F);
+        right = glm::normalize(glm::cross(dir, world_up));
+        up2 = glm::normalize(glm::cross(right, dir));
+      };
+
+      // Draw an arrow (shaft + arrowhead) between two screen points.
+      auto draw_arrow = [&](ImVec2 p0, ImVec2 p1, ImU32 col, float thickness) {
+        ld->AddLine(p0, p1, col, thickness);
+        const glm::vec2 d = glm::normalize(glm::vec2(p1.x - p0.x, p1.y - p0.y));
+        const glm::vec2 perp{-d.y, d.x};
+        constexpr float kAH = 7.0F;
+        const ImVec2 al{p1.x - (d.x * kAH) + (perp.x * kAH * 0.4F),
+                        p1.y - (d.y * kAH) + (perp.y * kAH * 0.4F)};
+        const ImVec2 ar{p1.x - (d.x * kAH) - (perp.x * kAH * 0.4F),
+                        p1.y - (d.y * kAH) - (perp.y * kAH * 0.4F)};
+        ld->AddTriangleFilled(p1, al, ar, col);
+      };
+
+      const auto& lights = ui_.sceneController->getLights();
+      const auto sel_light = ui_.sceneController->getSelectedLight();
+      for (int li = 0; li < static_cast<int>(lights.size()); ++li) {
+        if (!sel_light || *sel_light != li) continue;
+        const auto& light = lights[li];
+        const glm::vec3 cv = glm::clamp(light.color, 0.0F, 1.0F);
+        const ImU32 col =
+            IM_COL32(static_cast<int>(cv.r * 255), static_cast<int>(cv.g * 255),
+                     static_cast<int>(cv.b * 255), 210);
+
+        const auto ltype = static_cast<renderer::types::LightType>(light.type);
+
+        if (ltype == renderer::types::LightType::kDirectional) {
+          const glm::vec3 dir = glm::normalize(light.direction);
+          glm::vec3 right;
+          glm::vec3 up2;
+          make_basis(dir, right, up2);
+
+          // 5 parallel arrows: centre + 4 around it in a cross pattern.
+          constexpr float kLen = 0.6F;
+          constexpr float kSpread = 0.12F;
+          const glm::vec3 offsets[5] = {
+              {0.0F, 0.0F, 0.0F}, right * kSpread, -right * kSpread,
+              up2 * kSpread,      -up2 * kSpread,
+          };
+          for (const auto& off : offsets) {
+            const glm::vec3 base = light.position + off;
+            const glm::vec3 tip = base + dir * kLen;
+            bool v0;
+            bool v1;
+            ImVec2 s0 = w2s(base, v0);
+            ImVec2 s1 = w2s(tip, v1);
+            if (!v0 || !v1) continue;
+            draw_arrow(s0, s1, col, 1.5F);
           }
+
+        } else if (ltype == renderer::types::LightType::kSpot) {
+          const glm::vec3 dir = glm::normalize(light.direction);
+          glm::vec3 right;
+          glm::vec3 up2;
+          make_basis(dir, right, up2);
+
+          constexpr float kTwoPi = 2.0F * std::numbers::pi_v<float>;
+          const float cone_len = light.range;
+          const glm::vec3 cone_tip = light.position;
+          const glm::vec3 cone_center = cone_tip + dir * cone_len;
+
+          bool apex_vis;
+          const ImVec2 apex_s = w2s(cone_tip, apex_vis);
+
+          // Outer cone: 8 edge lines apex → outer rim.
+          constexpr int kEdges = 8;
+          const float outer_r = cone_len * std::tan(light.outerAngle);
+          for (int i = 0; i < kEdges; ++i) {
+            const float a = kTwoPi * static_cast<float>(i) / kEdges;
+            const glm::vec3 rim =
+                cone_center +
+                (right * std::cos(a) + up2 * std::sin(a)) * outer_r;
+            bool v1;
+            ImVec2 s1 = w2s(rim, v1);
+            if (!apex_vis || !v1) continue;
+            ld->AddLine(apex_s, s1, col, 1.0F);
+          }
+
+          // Outer base ring.
+          constexpr int kRingSeg = 32;
+          {
+            ImVec2 prev{};
+            bool prev_vis = false;
+            for (int i = 0; i <= kRingSeg; ++i) {
+              const float a =
+                  kTwoPi * static_cast<float>(i % kRingSeg) / kRingSeg;
+              const glm::vec3 pt =
+                  cone_center +
+                  (right * std::cos(a) + up2 * std::sin(a)) * outer_r;
+              bool vis;
+              ImVec2 cur = w2s(pt, vis);
+              if (vis && prev_vis) ld->AddLine(prev, cur, col, 1.0F);
+              prev = cur;
+              prev_vis = vis;
+            }
+          }
+
+          // Inner cone ring (dimmer).
+          const ImU32 col_inner = IM_COL32(static_cast<int>(cv.r * 255),
+                                           static_cast<int>(cv.g * 255),
+                                           static_cast<int>(cv.b * 255), 110);
+          const float inner_r = cone_len * std::tan(light.innerAngle);
+          {
+            ImVec2 prev{};
+            bool prev_vis = false;
+            for (int i = 0; i <= kRingSeg; ++i) {
+              const float a =
+                  kTwoPi * static_cast<float>(i % kRingSeg) / kRingSeg;
+              const glm::vec3 pt =
+                  cone_center +
+                  (right * std::cos(a) + up2 * std::sin(a)) * inner_r;
+              bool vis;
+              ImVec2 cur = w2s(pt, vis);
+              if (vis && prev_vis) ld->AddLine(prev, cur, col_inner, 1.0F);
+              prev = cur;
+              prev_vis = vis;
+            }
+          }
+
+          // Centre direction arrow.
+          bool v1;
+          ImVec2 tip_s = w2s(cone_center, v1);
+          if (apex_vis && v1) draw_arrow(apex_s, tip_s, col, 1.5F);
         }
+      }
 
-        if (!guizmo_using && viewer.isHovered() &&
-            ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-          scene_.sceneController.processMouseMovement(io.MouseDelta.x,
-                                                      io.MouseDelta.y);
-        }
+      ld->PopClipRect();
+    }
 
-        if (viewer.isHovered() && io.MouseWheel != 0.0F) {
-          float new_speed =
-              scene_.sceneController.movementSpeed + (io.MouseWheel * 2.0F);
-          scene_.sceneController.setMovementSpeed(std::max(0.1F, new_speed));
-        }
+    // --- ImGuizmo setup — clipped to viewer content area ---
+    if (gizmo_op == controller::GizmoOp::None) return;
 
-        // --- N/T/R/S mode buttons overlay ---
-        auto& sc = *ui_.sceneController;
-        const auto gizmo_op = sc.getGizmoOp();
-        const ImVec4 active_col{0.122F, 0.498F, 0.769F, 1.0F};
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 clip_min(viewer.getContentX(), viewer.getContentY());
+    const ImVec2 clip_max(viewer.getContentX() + viewer.getContentWidth(),
+                          viewer.getContentY() + viewer.getContentHeight());
+    dl->PushClipRect(clip_min, clip_max, true);
 
-        ImGui::SetCursorScreenPos(
-            ImVec2(viewer.getContentX() + 8.0F, viewer.getContentY() + 8.0F));
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(2.0F, 2.0F));
-        ImGui::PushID("gizmo_mode");
+    ImGuizmo::SetOrthographic(false);
+    ImGuizmo::SetDrawlist(dl);
+    ImGuizmo::SetRect(viewer.getContentX(), viewer.getContentY(),
+                      viewer.getContentWidth(), viewer.getContentHeight());
 
-        if (gizmo_op == controller::GizmoOp::None)
-          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
-        if (ImGui::SmallButton("N")) sc.setGizmoOp(controller::GizmoOp::None);
-        if (gizmo_op == controller::GizmoOp::None)
-          ImGui::PopStyleColor();
+    // Raw projection (no Vulkan Y-flip) — ImGuizmo works in OpenGL NDC
+    const glm::mat4 view_mat = scene_.sceneCamera->getViewMatrix();
+    const glm::mat4 proj_mat = scene_.sceneCamera->getProjection().getMatrix();
 
-        ImGui::SameLine();
-        if (gizmo_op == controller::GizmoOp::Translate)
-          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
-        if (ImGui::SmallButton("T"))
-          sc.setGizmoOp(controller::GizmoOp::Translate);
-        if (gizmo_op == controller::GizmoOp::Translate)
-          ImGui::PopStyleColor();
+    // Map selected mode to ImGuizmo operation
+    ImGuizmo::OPERATION imguizmo_op = ImGuizmo::TRANSLATE;
+    switch (gizmo_op) {
+      case controller::GizmoOp::Translate:
+        imguizmo_op = ImGuizmo::TRANSLATE;
+        break;
+      case controller::GizmoOp::Rotate:
+        imguizmo_op = ImGuizmo::ROTATE;
+        break;
+      case controller::GizmoOp::Scale:
+        imguizmo_op = ImGuizmo::SCALE;
+        break;
+      default:
+        break;
+    }
 
-        ImGui::SameLine();
-        if (gizmo_op == controller::GizmoOp::Rotate)
-          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
-        if (ImGui::SmallButton("R")) sc.setGizmoOp(controller::GizmoOp::Rotate);
-        if (gizmo_op == controller::GizmoOp::Rotate)
-          ImGui::PopStyleColor();
+    // --- Primitive gizmo — operates on all selected nodes at once ---
+    const auto& selection = ui_.sceneController->getSelection();
+    auto current_asset = engine_.assetController->getCurrentAsset();
 
-        ImGui::SameLine();
-        if (gizmo_op == controller::GizmoOp::Scale)
-          ImGui::PushStyleColor(ImGuiCol_Button, active_col);
-        if (ImGui::SmallButton("S")) sc.setGizmoOp(controller::GizmoOp::Scale);
-        if (gizmo_op == controller::GizmoOp::Scale)
-          ImGui::PopStyleColor();
-
-        ImGui::PopID();
-        ImGui::PopStyleVar();
-
-        // --- ImGuizmo setup — clipped to viewer content area ---
-        if (gizmo_op == controller::GizmoOp::None) return;
-
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        const ImVec2 clip_min(viewer.getContentX(), viewer.getContentY());
-        const ImVec2 clip_max(viewer.getContentX() + viewer.getContentWidth(),
-                              viewer.getContentY() + viewer.getContentHeight());
-        dl->PushClipRect(clip_min, clip_max, true);
-
-        ImGuizmo::SetOrthographic(false);
-        ImGuizmo::SetDrawlist(dl);
-        ImGuizmo::SetRect(viewer.getContentX(), viewer.getContentY(),
-                          viewer.getContentWidth(), viewer.getContentHeight());
-
-        // Raw projection (no Vulkan Y-flip) — ImGuizmo works in OpenGL NDC
-        const glm::mat4 view_mat = scene_.sceneCamera->getViewMatrix();
-        const glm::mat4 proj_mat =
-            scene_.sceneCamera->getProjection().getMatrix();
-
-        // Map selected mode to ImGuizmo operation
-        ImGuizmo::OPERATION imguizmo_op = ImGuizmo::TRANSLATE;
-        switch (gizmo_op) {
-          case controller::GizmoOp::Translate: imguizmo_op = ImGuizmo::TRANSLATE; break;
-          case controller::GizmoOp::Rotate:    imguizmo_op = ImGuizmo::ROTATE;    break;
-          case controller::GizmoOp::Scale:     imguizmo_op = ImGuizmo::SCALE;     break;
-          default: break;
-        }
-
-        // --- Primitive gizmo — operates on all selected nodes at once ---
-        const auto& selection = ui_.sceneController->getSelection();
-        auto current_asset = engine_.assetController->getCurrentAsset();
-
-        if (!selection.empty() && current_asset &&
-            !current_asset->scenes.empty()) {
-          // Collect every distinct node that owns at least one selected prim.
-          std::vector<scene::Node*> selected_nodes;
-          auto active_scene = current_asset->getActiveScene();
-          if (active_scene) {
-            auto collect = [&](auto& self, scene::Node* node) -> void {
-              if (node->mesh) {
-                for (const auto& prim : node->mesh->getPrimitives()) {
-                  if (prim->getStorageId().has_value() &&
-                      selection.count(prim->getStorageId().value())) {
-                    selected_nodes.push_back(node);
-                    break; // one entry per node
-                  }
-                }
+    if (!selection.empty() && current_asset && !current_asset->scenes.empty()) {
+      // Collect every distinct node that owns at least one selected prim.
+      std::vector<scene::Node*> selected_nodes;
+      auto active_scene = current_asset->getActiveScene();
+      if (active_scene) {
+        auto collect = [&](auto& self, scene::Node* node) -> void {
+          if (node->mesh) {
+            for (const auto& prim : node->mesh->getPrimitives()) {
+              if (prim->getStorageId().has_value() &&
+                  selection.contains(prim->getStorageId().value())) {
+                selected_nodes.push_back(node);
+                break;  // one entry per node
               }
-              for (const auto& child : node->getChildren())
-                self(self, child.get());
-            };
-            for (std::uint32_t root_id : active_scene->rootNodes)
-              if (auto node = current_asset->nodes.get(root_id))
-                collect(collect, node.get());
-          }
-
-          if (!selected_nodes.empty()) {
-            // Pivot = centroid of each node's world AABB centre (or origin).
-            glm::vec3 centroid{0.0F};
-            for (auto* n : selected_nodes) {
-              const glm::mat4 w = n->getGlobalTransform().getMatrix();
-              centroid += (n->mesh && n->mesh->aabbValid())
-                              ? glm::vec3(w * glm::vec4(n->mesh->aabbCenter(), 1.0F))
-                              : glm::vec3(w[3]);
-            }
-            centroid /= static_cast<float>(selected_nodes.size());
-
-            // Single selection: keep node's own axes (LOCAL).
-            // Multi-selection: world-aligned gizmo at centroid.
-            glm::mat4 gizmo_mat = glm::translate(glm::mat4(1.0F), centroid);
-            const auto gizmo_mode = ImGuizmo::WORLD;
-            if (selected_nodes.size() == 1) {
-              auto* n = selected_nodes[0];
-              gizmo_mat = n->getGlobalTransform().getMatrix();
-              gizmo_mat[3] = glm::vec4(centroid, 1.0F);
-            }
-
-            glm::mat4 delta(1.0F);
-            const auto mode =
-                (selected_nodes.size() == 1) ? ImGuizmo::LOCAL : gizmo_mode;
-            if (ImGuizmo::Manipulate(
-                    glm::value_ptr(view_mat), glm::value_ptr(proj_mat),
-                    imguizmo_op, mode, glm::value_ptr(gizmo_mat),
-                    glm::value_ptr(delta))) {
-              for (auto* n : selected_nodes) {
-                const glm::mat4 world = n->getGlobalTransform().getMatrix();
-                const glm::mat4 new_world = delta * world;
-                auto parent = n->getParent().lock();
-                glm::mat4 new_local = new_world;
-                if (parent)
-                  new_local = glm::inverse(
-                                  parent->getGlobalTransform().getMatrix()) *
-                              new_world;
-                n->setLocalTransform(scene::TrsTransform(new_local));
-              }
             }
           }
-        } else if (ui_.sceneController->getSelectedLight().has_value()) {
-          // --- Light gizmo — T/R/S buttons select operation ---
-          auto& lights = sc.getLights();
-          const int lidx = ui_.sceneController->getSelectedLight().value();
-          if (lidx >= 0 && static_cast<std::size_t>(lidx) < lights.size()) {
-            auto& light = lights[lidx];
+          for (const auto& child : node->getChildren()) self(self, child.get());
+        };
+        for (std::uint32_t root_id : active_scene->rootNodes)
+          if (auto node = current_asset->nodes.get(root_id))
+            collect(collect, node.get());
+      }
 
-            // Directional + Spot: R rotates direction; all others use imguizmo_op.
-            const bool has_direction =
-                light.type == static_cast<int>(
-                                  renderer::types::LightType::kDirectional) ||
-                light.type == static_cast<int>(
-                                  renderer::types::LightType::kSpot);
-            const ImGuizmo::OPERATION light_op =
-                (has_direction && gizmo_op == controller::GizmoOp::Rotate)
-                    ? ImGuizmo::ROTATE
-                    : imguizmo_op;
+      if (!selected_nodes.empty()) {
+        // Pivot = centroid of each node's world AABB centre (or origin).
+        glm::vec3 centroid{0.0F};
+        for (auto* n : selected_nodes) {
+          const glm::mat4 w = n->getGlobalTransform().getMatrix();
+          centroid +=
+              (n->mesh && n->mesh->aabbValid())
+                  ? glm::vec3(w * glm::vec4(n->mesh->aabbCenter(), 1.0F))
+                  : glm::vec3(w[3]);
+        }
+        centroid /= static_cast<float>(selected_nodes.size());
 
-            glm::mat4 light_mat =
-                glm::translate(glm::mat4(1.0F), light.position);
-            glm::mat4 delta(1.0F);
+        // Translate: always world-aligned (axes stay fixed after a rotate).
+        // Rotate/Scale single selection: LOCAL so handles follow the node's
+        // axes. Multi-selection: world-aligned centroid gizmo.
+        const bool use_local = (selected_nodes.size() == 1) &&
+                               (imguizmo_op != ImGuizmo::TRANSLATE);
 
-            if (ImGuizmo::Manipulate(
-                    glm::value_ptr(view_mat), glm::value_ptr(proj_mat),
-                    light_op, ImGuizmo::WORLD, glm::value_ptr(light_mat),
-                    glm::value_ptr(delta))) {
-              if (light_op == ImGuizmo::TRANSLATE) {
-                light.position = glm::vec3(light_mat[3]);
-              } else {
-                light.direction = glm::normalize(
-                    glm::vec3(delta * glm::vec4(light.direction, 0.0F)));
-              }
-            }
-          }
+        glm::mat4 gizmo_mat = glm::translate(glm::mat4(1.0F), centroid);
+        if (use_local) {
+          auto* n = selected_nodes[0];
+          gizmo_mat = n->getGlobalTransform().getMatrix();
+          gizmo_mat[3] = glm::vec4(centroid, 1.0F);
         }
 
-        dl->PopClipRect();
-      });
+        // Only move topmost selected nodes — children follow via the hierarchy.
+        // Moving every node individually causes parent+child pairs to get
+        // double-displaced, which breaks skinned animations.
+        std::unordered_set<scene::Node*> selected_set(selected_nodes.begin(),
+                                                      selected_nodes.end());
+        std::vector<scene::Node*> topmost_nodes;
+        for (auto* n : selected_nodes) {
+          bool ancestor_selected = false;
+          auto p = n->getParent().lock();
+          while (p) {
+            if (selected_set.count(p.get())) {
+              ancestor_selected = true;
+              break;
+            }
+            p = p->getParent().lock();
+          }
+          if (!ancestor_selected) topmost_nodes.push_back(n);
+        }
+
+        glm::mat4 delta(1.0F);
+        const auto mode = use_local ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+        if (ImGuizmo::Manipulate(
+                glm::value_ptr(view_mat), glm::value_ptr(proj_mat), imguizmo_op,
+                mode, glm::value_ptr(gizmo_mat), glm::value_ptr(delta))) {
+          for (auto* n : topmost_nodes) {
+            const glm::mat4 world = n->getGlobalTransform().getMatrix();
+            const glm::mat4 new_world = delta * world;
+            auto parent = n->getParent().lock();
+            glm::mat4 new_local = new_world;
+            if (parent)
+              new_local =
+                  glm::inverse(parent->getGlobalTransform().getMatrix()) *
+                  new_world;
+            n->setLocalTransform(scene::TrsTransform(new_local));
+          }
+        }
+      }
+    } else if (ui_.sceneController->getSelectedLight().has_value()) {
+      // --- Light gizmo — T/R/S buttons select operation ---
+      auto& lights = sc.getLights();
+      const int lidx = ui_.sceneController->getSelectedLight().value();
+      if (lidx >= 0 && static_cast<std::size_t>(lidx) < lights.size()) {
+        auto& light = lights[lidx];
+
+        // Directional + Spot: R rotates direction; all others use imguizmo_op.
+        const bool has_direction =
+            light.type ==
+                static_cast<int>(renderer::types::LightType::kDirectional) ||
+            light.type == static_cast<int>(renderer::types::LightType::kSpot);
+        const ImGuizmo::OPERATION light_op =
+            (has_direction && gizmo_op == controller::GizmoOp::Rotate)
+                ? ImGuizmo::ROTATE
+                : imguizmo_op;
+
+        glm::mat4 light_mat = glm::translate(glm::mat4(1.0F), light.position);
+        glm::mat4 delta(1.0F);
+
+        if (ImGuizmo::Manipulate(glm::value_ptr(view_mat),
+                                 glm::value_ptr(proj_mat), light_op,
+                                 ImGuizmo::WORLD, glm::value_ptr(light_mat),
+                                 glm::value_ptr(delta))) {
+          if (light_op == ImGuizmo::TRANSLATE) {
+            light.position = glm::vec3(light_mat[3]);
+          } else {
+            light.direction = glm::normalize(
+                glm::vec3(delta * glm::vec4(light.direction, 0.0F)));
+          }
+        }
+      }
+    }
+
+    dl->PopClipRect();
+  });
 
   ui_.materialViewer =
       std::make_shared<imgui::windows::Viewer>("Material Preview");
@@ -713,8 +927,7 @@ void App::initViewports() {
   ui_.materialViewer->setOnManipulate([this](imgui::windows::Viewer& viewer) {
     auto& io = ImGui::GetIO();
     if (viewer.isHovered() && viewer.isFocused()) {
-      if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
-          ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+      if (ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
         scene_.materialController.processMouseMovement(io.MouseDelta.x,
                                                        io.MouseDelta.y);
       }
@@ -894,7 +1107,7 @@ void App::mainLoop() {
     }
 
     if (ui_.enableSkinning && current_asset &&
-        current_asset->skins.getActiveCount() > 0)
+        current_asset->skins.getActiveCount() > 0 && !ui_.gizmoWasUsing)
       rSys_.animator->update(dt, current_asset.get());
     rSys_.materialSys->update(currentFrame_, *engine_.materialManager);
     rSys_.assetBridge->update(currentFrame_, current_asset.get());
@@ -927,7 +1140,8 @@ void App::mainLoop() {
     };
 
     // Build scene LightsSSBO (scene lights + optional camera light).
-    ui_.sceneController->updateCameraPosition(scene_.sceneCamera->getPosition());
+    ui_.sceneController->updateCameraPosition(
+        scene_.sceneCamera->getPosition());
     const auto lights_ssbo = ui_.sceneController->buildSceneLightsSSBO();
 
     // Material preview light — single point light at the material camera.
@@ -938,9 +1152,9 @@ void App::mainLoop() {
     // Build shadow light UBO from the first shadow-casting light.
     renderer::types::ShadowLightUBO shadow_light{};
     bool any_shadow_caster = false;
-    static constexpr float kShadowArea     = 20.0F;
+    static constexpr float kShadowArea = 20.0F;
     static constexpr float kShadowDistance = 50.0F;
-    static constexpr float kPi             = 3.14159265F;
+    static constexpr float kPi = std::numbers::pi_v<float>;
     auto& scene_params = ui_.sceneController->getSceneParams();
     for (std::uint32_t li = 0; li < lights_ssbo.count; ++li) {
       const auto& sl = lights_ssbo.lights[li];
@@ -953,14 +1167,18 @@ void App::mainLoop() {
               ? glm::vec3(0.0F, 1.0F, 0.0F)
               : glm::vec3(1.0F, 0.0F, 0.0F);
 
-      glm::mat4 lview, lproj;
+      glm::mat4 lview;
+      glm::mat4 lproj;
       const float half = kShadowArea * 0.5F;
 
-      if (sl.type == static_cast<int>(renderer::types::LightType::kDirectional)) {
+      if (sl.type ==
+          static_cast<int>(renderer::types::LightType::kDirectional)) {
         const glm::vec3 lpos = -ldir * kShadowDistance;
         lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
-        lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, kShadowDistance * 2.0F);
-      } else if (sl.type == static_cast<int>(renderer::types::LightType::kSpot)) {
+        lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F,
+                                kShadowDistance * 2.0F);
+      } else if (sl.type ==
+                 static_cast<int>(renderer::types::LightType::kSpot)) {
         const glm::vec3 lpos = sl.position;
         lview = glm::lookAt(lpos, lpos + ldir, up);
         const float fov = glm::clamp(sl.outerAngle * 2.0F, 0.01F, kPi * 0.99F);
@@ -968,7 +1186,8 @@ void App::mainLoop() {
       } else {
         const glm::vec3 lpos = sl.position;
         lview = glm::lookAt(lpos, glm::vec3(0.0F), up);
-        lproj = glm::orthoRH_ZO(-half, half, -half, half, 0.1F, sl.range * 2.0F);
+        lproj =
+            glm::orthoRH_ZO(-half, half, -half, half, 0.1F, sl.range * 2.0F);
       }
 
       shadow_light.viewProj = lproj * lview;
@@ -977,14 +1196,14 @@ void App::mainLoop() {
     }
 
     rSys_.sceneRenderer->updateUniforms(currentFrame_, scene_ubo, mat_ubo,
-                                        env_params, scene_params,
-                                        lights_ssbo, mat_lights_ssbo,
-                                        shadow_light);
+                                        env_params, scene_params, lights_ssbo,
+                                        mat_lights_ssbo, shadow_light);
 
     ui_.host->beginFrame(sys_.window->getWidth(), sys_.window->getHeight(), dt);
     ImGuizmo::BeginFrame();
     ui_.windowManager->drawWindows(currentFrame_);
     ui_.host->endFrame();
+    ui_.gizmoWasUsing = ImGuizmo::IsUsing();
 
     auto task = renderer::RenderTask{};
 
@@ -995,7 +1214,8 @@ void App::mainLoop() {
     auto prim_set = rSys_.assetBridge->getDescriptorSet(currentFrame_);
     auto light_set = rSys_.sceneRenderer->getLightDescriptorSet(currentFrame_);
 
-    // Shadow pass: only when shadows are enabled and a shadow-casting light exists.
+    // Shadow pass: only when shadows are enabled and a shadow-casting light
+    // exists.
     if (current_asset && scene_params.shadowsEnabled && any_shadow_caster) {
       task.add<renderer::rp::BeginShadowPass>(
               rSys_.sceneRenderer->getShadowImage(),
@@ -1018,6 +1238,7 @@ void App::mainLoop() {
               sys_.bindlessSet, env_base_color, env_blur)
           .add<renderer::cmd::DrawAssetCommand>(
               rSys_.sceneRenderer->opaquePipeline,
+              rSys_.sceneRenderer->transparentDepthPrepassPipeline,
               rSys_.sceneRenderer->transparentPipeline,
               rSys_.sceneRenderer->transparentBackFacePipeline,
               rSys_.sceneRenderer->primitiveLayout->get(), scene_set,

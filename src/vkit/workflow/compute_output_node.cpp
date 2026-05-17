@@ -24,6 +24,13 @@ ComputeOutputNode::ComputeOutputNode(
           return;
         }
 
+        // Params changed while the job was in flight — discard stale result
+        // and let the workflow re-execute with the current params.
+        if (status_ == NodeStatus::kStale) {
+          if (onStateChanged) onStateChanged();
+          return;
+        }
+
         if (ev.imageF32 && ev.imageUnorm) {
           outputF32Id = textureManager_.add(ev.imageF32);
           outputColorId = textureManager_.add(ev.imageUnorm);

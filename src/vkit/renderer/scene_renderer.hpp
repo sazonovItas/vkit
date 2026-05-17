@@ -71,6 +71,7 @@ class SceneRenderer {
   }
 
   vk::Pipeline opaquePipeline;
+  vk::Pipeline transparentDepthPrepassPipeline;
   vk::Pipeline transparentPipeline;
   vk::Pipeline transparentBackFacePipeline;
   vk::Pipeline opaqueRaySpherePipeline;
@@ -102,6 +103,7 @@ class SceneRenderer {
   std::unique_ptr<pl::LightGizmoPipelineLayout> uLightGizmoLayout_;
 
   vk::UniquePipeline uOpaquePipeline_;
+  vk::UniquePipeline uTransparentDepthPrepassPipeline_;
   vk::UniquePipeline uTransparentPipeline_;
   vk::UniquePipeline uTransparentBackFacePipeline_;
   vk::UniquePipeline uRaySphereOpaquePipeline_;

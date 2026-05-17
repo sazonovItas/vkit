@@ -1,5 +1,7 @@
 #include "vkit/renderer/material_system.hpp"
 
+#include "vkit/material/mix_material.hpp"
+
 namespace vkit::renderer {
 
 MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
@@ -8,7 +10,7 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
     : device_{device} {
   std::array<vk::DescriptorPoolSize, 1> pool_sizes = {vk::DescriptorPoolSize{
       vk::DescriptorType::eStorageBuffer,
-      framesInFlight * 3,
+      framesInFlight * 4,
   }};
 
   vk::DescriptorPoolCreateInfo pool_info{};
@@ -33,6 +35,9 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
     frame.principledBuffer = std::make_unique<graphics::DescriptorBuffer>(
         device_.allocator, usage,
         sizeof(material::PrincipledBSDF::Data) * kMaxMaterials);
+    frame.mixBuffer = std::make_unique<graphics::DescriptorBuffer>(
+        device_.allocator, usage,
+        sizeof(material::MixMaterial::Data) * kMaxMaterials);
 
     vk::DescriptorSetAllocateInfo alloc_info{*pool_, 1, &layout.get()};
     frame.descriptorSet =
@@ -41,8 +46,9 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
     auto diff_info = frame.diffuseBuffer->descriptorInfo();
     auto spec_info = frame.diffuseSpecBuffer->descriptorInfo();
     auto bsdf_info = frame.principledBuffer->descriptorInfo();
+    auto mix_info  = frame.mixBuffer->descriptorInfo();
 
-    std::array<vk::WriteDescriptorSet, 3> writes = {
+    std::array<vk::WriteDescriptorSet, 4> writes = {
         vk::WriteDescriptorSet{
             frame.descriptorSet,
             dsl::MaterialSetLayout::kDiffuseBinding,
@@ -73,6 +79,16 @@ MaterialSystem::MaterialSystem(graphics::GfxDevice& device,
             &bsdf_info,
             nullptr,
         },
+        vk::WriteDescriptorSet{
+            frame.descriptorSet,
+            dsl::MaterialSetLayout::kMixBinding,
+            0,
+            1,
+            vk::DescriptorType::eStorageBuffer,
+            nullptr,
+            &mix_info,
+            nullptr,
+        },
     };
     device_.get().updateDescriptorSets(writes, nullptr);
   }
@@ -93,6 +109,10 @@ void MaterialSystem::update(std::uint32_t frameIndex,
   auto bsdf_data = manager.principledBSDF.getData();
   if (!bsdf_data.empty())
     std::ignore = frame.principledBuffer->writeAt(std::as_bytes(bsdf_data));
+
+  auto mix_data = manager.mix.getData();
+  if (!mix_data.empty())
+    std::ignore = frame.mixBuffer->writeAt(std::as_bytes(mix_data));
 }
 
 };  // namespace vkit::renderer

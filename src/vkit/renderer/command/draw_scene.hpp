@@ -13,6 +13,7 @@
 #include "vkit/graphics/command.hpp"
 #include "vkit/material/manager.hpp"
 #include "vkit/material/material.hpp"
+#include "vkit/material/mix_material.hpp"
 #include "vkit/renderer/pipeline_layout/primitive_material.hpp"
 #include "vkit/renderer/pipeline_layout/ray_sphere_material.hpp"
 #include "vkit/renderer/pipeline_layout/skybox.hpp"
@@ -141,11 +142,13 @@ class DrawAssetCommand final : public graphics::Command {
     vk::IndexType indexType;
     std::uint32_t indexCount;
     float distSq{0.0F};
+    bool skipDepthPrepass{false};
     pl::PrimitiveMaterialPipelineLayout::PushConstants pcs;
   };
 
  public:
   DrawAssetCommand(vk::Pipeline opaquePipeline,
+                   vk::Pipeline transparentDepthPrepassPipeline,
                    vk::Pipeline transparentPipeline,
                    vk::Pipeline transparentBackFacePipeline,
                    vk::PipelineLayout layout,
@@ -155,6 +158,7 @@ class DrawAssetCommand final : public graphics::Command {
                    const material::MaterialManager* materialManager,
                    bool enableSkinning, glm::vec3 cameraPos)
       : opaquePipeline_{opaquePipeline},
+        transparentDepthPrepassPipeline_{transparentDepthPrepassPipeline},
         transparentPipeline_{transparentPipeline},
         transparentBackFacePipeline_{transparentBackFacePipeline},
         layout_{layout},
@@ -185,6 +189,7 @@ class DrawAssetCommand final : public graphics::Command {
           std::uint32_t final_mat_type = 0;
           std::uint32_t final_mat_index = 0;
           material::AlphaMode alpha_mode = material::AlphaMode::kOpaque;
+          bool skip_depth_prepass = false;
 
           auto slot = materialManager_->getSlot(prim->getMaterialSlot());
 
@@ -197,6 +202,13 @@ class DrawAssetCommand final : public graphics::Command {
               alpha_mode = mat->getAlphaMode();
               final_mat_type = static_cast<std::uint32_t>(m_type);
               final_mat_index = m_id;
+              if (m_type == material::Type::kMix) {
+                auto* mix = static_cast<material::MixMaterial*>(mat.get());
+                if (mix->hasOpacityMap() || mix->hasTransmission()) {
+                  alpha_mode = material::AlphaMode::kBlend;
+                  skip_depth_prepass = mix->hasTransmission();
+                }
+              }
             }
           }
 
@@ -220,6 +232,7 @@ class DrawAssetCommand final : public graphics::Command {
               }};
 
           if (alpha_mode == material::AlphaMode::kBlend) {
+            draw_info.skipDepthPrepass = skip_depth_prepass;
             transparent_draws.push_back(draw_info);
           } else {
             opaque_draws.push_back(draw_info);
@@ -273,14 +286,25 @@ class DrawAssetCommand final : public graphics::Command {
     if (!transparent_draws.empty()) {
       const auto push_stage = vk::ShaderStageFlagBits::eVertex |
                               vk::ShaderStageFlagBits::eFragment;
-      // Pass 1: back faces (cull front) so interior is composited first
+      // Pre-pass: depth write ON, color write OFF (cull back = front faces only).
+      // Populates depth buffer with front-face depths so that:
+      //   - back-face blend pass fails where front faces are closer (no bleed-through)
+      //   - front-face blend pass uses eLessOrEqual and correctly passes its own depths
+      cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentDepthPrepassPipeline_);
+      for (const auto& draw : transparent_draws) {
+        if (draw.skipDepthPrepass) continue;
+        cb.bindIndexBuffer(draw.indexBuffer, draw.indexOffset, draw.indexType);
+        cb.pushConstants(layout_, push_stage, 0, sizeof(draw.pcs), &draw.pcs);
+        cb.drawIndexed(draw.indexCount, 1, 0, 0, 0);
+      }
+      // Pass 1: back faces (cull front) blended — depth write OFF.
       cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentBackFacePipeline_);
       for (const auto& draw : transparent_draws) {
         cb.bindIndexBuffer(draw.indexBuffer, draw.indexOffset, draw.indexType);
         cb.pushConstants(layout_, push_stage, 0, sizeof(draw.pcs), &draw.pcs);
         cb.drawIndexed(draw.indexCount, 1, 0, 0, 0);
       }
-      // Pass 2: front faces (cull back) composited on top
+      // Pass 2: front faces (cull back) blended on top — depth write OFF.
       cb.bindPipeline(vk::PipelineBindPoint::eGraphics, transparentPipeline_);
       for (const auto& draw : transparent_draws) {
         cb.bindIndexBuffer(draw.indexBuffer, draw.indexOffset, draw.indexType);
@@ -292,6 +316,7 @@ class DrawAssetCommand final : public graphics::Command {
 
  private:
   vk::Pipeline opaquePipeline_;
+  vk::Pipeline transparentDepthPrepassPipeline_;
   vk::Pipeline transparentPipeline_;
   vk::Pipeline transparentBackFacePipeline_;
   vk::PipelineLayout layout_;

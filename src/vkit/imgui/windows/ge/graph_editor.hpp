@@ -2,6 +2,7 @@
 
 #include <imnodes.h>
 
+#include <filesystem>
 #include <string_view>
 
 #include "vkit/controller/workflow.hpp"
@@ -28,6 +29,11 @@ class GraphEditorWindow : public ImguiWindow {
  private:
   controller::WorkflowController* controller_{nullptr};
   NodeUIRegistry registry_;
+
+  bool pendingExport_{false};
+  bool pendingImport_{false};
+  std::filesystem::path pendingExportPath_;
+  std::filesystem::path pendingImportPath_;
 };
 
 };  // namespace vkit::imgui::windows::ge

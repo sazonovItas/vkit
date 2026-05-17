@@ -37,6 +37,8 @@ glslc:
 	glslc ./shaders/operators/normalmap.comp -o ./assets/shaders/operators/normalmap.comp
 	glslc ./shaders/operators/tint.comp -o ./assets/shaders/operators/tint.comp
 	glslc ./shaders/operators/mix.comp -o ./assets/shaders/operators/mix.comp
+	glslc ./shaders/operators/channel_remap.comp -o ./assets/shaders/operators/channel_remap.comp
+	glslc ./shaders/operators/channel_adjust.comp -o ./assets/shaders/operators/channel_adjust.comp
 
 .PHONY: cmake
 cmake:

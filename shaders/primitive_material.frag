@@ -17,6 +17,7 @@ layout(location = 0) out vec4 outColor;
 #include "material/diffuse.glsl"
 #include "material/diffuse_specular.glsl"
 #include "material/principled_bsdf.glsl"
+#include "material/mix_material.glsl"
 
 layout(set = 0, binding = 0) uniform Camera {
     mat4 view;
@@ -51,6 +52,9 @@ layout(std430, set = 2, binding = 1) readonly buffer DiffuseSpecularBlock {
 layout(std430, set = 2, binding = 2) readonly buffer BsdfBlock {
     PrincipledBSDFData materials[];
 } bsdfData;
+layout(std430, set = 2, binding = 3) readonly buffer MixBlock {
+    MixMaterialData materials[];
+} mixData;
 
 layout(push_constant) uniform PushConstants {
     mat4 model;
@@ -76,6 +80,41 @@ void main() {
         outColor = evaluateDiffuseSpecular(diffSpecData.materials[pcs.materialIndex], inUV, baseTBN, V, inWorldPos);
     } else if (pcs.materialType == PRINCIPLED_MATERIAL) {
         outColor = evaluatePrincipledBSDF(bsdfData.materials[pcs.materialIndex], inWorldPos, inUV, baseTBN, V, env.params, sceneParams.exposure);
+        outColor.rgb = pow(outColor.rgb, vec3(1.0 / max(sceneParams.gamma, 0.01)));
+    } else if (pcs.materialType == MIX_MATERIAL) {
+        MixMaterialData mx = mixData.materials[pcs.materialIndex];
+        float f = mx.params.factor;
+        if (mx.params.factorTexIdx >= 0)
+            f = clamp(sampleTexture2DLinear(uint(mx.params.factorTexIdx), inUV).r, 0.0, 1.0);
+        float halfEdge = max(mx.params.edge * 0.5, 1e-5);
+        f = clamp(smoothstep(mx.params.threshold - halfEdge, mx.params.threshold + halfEdge, f), 0.0, 1.0);
+
+        // Evaluate both materials in HDR then blend — avoids parameter-space
+        // non-linearities (specular humps, featureMask leaking between sides).
+        PrincipledBSDFData matA = bsdfData.materials[mx.params.materialIndexA];
+        PrincipledBSDFData matB = bsdfData.materials[mx.params.materialIndexB];
+        Surface sA = buildSurface(inWorldPos, V, baseTBN, inUV, matA);
+        Surface sB = buildSurface(inWorldPos, V, baseTBN, inUV, matB);
+
+        float alpha = mix(sA.albedo.a, sB.albedo.a, f);
+        if (mx.params.opacityTexIdx >= 0) {
+            float op = sampleTexture2DLinear(uint(mx.params.opacityTexIdx), inUV).r;
+            if (op < mx.params.alphaCutoff) discard;
+        } else {
+            if (alpha < mx.params.alphaCutoff) discard;
+        }
+
+        float ambShadow = primaryShadowFactor(inWorldPos);
+        vec3 hdrA = evaluateUberLightingIBL(sA, baseTBN, matA, env.params) * mix(0.3, 1.0, ambShadow);
+        vec3 hdrB = evaluateUberLightingIBL(sB, baseTBN, matB, env.params) * mix(0.3, 1.0, ambShadow);
+        for (uint i = 0; i < lightsBlock.count; i++) {
+            vec3 L; vec3 lColor; float shadow;
+            computeLightContrib(i, inWorldPos, L, lColor, shadow);
+            hdrA += evaluateUberLightingDirect(sA, L, baseTBN, matA, shadow) * lColor;
+            hdrB += evaluateUberLightingDirect(sB, L, baseTBN, matB, shadow) * lColor;
+        }
+        vec3 hdr = tonemapACES(mix(hdrA, hdrB, f) * sceneParams.exposure);
+        outColor = vec4(hdr, alpha);
         outColor.rgb = pow(outColor.rgb, vec3(1.0 / max(sceneParams.gamma, 0.01)));
     } else {
         outColor = evaluateFallback(inNormal, inTangent, inUV, inWorldPos);
