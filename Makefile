@@ -1,4 +1,5 @@
-EXECUTABLE ?= ./build/vkit
+EXECUTABLE_DEBUG ?= ./build/vkit
+EXECUTABLE_RELEASE ?= ./build-release/vkit
 
 .PHONY: glslc
 glslc:
@@ -40,14 +41,20 @@ glslc:
 	glslc ./shaders/operators/channel_remap.comp -o ./assets/shaders/operators/channel_remap.comp
 	glslc ./shaders/operators/channel_adjust.comp -o ./assets/shaders/operators/channel_adjust.comp
 
-.PHONY: cmake
-cmake:
-	cmake -S . -B build -DCMAKE_CXX_COMPILER=clang++
+.PHONY: debug
+debug: glslc
+	cmake --preset debug
+	cmake --build --preset debug
 
-.PHONY: build
-build: glslc cmake
-	make -C build
+.PHONY: release
+release: glslc
+	cmake --preset release
+	cmake --build --preset release
 
 .PHONY: run
-run: build
-	${EXECUTABLE}
+run: debug
+	${EXECUTABLE_DEBUG}
+
+.PHONY: run-release
+run-release: release
+	${EXECUTABLE_RELEASE}

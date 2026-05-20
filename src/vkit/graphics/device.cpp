@@ -32,7 +32,12 @@ constexpr auto deviceTypeToString(vk::PhysicalDeviceType type) {
   std::unreachable();
 }
 
-constexpr auto kRequiredExtensions = std::array{vk::KHRSwapchainExtensionName};
+constexpr auto kRequiredExtensions = std::array{
+    vk::KHRSwapchainExtensionName,
+    vk::KHRDynamicRenderingExtensionName,
+    vk::KHRSynchronization2ExtensionName,
+    vk::KHRCopyCommands2ExtensionName,
+};
 
 constexpr auto kRequiredFeatures = vk::PhysicalDeviceFeatures{}
                                        .setFillModeNonSolid(vk::True)
@@ -240,7 +245,6 @@ auto GfxDevice::createDevice() -> vk::UniqueDevice {
       vk::PhysicalDeviceFeatures2{kRequiredFeatures},
       vk::PhysicalDeviceSynchronization2Features{vk::True},
       vk::PhysicalDeviceDynamicRenderingFeatures{vk::True},
-      vk::PhysicalDeviceShaderObjectFeaturesEXT{vk::True},
       vk::PhysicalDeviceVulkan12Features{}
           .setScalarBlockLayout(vk::True)
           .setBufferDeviceAddress(vk::True)

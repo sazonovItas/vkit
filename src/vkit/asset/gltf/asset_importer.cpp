@@ -4,14 +4,12 @@
 #include <fastgltf/glm_element_traits.hpp>
 #include <fastgltf/tools.hpp>
 #include <fstream>
+#include <print>
 #include <glm/gtc/type_ptr.hpp>
-#include <iostream>
 #include <limits>
 
 #include "fastgltf/core.hpp"
 #include "vkit/dataformat/vertex_format.hpp"
-
-#define LOG_TRACE(msg) std::cout << "[glTF Importer] " << msg << std::endl
 
 namespace vkit::asset::gltf {
 
@@ -19,7 +17,6 @@ namespace {
 
 auto loadFileAsBinary(const std::filesystem::path& path)
     -> std::vector<std::byte> {
-  LOG_TRACE("Opening binary file: " << path.string());
   auto file = std::ifstream{path, std::ios::binary | std::ios::ate};
   if (!file) throw std::runtime_error{"failed to open file: " + path.string()};
   const auto size = file.tellg();
@@ -31,15 +28,14 @@ auto loadFileAsBinary(const std::filesystem::path& path)
   if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
     throw std::runtime_error{"failed to read file: " + path.string()};
   }
-  LOG_TRACE("Successfully read " << size << " bytes.");
   return buffer;
 }
 
 template <std::move_constructible T>
 [[nodiscard]] auto getChecked(fastgltf::Expected<T> expected) -> T {
   if (expected) return std::move(expected.get());
-  std::cerr << "[glTF Error] fastgltf parsing failed: "
-            << fastgltf::getErrorMessage(expected.error()) << std::endl;
+  std::println(stderr, "[glTF Error] fastgltf parsing failed: {}",
+               fastgltf::getErrorMessage(expected.error()));
   throw expected.error();
 }
 
@@ -59,7 +55,6 @@ void AssetImporter::resetState() {
 
 auto AssetImporter::load(const std::filesystem::path& filepath)
     -> std::shared_ptr<Asset> {
-  LOG_TRACE("=== Starting to load asset: " << filepath.string() << " ===");
   resetState();
 
   asset_ = std::make_shared<Asset>(filepath.stem().string());
@@ -88,33 +83,18 @@ auto AssetImporter::load(const std::filesystem::path& filepath)
                  fastgltf::Options::DecomposeNodeMatrices |
                  fastgltf::Options::LoadExternalBuffers;
 
-  LOG_TRACE("Loading GltfDataBuffer from path...");
   auto data_buffer = getChecked(fastgltf::GltfDataBuffer::FromPath(filepath));
   const auto directory = filepath.parent_path();
 
-  LOG_TRACE("Parsing glTF file structure...");
   auto gltf_asset =
       getChecked(parser.loadGltf(data_buffer, directory, options));
 
-  LOG_TRACE("Calling loadBuffers...");
   loadBuffers(gltf_asset, directory);
-
-  LOG_TRACE("Calling loadMaterials...");
   loadMaterials(gltf_asset, directory);
-
-  LOG_TRACE("Calling loadMeshes...");
   loadMeshes(gltf_asset);
-
-  LOG_TRACE("Calling loadNodes...");
   loadNodes(gltf_asset);
-
-  LOG_TRACE("Calling loadSkins...");
   loadSkins(gltf_asset);
-
-  LOG_TRACE("Calling loadScenes...");
   loadScenes(gltf_asset);
-
-  LOG_TRACE("Calling animations...");
   loadAnimations(gltf_asset);
 
   auto final_asset = std::move(asset_);
@@ -197,8 +177,7 @@ void AssetImporter::populateAttribute(primitive::Attribute& attr,
                                       const fastgltf::Asset& asset,
                                       std::size_t accessorIdx) {
   if (accessorIdx >= asset.accessors.size()) {
-    std::cerr << "[glTF Error] Accessor index out of bounds: " << accessorIdx
-              << std::endl;
+    std::println(stderr, "[glTF Error] Accessor index out of bounds: {}", accessorIdx);
     return;
   }
 
@@ -213,7 +192,7 @@ void AssetImporter::populateAttribute(primitive::Attribute& attr,
 
   if (accessor.bufferViewIndex.has_value()) {
     if (accessor.bufferViewIndex.value() >= asset.bufferViews.size()) {
-      std::cerr << "[glTF Error] BufferView index out of bounds!" << std::endl;
+      std::println(stderr, "[glTF Error] BufferView index out of bounds!");
       attr.info.stride = 0;
       return;
     }
@@ -232,56 +211,45 @@ void AssetImporter::populateAttribute(primitive::Attribute& attr,
 
 void AssetImporter::loadBuffers(const fastgltf::Asset& asset,
                                 const std::filesystem::path& directory) {
-  LOG_TRACE("Loading " << asset.buffers.size() << " buffers...");
   auto cpu_buffers = std::make_shared<primitive::Buffers>();
 
   for (std::size_t i = 0; i < asset.buffers.size(); ++i) {
-    LOG_TRACE("Processing buffer " << i);
     std::vector<std::byte> raw_data;
     std::visit(
         fastgltf::visitor{
             [&](const fastgltf::sources::Array& array) {
-              LOG_TRACE("  Source: Array");
               raw_data = std::vector<std::byte>(
                   reinterpret_cast<const std::byte*>(array.bytes.data()),
                   reinterpret_cast<const std::byte*>(array.bytes.data()) +
                       array.bytes.size());
             },
             [&](const fastgltf::sources::Vector& vector) {
-              LOG_TRACE("  Source: Vector");
               raw_data = std::vector<std::byte>(
                   reinterpret_cast<const std::byte*>(vector.bytes.data()),
                   reinterpret_cast<const std::byte*>(vector.bytes.data()) +
                       vector.bytes.size());
             },
             [&](const fastgltf::sources::ByteView& byte_view) {
-              LOG_TRACE("  Source: ByteView");
               raw_data = std::vector<std::byte>(byte_view.bytes.begin(),
                                                 byte_view.bytes.end());
             },
             [&](const fastgltf::sources::URI& uri) {
-              LOG_TRACE("  Source: URI (" << uri.uri.fspath() << ")");
               if (uri.uri.isLocalPath()) {
                 raw_data = loadFileAsBinary(directory / uri.uri.fspath());
               }
             },
             [](const auto&) {
-              std::cerr << "[glTF Warning] Unhandled buffer source format!"
-                        << std::endl;
+              std::println(stderr, "[glTF Warning] Unhandled buffer source format!");
             }},
         asset.buffers[i].data);
 
-    LOG_TRACE(
-        "  Buffer " << i << " added to CPU buffers. Size: " << raw_data.size());
     cpu_buffers->addBuffer(i, std::move(raw_data));
   }
 
-  LOG_TRACE("Adding " << asset.bufferViews.size() << " buffer views...");
   for (const auto& bv : asset.bufferViews) {
     cpu_buffers->addBufferView(bv.bufferIndex, bv.byteOffset, bv.byteLength);
   }
 
-  LOG_TRACE("Creating GPU DeviceBuffers...");
   graphics::util::RecordAndSubmitInfo rs_info{
       .device = gfxDevice_.get(),
       .queue = gfxDevice_.queues.transfer,
@@ -290,12 +258,10 @@ void AssetImporter::loadBuffers(const fastgltf::Asset& asset,
 
   deviceBuffers_ = std::make_shared<primitive::DeviceBuffers>(
       cpu_buffers, gfxDevice_.allocator, rs_info);
-  LOG_TRACE("DeviceBuffers created.");
 }
 
 void AssetImporter::loadMaterials(const fastgltf::Asset& asset,
                                   const std::filesystem::path& directory) {
-  LOG_TRACE("Loading " << asset.materials.size() << " materials...");
   asset_->gltfMaterials.clear();
   asset_->gltfMaterials.reserve(asset.materials.size());
 
@@ -445,16 +411,13 @@ void AssetImporter::loadMaterials(const fastgltf::Asset& asset,
 }
 
 void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
-  LOG_TRACE("Loading " << asset.meshes.size() << " meshes...");
   loadedMeshes_.reserve(asset.meshes.size());
 
   for (std::size_t i = 0; i < asset.meshes.size(); ++i) {
-    LOG_TRACE("  Mesh " << i << " (" << asset.meshes[i].name << ")");
     const auto& gltf_mesh = asset.meshes[i];
     auto mesh = std::make_shared<scene::Mesh>(gltf_mesh.name.c_str());
 
     for (std::size_t p = 0; p < gltf_mesh.primitives.size(); ++p) {
-      LOG_TRACE("    Primitive " << p);
       const auto& gltf_prim = gltf_mesh.primitives[p];
       primitive::PrimitiveAttributes attrs{};
 
@@ -521,11 +484,9 @@ void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
 }
 
 void AssetImporter::loadNodes(const fastgltf::Asset& asset) {
-  LOG_TRACE("Loading " << asset.nodes.size() << " nodes...");
   loadedNodes_.resize(asset.nodes.size());
 
   for (std::size_t i = 0; i < asset.nodes.size(); ++i) {
-    LOG_TRACE("  Node " << i);
     const auto& gltf_node = asset.nodes[i];
     auto node = std::make_shared<scene::Node>(gltf_node.name.c_str());
 
@@ -549,8 +510,7 @@ void AssetImporter::loadNodes(const fastgltf::Asset& asset) {
       if (m_idx < loadedMeshes_.size()) {
         node->mesh = loadedMeshes_[m_idx];
       } else {
-        std::cerr << "[glTF Error] Node references out-of-bounds mesh!"
-                  << std::endl;
+        std::println(stderr, "[glTF Error] Node references out-of-bounds mesh!");
       }
     }
 
@@ -558,21 +518,18 @@ void AssetImporter::loadNodes(const fastgltf::Asset& asset) {
     loadedNodes_[i] = node;
   }
 
-  LOG_TRACE("Resolving node children hierarchy...");
   for (std::size_t i = 0; i < asset.nodes.size(); ++i) {
     for (auto child_idx : asset.nodes[i].children) {
       if (child_idx < loadedNodes_.size()) {
         loadedNodes_[i]->addChild(loadedNodes_[child_idx]);
       } else {
-        std::cerr << "[glTF Error] Node references out-of-bounds child node!"
-                  << std::endl;
+        std::println(stderr, "[glTF Error] Node references out-of-bounds child node!");
       }
     }
   }
 }
 
 void AssetImporter::loadSkins(const fastgltf::Asset& asset) {
-  LOG_TRACE("Loading " << asset.skins.size() << " skins...");
   loadedSkins_.reserve(asset.skins.size());
 
   for (std::size_t i = 0; i < asset.skins.size(); ++i) {
@@ -605,7 +562,6 @@ void AssetImporter::loadSkins(const fastgltf::Asset& asset) {
     loadedSkins_.push_back(skin);
   }
 
-  LOG_TRACE("Attaching skins to nodes...");
   for (std::size_t i = 0; i < asset.nodes.size(); ++i) {
     if (asset.nodes[i].skinIndex.has_value()) {
       loadedNodes_[i]->skin = loadedSkins_[asset.nodes[i].skinIndex.value()];
