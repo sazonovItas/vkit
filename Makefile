@@ -1,5 +1,9 @@
-EXECUTABLE_DEBUG ?= ./build/vkit
-EXECUTABLE_RELEASE ?= ./build-release/vkit
+EXECUTABLE_DEBUG   ?= ./build/linux/debug/vkit
+EXECUTABLE_RELEASE ?= ./build/linux/release/vkit
+
+# Default assets bundled into zips
+MODEL       ?= mechdrone
+ENV_MAP     ?= blaubeuren_night_4k.hdr
 
 .PHONY: glslc
 glslc:
@@ -51,10 +55,54 @@ release: glslc
 	cmake --preset release
 	cmake --build --preset release
 
-.PHONY: run
+.PHONY: run-debug
 run: debug
 	${EXECUTABLE_DEBUG}
 
 .PHONY: run-release
 run-release: release
 	${EXECUTABLE_RELEASE}
+
+.PHONY: debug-win
+debug-win: glslc
+	cmake --preset debug-win
+	cmake --build --preset debug-win
+
+.PHONY: release-win
+release-win: glslc
+	cmake --preset release-win
+	cmake --build --preset release-win
+
+.PHONY: _zip
+_zip:
+	rm -rf dist/$(PLATFORM)/$(VARIANT)
+	mkdir -p dist/$(PLATFORM)/$(VARIANT)/assets/models
+	mkdir -p dist/$(PLATFORM)/$(VARIANT)/assets/environment
+	cp $(EXE) dist/$(PLATFORM)/$(VARIANT)/$(EXE_NAME)
+	cp -r assets/shaders dist/$(PLATFORM)/$(VARIANT)/assets/
+	cp -r assets/fonts   dist/$(PLATFORM)/$(VARIANT)/assets/
+	cp assets/environment/$(ENV_MAP) dist/$(PLATFORM)/$(VARIANT)/assets/environment/
+	cp -r assets/models/$(MODEL)     dist/$(PLATFORM)/$(VARIANT)/assets/models/
+	cp -r examples                   dist/$(PLATFORM)/$(VARIANT)/
+	rm -f dist/$(PLATFORM)/vkit-$(PLATFORM)-$(VARIANT).zip
+	zip -r dist/$(PLATFORM)/vkit-$(PLATFORM)-$(VARIANT).zip dist/$(PLATFORM)/$(VARIANT)/
+
+.PHONY: zip-debug
+zip-debug: debug
+	$(MAKE) _zip PLATFORM=linux VARIANT=debug \
+	    EXE=build/linux/debug/vkit EXE_NAME=vkit
+
+.PHONY: zip-release
+zip-release: release
+	$(MAKE) _zip PLATFORM=linux VARIANT=release \
+	    EXE=build/linux/release/vkit EXE_NAME=vkit
+
+.PHONY: zip-debug-win
+zip-debug-win: debug-win
+	$(MAKE) _zip PLATFORM=win VARIANT=debug \
+	    EXE=build/win/debug/vkit.exe EXE_NAME=vkit.exe
+
+.PHONY: zip-release-win
+zip-release-win: release-win
+	$(MAKE) _zip PLATFORM=win VARIANT=release \
+	    EXE=build/win/release/vkit.exe EXE_NAME=vkit.exe

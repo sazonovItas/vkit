@@ -97,7 +97,7 @@ class GraphicsPipelineBuilder {
     depthStencil_ = vk::PipelineDepthStencilStateCreateInfo{}
                         .setDepthTestEnable(vk::True)
                         .setDepthWriteEnable(vk::True)
-                        .setDepthCompareOp(vk::CompareOp::eLessOrEqual)
+                        .setDepthCompareOp(vk::CompareOp::eGreaterOrEqual)
                         .setDepthBoundsTestEnable(vk::False)
                         .setStencilTestEnable(vk::False);
 
@@ -141,7 +141,7 @@ class GraphicsPipelineBuilder {
   }
 
   auto setDepthState(vk::Bool32 testEnable, vk::Bool32 writeEnable,
-                     vk::CompareOp compareOp = vk::CompareOp::eLessOrEqual)
+                     vk::CompareOp compareOp = vk::CompareOp::eGreaterOrEqual)
       -> GraphicsPipelineBuilder& {
     depthStencil_.setDepthTestEnable(testEnable);
     depthStencil_.setDepthWriteEnable(writeEnable);

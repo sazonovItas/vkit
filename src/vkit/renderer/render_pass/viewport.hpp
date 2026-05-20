@@ -81,7 +81,7 @@ class BeginViewportPass : public graphics::Command {
           .setImageLayout(vk::ImageLayout::eDepthAttachmentOptimal)
           .setLoadOp(vk::AttachmentLoadOp::eClear)
           .setStoreOp(vk::AttachmentStoreOp::eDontCare)
-          .setClearValue(vk::ClearDepthStencilValue{1.0F, 0});
+          .setClearValue(vk::ClearDepthStencilValue{0.0F, 0});
       render_info.setPDepthAttachment(&depth_attachment);
     }
 

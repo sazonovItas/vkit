@@ -426,7 +426,8 @@ void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
                           gltf_prim.indicesAccessor.value());
       }
 
-      if (const auto* it = gltf_prim.findAttribute("POSITION")) {
+      if (auto* it = gltf_prim.findAttribute("POSITION");
+          it != gltf_prim.attributes.end()) {
         populateAttribute(attrs.position, asset, it->accessorIndex);
         const auto& acc = asset.accessors[it->accessorIndex];
         if (acc.min.has_value() && acc.max.has_value() &&
@@ -444,16 +445,19 @@ void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
                         float(mx.get<double>(2))));
         }
       }
-      if (const auto* it = gltf_prim.findAttribute("NORMAL")) {
+      if (auto* it = gltf_prim.findAttribute("NORMAL");
+          it != gltf_prim.attributes.end()) {
         populateAttribute(attrs.normal, asset, it->accessorIndex);
       }
-      if (const auto* it = gltf_prim.findAttribute("TANGENT")) {
+      if (auto* it = gltf_prim.findAttribute("TANGENT");
+          it != gltf_prim.attributes.end()) {
         populateAttribute(attrs.tangent, asset, it->accessorIndex);
       }
       constexpr std::array<std::string_view, 4> kTexcoordNames = {
           "TEXCOORD_0", "TEXCOORD_1", "TEXCOORD_2", "TEXCOORD_3"};
       for (std::size_t i = 0; i < kTexcoordNames.size(); ++i) {
-        if (const auto* it = gltf_prim.findAttribute(kTexcoordNames[i])) {
+        if (auto* it = gltf_prim.findAttribute(kTexcoordNames[i]);
+            it != gltf_prim.attributes.end()) {
           populateAttribute(attrs.texcoords[i], asset, it->accessorIndex);
         }
       }
@@ -463,10 +467,12 @@ void AssetImporter::loadMeshes(const fastgltf::Asset& asset) {
       constexpr std::array<std::string_view, 2> kWeightNames = {"WEIGHTS_0",
                                                                 "WEIGHTS_1"};
       for (std::size_t i = 0; i < kJointNames.size(); ++i) {
-        if (const auto* it = gltf_prim.findAttribute(kJointNames[i])) {
+        if (auto* it = gltf_prim.findAttribute(kJointNames[i]);
+            it != gltf_prim.attributes.end()) {
           populateAttribute(attrs.jointIndices[i], asset, it->accessorIndex);
         }
-        if (const auto* it = gltf_prim.findAttribute(kWeightNames[i])) {
+        if (auto* it = gltf_prim.findAttribute(kWeightNames[i]);
+            it != gltf_prim.attributes.end()) {
           populateAttribute(attrs.jointWeights[i], asset, it->accessorIndex);
         }
       }

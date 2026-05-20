@@ -31,7 +31,7 @@ A Vulkan-based PBR renderer with a node-graph material editor, built in C++23.
 
 ## Dependencies
 
-All dependencies are git submodules under `ext/` (except imnodes, which is vendored directly).
+All dependencies are git submodules under `ext/`.
 
 | Library | Purpose |
 |---|---|
@@ -50,28 +50,54 @@ All dependencies are git submodules under `ext/` (except imnodes, which is vendo
 
 ## Building
 
-**Requirements:** Clang, CMake 3.24+, `glslc` (from the Vulkan SDK), GNU Make.
+### Requirements
+
+**Linux:** Clang, CMake 3.24+, `glslc` (Vulkan SDK), GNU Make.
+
+**Windows cross-compilation (from Linux):** additionally `x86_64-w64-mingw32-g++` and `zip`.
 
 ```bash
 git clone --recurse-submodules <repo-url>
 cd vkit
-make build
 ```
 
-`make build` compiles shaders with `glslc`, configures CMake, then builds the project.
+### Linux
 
-To run after building:
+| Target | Description |
+|---|---|
+| `make debug` | Compile shaders + configure + build (debug) |
+| `make release` | Compile shaders + configure + build (release, no validation layers) |
+| `make run` | Build debug then run |
+| `make run-release` | Build release then run |
+| `make zip-debug` | Build debug + create `dist/linux/vkit-linux-debug.zip` |
+| `make zip-release` | Build release + create `dist/linux/vkit-linux-release.zip` |
 
-```bash
-make run
-# or directly:
-./build/vkit
-```
+Binaries land in `build/linux/debug/` and `build/linux/release/`.
 
-To recompile shaders only:
+### Windows (cross-compile from Linux)
+
+| Target | Description |
+|---|---|
+| `make debug-win` | Compile shaders + configure + build (debug) |
+| `make release-win` | Compile shaders + configure + build (release) |
+| `make zip-debug-win` | Build debug + create `dist/win/vkit-win-debug.zip` |
+| `make zip-release-win` | Build release + create `dist/win/vkit-win-release.zip` |
+
+Binaries land in `build/win/debug/` and `build/win/release/`.
+The produced `.exe` requires only `vulkan-1.dll` at runtime (ships with GPU drivers); all other runtime libs are statically linked.
+
+### Shaders only
 
 ```bash
 make glslc
+```
+
+### Customising the bundled assets
+
+The default model and environment map packed into zips can be overridden:
+
+```bash
+make zip-release MODEL=my_model ENV_MAP=my_env.hdr
 ```
 
 ## Project Structure
@@ -88,11 +114,13 @@ vkit/
 │   ├── graphics/      # Low-level Vulkan device, swapchain, pipelines
 │   └── ...
 ├── shaders/           # GLSL source (vert/frag/comp)
-│   ├── material/      # Per-material fragment shaders
 │   ├── operators/     # Compute operator shaders
 │   ├── procedural/    # Procedural generator compute shaders
 │   └── ibl/           # IBL precomputation compute shaders
 ├── assets/            # Runtime assets (compiled shaders, models, fonts, envmaps)
+├── examples/          # Example .mgraph files and textures
 ├── ext/               # Third-party libraries (git submodules)
+├── cmake/             # Toolchain files (MinGW-w64 cross-compilation)
+├── CMakePresets.json  # Configure + build presets
 └── Makefile
 ```

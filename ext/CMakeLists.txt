@@ -130,7 +130,7 @@ target_sources(vma PRIVATE
     vk_mem_alloc.cpp
 )
 
-target_compile_options(vma PRIVATE -w)
+target_compile_options(vma PRIVATE $<IF:$<CXX_COMPILER_ID:MSVC>,/W0,-w>)
 
 message(STATUS "[fastgltf]")
 set(FASTGLTF_ENABLE_DEPRECATED_EXT ON)
@@ -176,7 +176,7 @@ target_link_libraries(${PROJECT_NAME} INTERFACE
     stb::stb
     nfd
     simdjson
-    dl
+    $<$<PLATFORM_ID:Linux>:dl>
 )
 
 target_compile_definitions(${PROJECT_NAME} INTERFACE

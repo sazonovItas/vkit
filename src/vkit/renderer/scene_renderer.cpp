@@ -206,7 +206,7 @@ SceneRenderer::SceneRenderer(
           shadow_vert.stageCreateInfo(vk::ShaderStageFlagBits::eVertex))
       .setVertexInput({}, {})
       .setRenderingFormats({}, vk::Format::eD32Sfloat)
-      .setDepthState(vk::True, vk::True)
+      .setDepthState(vk::True, vk::True, vk::CompareOp::eLessOrEqual)
       .setCullMode(vk::CullModeFlagBits::eFront)
       .setMultisampling(vk::SampleCountFlagBits::e1)
       .clearColorBlendAttachments();

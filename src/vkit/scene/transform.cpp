@@ -1,5 +1,7 @@
 #include "vkit/scene/transform.hpp"
 
+#include <cmath>
+
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 
@@ -29,8 +31,15 @@ void Transform::setOrthographic(const float left, const float right,
 }
 
 void Transform::setPerspective(float fovY, float aspectRatio, float zNear,
-                               float zFar) {
-  matrix_ = glm::perspective(fovY, aspectRatio, zNear, zFar);
+                               float /*zFar*/) {
+  // Reversed-Z infinite perspective: near→1, far→0.
+  // Eliminates Z-fighting by using the float32 precision where it matters.
+  float f = 1.0F / std::tan(fovY * 0.5F);
+  matrix_ = glm::mat4(0.0F);
+  matrix_[0][0] = f / aspectRatio;
+  matrix_[1][1] = f;
+  matrix_[2][3] = -1.0F;
+  matrix_[3][2] = zNear;
   inverseMatrix_ = glm::inverse(matrix_);
 }
 

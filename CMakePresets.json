@@ -4,7 +4,7 @@
     {
       "name": "debug",
       "displayName": "Debug",
-      "binaryDir": "${sourceDir}/build",
+      "binaryDir": "${sourceDir}/build/linux/debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++"
@@ -13,10 +13,28 @@
     {
       "name": "release",
       "displayName": "Release",
-      "binaryDir": "${sourceDir}/build-release",
+      "binaryDir": "${sourceDir}/build/linux/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "clang++"
+      }
+    },
+    {
+      "name": "debug-win",
+      "displayName": "Debug (Windows / MinGW-w64)",
+      "binaryDir": "${sourceDir}/build/win/debug",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-mingw-w64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release-win",
+      "displayName": "Release (Windows / MinGW-w64)",
+      "binaryDir": "${sourceDir}/build/win/release",
+      "toolchainFile": "${sourceDir}/cmake/toolchain-mingw-w64.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       }
     }
   ],
@@ -29,6 +47,16 @@
     {
       "name": "release",
       "configurePreset": "release",
+      "jobs": 0
+    },
+    {
+      "name": "debug-win",
+      "configurePreset": "debug-win",
+      "jobs": 0
+    },
+    {
+      "name": "release-win",
+      "configurePreset": "release-win",
       "jobs": 0
     }
   ]

@@ -1,5 +1,5 @@
 .cache
-build*
+build/
 compile_commands.json
 
 .renderdoc
@@ -8,3 +8,6 @@ assets/models
 assets/shaders
 
 imgui.ini
+
+# Distribution zips and staged trees
+dist/

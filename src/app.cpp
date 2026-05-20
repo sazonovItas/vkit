@@ -25,6 +25,8 @@
 #include "vkit/core/shaders/shaders.hpp"
 #include "vkit/graphics/bindless_texture_manager.hpp"
 #include "vkit/graphics/device.hpp"
+#include "vkit/imgui/windows/ge/node/channel_adjust_ui.hpp"
+#include "vkit/imgui/windows/ge/node/channel_remap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/diffuse_specular_ui.hpp"
 #include "vkit/imgui/windows/ge/node/diffuse_ui.hpp"
 #include "vkit/imgui/windows/ge/node/fractal_generator_ui.hpp"
@@ -38,8 +40,6 @@
 #include "vkit/imgui/windows/ge/node/slot_output_ui.hpp"
 #include "vkit/imgui/windows/ge/node/sobel_ui.hpp"
 #include "vkit/imgui/windows/ge/node/texture_load_ui.hpp"
-#include "vkit/imgui/windows/ge/node/channel_adjust_ui.hpp"
-#include "vkit/imgui/windows/ge/node/channel_remap_ui.hpp"
 #include "vkit/imgui/windows/ge/node/tint_ui.hpp"
 #include "vkit/renderer/command/draw_imgui.hpp"
 #include "vkit/renderer/command/draw_light_gizmos.hpp"
@@ -474,15 +474,7 @@ void App::initAsset() {
   engine_.assetController =
       std::make_unique<controller::AssetController>(engine_.assetManager.get());
 
-  std::filesystem::path asset_path =
-      asset::assetPath("models/mechdrone/scene.gltf");
-  if (std::filesystem::exists(asset_path)) {
-    auto default_asset = engine_.assetManager->loadGltfAsset(asset_path);
-    if (default_asset) {
-      engine_.assetController->setCurrentAsset(
-          default_asset->getStorageId().value());
-    }
-  }
+
 }
 
 void App::initWorkflow() {
@@ -850,7 +842,7 @@ void App::initViewports() {
           bool ancestor_selected = false;
           auto p = n->getParent().lock();
           while (p) {
-            if (selected_set.count(p.get())) {
+            if (selected_set.contains(p.get())) {
               ancestor_selected = true;
               break;
             }
@@ -1214,8 +1206,6 @@ void App::mainLoop() {
     auto prim_set = rSys_.assetBridge->getDescriptorSet(currentFrame_);
     auto light_set = rSys_.sceneRenderer->getLightDescriptorSet(currentFrame_);
 
-    // Shadow pass: only when shadows are enabled and a shadow-casting light
-    // exists.
     if (current_asset && scene_params.shadowsEnabled && any_shadow_caster) {
       task.add<renderer::rp::BeginShadowPass>(
               rSys_.sceneRenderer->getShadowImage(),
